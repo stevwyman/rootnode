@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit {{ individual.given_name }} {{ individual.surname }}</title>
+</head>
+<body>
+    <p><a href="{% url 'genview:individual_detail' individual.pk %}">&larr; Cancel and go back</a></p>
+
+    <h1>Edit Individual</h1>
+
+    <form method="POST">
+        {% csrf_token %}
+        
+        {{ form.as_p }}
+        
+        <button type="submit">Save Changes</button>
+    </form>
+</body>
+</html>

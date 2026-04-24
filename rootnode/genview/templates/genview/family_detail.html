@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Family {{ family.gedcom_id }}</title>
+</head>
+<body>
+    <p><a href="{% url 'genview:individual_list' %}">&larr; Back to Directory</a></p>
+
+    <h1>Family Group ({{ family.gedcom_id }})</h1>
+
+    <h3>Parents</h3>
+    <ul>
+        <li>
+            <strong>Husband:</strong> 
+            {% if family.husband %}
+                <a href="{% url 'genview:individual_detail' family.husband.pk %}">
+                    {{ family.husband.given_name }} {{ family.husband.surname }}
+                </a>
+            {% else %}
+                Unknown
+            {% endif %}
+        </li>
+        <li>
+            <strong>Wife:</strong> 
+            {% if family.wife %}
+                <a href="{% url 'genview:individual_detail' family.wife.pk %}">
+                    {{ family.wife.given_name }} {{ family.wife.surname }}
+                </a>
+            {% else %}
+                Unknown
+            {% endif %}
+        </li>
+    </ul>
+
+    <h3>Children</h3>
+    <ul>
+        {% for link in family.children.all %}
+            <li>
+                <a href="{% url 'genview:individual_detail' link.child.pk %}">
+                    {{ link.child.given_name }} {{ link.child.surname }}
+                </a>
+            </li>
+        {% empty %}
+            <li>No children recorded for this family.</li>
+        {% endfor %}
+    </ul>
+
+    <a href="{% url 'genview:family_edit' family.pk %}"><button>Edit Family</button></a>
+</body>
+</html>

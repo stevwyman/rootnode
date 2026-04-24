@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ individual.given_name }} {{ individual.surname }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        // Initialize mermaid
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</head>
+<body>
+    <p><a href="{% url 'genview:individual_list' %}">&larr; Back to List</a></p>
+    
+    <h1>{{ individual.given_name }} {{ individual.surname }}</h1>
+    <p><strong>GEDCOM ID:</strong> {{ individual.gedcom_id }}</p>
+    <p><strong>Sex:</strong> {{ individual.get_sex_display }}</p>
+
+    <h3>Families as a Spouse:</h3>
+    <ul>
+        {% for family in individual.families_as_husband.all %}
+            <li><a href="{% url 'genview:family_detail' family.pk %}">{{ family }}</a></li>
+        {% endfor %}
+        
+        {% for family in individual.families_as_wife.all %}
+            <li><a href="{% url 'genview:family_detail' family.pk %}">{{ family }}</a></li>
+        {% endfor %}
+    </ul>
+
+    <h3>Families as a Child:</h3>
+    <ul>
+        {% for link in individual.parental_families.all %}
+            <li>
+                <a href="{% url 'genview:family_detail' link.family.pk %}">
+                    {{ link.family }}
+                </a> 
+                (Relationship: {{ link.get_relationship_type_display }})
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h3>Family Tree</h3>
+    <div class="mermaid">
+        {{ mermaid_graph|safe }}
+    </div>
+
+    <h3>Gallery & Documents</h3>
+    <div class="media-gallery" style="display: flex; gap: 20px; flex-wrap: wrap;">
+        {% for media in individual.media_objects.all %}
+            <div class="media-item" style="border: 1px solid #ccc; padding: 10px; max-width: 250px;">
+                
+                {% if media.is_image %}
+                    <a href="{{ media.file.url }}" target="_blank">
+                        <img src="{{ media.file.url }}" alt="{{ media.title }}" style="max-width: 100%; height: auto;">
+                    </a>
+                {% else %}
+                    <div style="background: #f4f4f4; padding: 40px 20px; text-align: center;">
+                        📄 <a href="{{ media.file.url }}" target="_blank">View Document</a>
+                    </div>
+                {% endif %}
+                
+                <p><strong>{{ media.title }}</strong></p>
+                {% if media.description %}
+                    <p style="font-size: 0.9em; color: #555;">{{ media.description }}</p>
+                {% endif %}
+            </div>
+        {% empty %}
+            <p>No media files attached to this individual.</p>
+        {% endfor %}
+
+        <a href="{% url 'genview:individual_edit' individual.pk %}"><button>Edit Person</button></a>
+
+    </div>
+
+</body>
+</html>

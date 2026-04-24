@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Family {{ family.gedcom_id }}</title>
+</head>
+<body>
+    <p><a href="{% url 'genview:family_detail' family.pk %}">&larr; Cancel and go back</a></p>
+
+    <h1>Edit Family Group</h1>
+
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Save Changes</button>
+    </form>
+</body>
+</html>
