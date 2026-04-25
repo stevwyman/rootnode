@@ -1,0 +1,18 @@
+{% extends "genview/base.html" %}
+{% block title %}Bild löschen{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Bild wirklich löschen?</h1>
+
+<p><strong>{{ object.title }}</strong></p>
+{% if object.is_image %}
+    <img src="{{ object.file.url }}" alt="{{ object.title }}" class="img-fluid mb-3" style="max-width:300px;">
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Ja, Bild entfernen</button>
+    <a href="{% url 'genview:individual-detail' person_pk %}"
+       class="btn btn-outline-secondary ms-2">Abbrechen</a>
+</form>
+{% endblock %}

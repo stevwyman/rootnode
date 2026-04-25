@@ -1,19 +1,124 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Edit {{ individual.given_name }} {{ individual.surname }}</title>
-</head>
-<body>
-    <p><a href="{% url 'genview:individual_detail' individual.pk %}">&larr; Cancel and go back</a></p>
+{% extends "genview/base.html" %}
+{% load static %}
 
-    <h1>Edit Individual</h1>
+{% block title %}
+    {% if view.object %}Person bearbeiten{% else %}Neue Person{% endif %}
+{% endblock %}
 
-    <form method="POST">
-        {% csrf_token %}
-        
-        {{ form.as_p }}
-        
-        <button type="submit">Save Changes</button>
-    </form>
-</body>
-</html>
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <h1 class="mb-4">
+            {% if view.object %}
+                Person {{ view.object.full_name }} ändern
+            {% else %}
+                Neue Person anlegen
+            {% endif %}
+        </h1>
+
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+
+            {# -------- Stammdaten -------- #}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form.gedcom_id.label_tag }} {{ form.gedcom_id }}
+                    {{ form.gedcom_id.errors }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.sex.label_tag }} {{ form.sex }}
+                    {{ form.sex.errors }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                {{ form.given_name.label_tag }} {{ form.given_name }}
+                {{ form.given_name.errors }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.surname.label_tag }} {{ form.surname }}
+                {{ form.surname.errors }}
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form.name_prefix.label_tag }} {{ form.name_prefix }}
+                    {{ form.name_prefix.errors }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.name_suffix.label_tag }} {{ form.name_suffix }}
+                    {{ form.name_suffix.errors }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                {{ form.notes.label_tag }} {{ form.notes }}
+                {{ form.notes.errors }}
+            </div>
+
+            {# -------- Quellen (ManyToMany) -------- #}
+            <div class="mb-3">
+                {{ form.sources.label_tag }}
+                {{ form.sources }}
+                {{ form.sources.errors }}
+                <small class="form-text text-muted">
+                    Mehrfachauswahl mit Strg/Cmd‑Taste.
+                </small>
+            </div>
+
+            <hr class="my-4">
+
+            {# -------- Geburts‑/Sterbedaten (virtuelle Felder) -------- #}
+            <h4 class="mb-3">Geburts‑ und Sterbedaten</h4>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form.birth_date_raw.label_tag }}
+                    {{ form.birth_date_raw }}
+                    {{ form.birth_date_raw.errors }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.birth_date_parsed.label_tag }}
+                    {{ form.birth_date_parsed }}
+                    {{ form.birth_date_parsed.errors }}
+                </div>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <div class="col-md-6">
+                    {{ form.death_date_raw.label_tag }}
+                    {{ form.death_date_raw }}
+                    {{ form.death_date_raw.errors }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.death_date_parsed.label_tag }}
+                    {{ form.death_date_parsed }}
+                    {{ form.death_date_parsed.errors }}
+                </div>
+            </div>
+
+            {# ----------------------------------------------------------- #}
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary">
+                    Zurück zur Übersicht
+                </a>
+
+                {% if view.object %}
+                    <a href="{% url 'genview:individual-detail' view.object.pk %}"
+                       class="btn btn-outline-primary">Abbrechen</a>
+                {% else %}
+                    <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-primary">
+                        Abbrechen
+                    </a>
+                {% endif %}
+
+                <button type="submit" class="btn btn-success">
+                    {% if view.object %}Speichern{% else %}Anlegen{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

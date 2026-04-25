@@ -1,34 +1,110 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>genview - Individuals</title>
-</head>
-<body>
-    <h1>All Individuals</h1>
-    
-    <ul>
-        {% for person in individuals %}
-            <li>
-                <a href="{% url 'genview:individual_detail' person.pk %}">
-                    {{ person.given_name }} {{ person.surname }}
-                </a> 
-                ({{ person.gedcom_id }})
-            </li>
-        {% empty %}
-            <li>No individuals found. Have you imported the GEDCOM file?</li>
-        {% endfor %}
-    </ul>
+{% extends "genview/base.html" %}
+{% load django_bootstrap5 %}  
+{% block title %}Personen{% endblock %}
 
-    {% if is_paginated %}
-        <div class="pagination">
-            {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
-            {% endif %}
-            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-            {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}">Next</a>
-            {% endif %}
-        </div>
-    {% endif %}
-</body>
-</html>
+{% block content %}
+<h1 class="mb-4">Alle Personen</h1>
+
+
+{# -------------------------------------------------------------- #}
+{#  Suchformular (GET‑Methode)                                   #}
+{# -------------------------------------------------------------- #}
+<!--
+<form method="get" action="{% url 'genview:individual-search' %}" class="row g-3 mb-4">
+    <div class="col-md-9">
+        {{ search_form.q }}
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">Suchen</button>
+    </div>
+</form>
+-->
+
+
+{# -------------------------------------------------------------- #}
+{#  Suchformular (AJAX‑Methode)                                   #}
+{# -------------------------------------------------------------- #}
+<form id="search-form" class="row g-3 mb-4">
+    <div class="col-md-9">
+        <input type="text" name="q" id="search-input"
+               class="form-control" placeholder="Name, GEDCOM‑ID …"
+               value="{{ request.GET.q|default_if_none:'' }}">
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">Suchen</button>
+    </div>
+</form>
+
+{% if search_query %}
+    <p class="text-muted">Ergebnisse für <strong>{{ search_query }}</strong> ({{ page_obj.paginator.count }} Treffer)</p>
+{% endif %}
+
+<a href="{% url 'genview:individual-add' %}" class="btn btn-success mb-3">Neue Person</a>
+
+<table class="table table-striped table-hover" id="people-table">
+    <thead class="table-primary">
+        <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Geschlecht</th>
+            <th>Alter</th>
+            <th>Geburtsdatum</th>
+            <th>Sterbedatum</th>
+            <th>Aktionen</th>
+        </tr>
+    </thead>
+    {% include "genview/_individual_table.html" with object_list=people %}
+</table>
+
+<div id="pagination-container">
+    {% include "genview/_individual_pager.html" %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('search-form');
+    const tableBody = document.querySelector('#people-table tbody');
+    const paginationDiv = document.getElementById('pagination-container');
+    const input = document.getElementById('search-input');
+
+    // ----------- Hilfsfunktion: AJAX‑Request ----------
+    function fetchPage(url) {
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(r => r.json())
+            .then(data => {
+                tableBody.innerHTML = data.table;      // neue Zeilen
+                paginationDiv.innerHTML = data.pager;   // neue Pagination‑Leiste
+                bindPaginationLinks();                 // neu gebundene Links wieder aktivieren
+            })
+            .catch(err => console.error('Ajax error:', err));
+    }
+
+    // ----------- Formular-Submit (Suche) ----------
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const query = encodeURIComponent(input.value.trim());
+        const url = "{% url 'genview:individual-search-ajax' %}?q=" + query;
+        fetchPage(url);
+    });
+
+    // ----------- Pagination-Links (nach AJAX) ----------
+    function bindPaginationLinks() {
+        // Wir fangen die Klicks auf die neuen <a>-Links ab
+        const links = paginationDiv.querySelectorAll('a.page-link');
+        links.forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const href = this.getAttribute('href');
+                // Da href bereits den `?q=`‑Parameter enthält, können wir ihn direkt nutzen
+                const url = "{% url 'genview:individual-search-ajax' %}" + href;
+                fetchPage(url);
+            });
+        });
+    }
+
+    // Beim ersten Laden die Links binden (falls bereits Pagination vorhanden ist)
+    bindPaginationLinks();
+});
+</script>
+{% endblock %}
+

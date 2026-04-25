@@ -1,0 +1,56 @@
+{% extends "genview/base.html" %}
+{% block title %}{% if view.object %}Bild bearbeiten{% else %}Bild hinzufügen{% endif %}{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">{% if view.object %}Bild bearbeiten{% else %}Neues Bild hinzufügen{% endif %}</h1>
+
+<form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    {# verstecktes Feld, wenn das Bild bereits einer Person zugeordnet ist #}
+    {% if form.person_hidden %}{{ form.person_hidden }}{% endif %}
+
+    <div class="mb-3">
+        {{ form.title.label_tag }} {{ form.title }}
+        {{ form.title.errors }}
+    </div>
+
+    <div class="mb-3">
+        {{ form.file.label_tag }} {{ form.file }}
+        {{ form.file.errors }}
+    </div>
+
+    <div class="mb-3">
+        {{ form.description.label_tag }} {{ form.description }}
+        {{ form.description.errors }}
+    </div>
+
+    {# Wenn das Formular ohne feste Person verwendet wird (z. B. Admin) #}
+    {% if form.individuals %}
+        <div class="mb-3">
+            {{ form.individuals.label_tag }} {{ form.individuals }}
+            {{ form.individuals.errors }}
+        </div>
+    {% endif %}
+
+    <div class="mb-3">
+        {{ form.sources.label_tag }} {{ form.sources }}
+        {{ form.sources.errors }}
+    </div>
+
+    <div class="form-check mb-3">
+        {{ form.is_portrait }} {{ form.is_portrait.label_tag }}
+    </div>
+
+    <button type="submit" class="btn btn-success">
+        {% if view.object %}Änderungen speichern{% else %}Bild speichern{% endif %}
+    </button>
+    {% if view.object %}
+        <a href="{% url 'genview:individual-detail' view.object.individuals.first.pk %}"
+           class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    {% else %}
+        <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    {% endif %}
+</form>
+{% endblock %}

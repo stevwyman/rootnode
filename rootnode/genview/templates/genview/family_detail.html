@@ -1,50 +1,162 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Family {{ family.gedcom_id }}</title>
-</head>
-<body>
-    <p><a href="{% url 'genview:individual_list' %}">&larr; Back to Directory</a></p>
+{% extends "genview/base.html" %}
+{% load django_bootstrap5 %}
+{% block title %}Familie {{ family.gedcom_id }}{% endblock %}
 
-    <h1>Family Group ({{ family.gedcom_id }})</h1>
+{% block content %}
+<h2 class="mb-4">Familie {{ family.gedcom_id }}</h2>
 
-    <h3>Parents</h3>
-    <ul>
-        <li>
-            <strong>Husband:</strong> 
-            {% if family.husband %}
-                <a href="{% url 'genview:individual_detail' family.husband.pk %}">
-                    {{ family.husband.given_name }} {{ family.husband.surname }}
-                </a>
-            {% else %}
-                Unknown
-            {% endif %}
-        </li>
-        <li>
-            <strong>Wife:</strong> 
-            {% if family.wife %}
-                <a href="{% url 'genview:individual_detail' family.wife.pk %}">
-                    {{ family.wife.given_name }} {{ family.wife.surname }}
-                </a>
-            {% else %}
-                Unknown
-            {% endif %}
-        </li>
-    </ul>
-
-    <h3>Children</h3>
-    <ul>
-        {% for link in family.children.all %}
-            <li>
-                <a href="{% url 'genview:individual_detail' link.child.pk %}">
-                    {{ link.child.given_name }} {{ link.child.surname }}
-                </a>
+<div class="row">
+    <!-- linke Spalte: Ehepartner -->
+    <div class="col-md-6">
+        <h4>Ehepartner</h4>
+        <ul class="list-group mb-3">
+            <li class="list-group-item">
+                <strong>Vater / Husband:</strong><br>
+                {% if family.husband %}
+                    <a href="{% url 'genview:individual-detail' family.husband.pk %}">
+                        {{ family.husband.full_name }}
+                    </a> ({{ family.husband.get_sex_display }})
+                {% else %}
+                    <span class="text-muted">nicht angegeben</span>
+                {% endif %}
             </li>
-        {% empty %}
-            <li>No children recorded for this family.</li>
+            <li class="list-group-item">
+                <strong>Mutter / Wife:</strong><br>
+                {% if family.wife %}
+                    <a href="{% url 'genview:individual-detail' family.wife.pk %}">
+                        {{ family.wife.full_name }}
+                    </a> ({{ family.wife.get_sex_display }})
+                {% else %}
+                    <span class="text-muted">nicht angegeben</span>
+                {% endif %}
+            </li>
+        </ul>
+    </div>
+
+    <!-- rechte Spalte: Kinder -->
+    <div class="col-md-6">
+        <h4>Kinder ({{ family.children.all|length }})</h4>
+        {% if family.children.all %}
+            <ul class="list-group mb-3">
+                {% for link in family.children.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <a href="{% url 'genview:individual-detail' link.child.pk %}">
+                            {{ link.child.full_name }}
+                        </a>
+                        <span class="badge bg-secondary">
+                            {{ link.get_relationship_type_display }}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted">Keine Kinder zugeordnet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<hr>
+
+<dl class="row">
+    <dt class="col-sm-3">GEDCOM‑ID</dt><dd class="col-sm-9">{{ family.gedcom_id }}</dd>
+
+    <dt class="col-sm-3">Ehemann</dt>
+    <dd class="col-sm-9">
+        {% if family.husband %}
+            <a href="{{ family.husband.get_absolute_url }}">{{ family.husband.full_name }}</a>
+        {% else %}<span class="text-muted">‑</span>{% endif %}
+    </dd>
+
+    <dt class="col-sm-3">Ehefrau</dt>
+    <dd class="col-sm-9">
+        {% if family.wife %}
+            <a href="{{ family.wife.get_absolute_url }}">{{ family.wife.full_name }}</a>
+        {% else %}<span class="text-muted">‑</span>{% endif %}
+    </dd>
+
+    {# ---------- Heirats‑Datum & Ort ---------- #}
+    <dt class="col-sm-3">Heirats‑Datum</dt>
+    <dd class="col-sm-9">
+        {% if family.marriage_event %}
+            {# Wenn du das geparste Datum willst: #}
+            {% if family.marriage_event.parsed_date %}
+                {{ family.marriage_event.parsed_date|date:"Y-m-d" }}
+            {% else %}
+                {{ family.marriage_event.raw_date }}   {# Roh‑String fallback #}
+            {% endif %}
+        {% else %}
+            <span class="text-muted">‑</span>
+        {% endif %}
+    </dd>
+
+    <dt class="col-sm-3">Heirats‑Ort</dt>
+    <dd class="col-sm-9">
+        {% if family.marriage_event and family.marriage_event.place %}
+            {{ family.marriage_event.place }}
+        {% else %}
+            <span class="text-muted">‑</span>
+        {% endif %}
+    </dd>
+
+    <dt class="col-sm-3">Notizen</dt><dd class="col-sm-9">{{ family.notes|linebreaksbr }}</dd>
+</dl>
+
+<!-- Familien‑Events -->
+<h4 class="mt-4">Ereignisse der Familie</h4>
+{% if family.events %}
+    <ul class="list-group mb-3">
+        {% for ev in family.events.all %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ ev.get_event_type_display }}
+                {% if ev.parsed_date %}
+                    <span class="badge bg-primary">
+                        {{ ev.parsed_date|date:"d.m.Y" }}
+                    </span>
+                {% endif %}
+            </li>
         {% endfor %}
     </ul>
+{% else %}
+    <p class="text-muted">Keine Ereignisse erfasst.</p>
+{% endif %}
 
-    <a href="{% url 'genview:family_edit' family.pk %}"><button>Edit Family</button></a>
-</body>
-</html>
+<!-- Medien‑Objekte -->
+<h4 class="mt-4">Medien</h4>
+{% if family.media_objects %}
+    <div class="row g-3">
+        {% for media in family.media_objects.all %}
+            <div class="col-md-4">
+                <div class="card h-100">
+                    {% if media.is_image %}
+                        <img src="{{ media.file.url }}" class="card-img-top img-fluid"
+                             alt="{{ media.title|default:'Mediadatei' }}">
+                    {% else %}
+                        <div class="card-body d-flex align-items-center justify-content-center">
+                            <a href="{{ media.file.url }}" class="stretched-link">
+                                {{ media.title|default:"Datei" }}
+                            </a>
+                        </div>
+                    {% endif %}
+                    {% if media.title or media.description %}
+                        <div class="card-body">
+                            {% if media.title %}
+                                <h5 class="card-title">{{ media.title }}</h5>
+                            {% endif %}
+                            {% if media.description %}
+                                <p class="card-text">{{ media.description|linebreaks }}</p>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-muted">Keine Medien verknüpft.</p>
+{% endif %}
+
+<hr>
+<a href="{% url 'genview:family-edit' family.pk %}" class="btn btn-primary">Bearbeiten</a>
+<a href="{% url 'genview:family-delete' family.pk %}" class="btn btn-danger">Löschen</a>
+<a href="{% url 'genview:family-list' %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+{% endblock %}

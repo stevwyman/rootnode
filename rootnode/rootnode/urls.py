@@ -18,11 +18,17 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from genview import views as genview_views
+
+from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # ------------------ Home / Startseite ------------------
+    path('', genview_views.home, name='home'),   
+    # ------------------ App‑bezogene URLs -----------------
     path('genview/', include('genview.urls'))
-]
+] + debug_toolbar_urls()
 
 # This line is CRITICAL for viewing uploaded images in development
 if settings.DEBUG:

@@ -1,2 +1,6 @@
 django
+django-bootstrap5
+python-dateutil
+django-mptt
+pytest
 python-gedcom

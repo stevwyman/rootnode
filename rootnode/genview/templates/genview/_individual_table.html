@@ -1,0 +1,61 @@
+{% comment %}
+Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
+{% endcomment %}
+{% load event_extras %}  
+<tbody>
+    {% for person in object_list %}
+    <tr>
+        <td>{{ forloop.counter }}</td>
+        <td><a href="{{ person.get_absolute_url }}">{{ person.full_name }}</a></td>
+        <td>{{ person.get_sex_display }}</td>
+        <td>
+            {% if person.age %}
+                {{ person.age }}
+            {% endif %}
+        </td>
+        <!-- <td>{{ person.birth_date|date:"Y-M-d" }}</td> -->
+        <!-- 
+        {# ---- Geburtsdatum ermitteln (Event BIRT) ---- #}
+        <td>
+            {% with birth=person.birth_events.0 %}
+                <span class="badge bg-primary">
+                    {{ birth|display_event_date }}
+                </span>
+            {% endwith %}
+        </td>
+        -->
+        {# ---- Geburtsdatum ---- #}
+        <td>
+            {% if person.birth_date %}
+                <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
+            {% elif person.birth_date_raw %}
+                <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
+            {% else %}
+                <span class="text-muted">-</span>
+            {% endif %}
+        </td>
+        {# ---- Sterbedatum (optional) ---- #}
+        <td>
+            {% if person.is_deceased %}
+                {% if person.death_date %}
+                    <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
+                {% elif person.death_date_raw %}
+                    <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
+                {% else %}
+                    <span class="text-muted">‑</span>
+                {% endif %}
+            {% else %}
+                <span class="text-muted">‑</span>
+            {% endif %}
+        </td>
+        <td>
+            <a href="{% url 'genview:individual-edit' person.pk %}"
+               class="btn btn-sm btn-outline-primary">Edit</a>
+            <a href="{% url 'genview:individual-delete' person.pk %}"
+               class="btn btn-sm btn-outline-danger">Del</a>
+        </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-center">Keine Personen gefunden.</td></tr>
+    {% endfor %}
+</tbody>

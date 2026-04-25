@@ -1,75 +1,281 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ individual.given_name }} {{ individual.surname }}</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>
-        // Initialize mermaid
-        mermaid.initialize({ startOnLoad: true });
-    </script>
-</head>
-<body>
-    <p><a href="{% url 'genview:individual_list' %}">&larr; Back to List</a></p>
-    
-    <h1>{{ individual.given_name }} {{ individual.surname }}</h1>
-    <p><strong>GEDCOM ID:</strong> {{ individual.gedcom_id }}</p>
-    <p><strong>Sex:</strong> {{ individual.get_sex_display }}</p>
+{# genview/templates/genview/individual_detail.html #}
+{% extends "genview/base.html" %}
+{% load django_bootstrap5 event_extras %}  
+{% block title %}{{ person.full_name }}{% endblock %}
 
-    <h3>Families as a Spouse:</h3>
-    <ul>
-        {% for family in individual.families_as_husband.all %}
-            <li><a href="{% url 'genview:family_detail' family.pk %}">{{ family }}</a></li>
-        {% endfor %}
-        
-        {% for family in individual.families_as_wife.all %}
-            <li><a href="{% url 'genview:family_detail' family.pk %}">{{ family }}</a></li>
-        {% endfor %}
-    </ul>
+{% block content %}
 
-    <h3>Families as a Child:</h3>
-    <ul>
-        {% for link in individual.parental_families.all %}
-            <li>
-                <a href="{% url 'genview:family_detail' link.family.pk %}">
-                    {{ link.family }}
-                </a> 
-                (Relationship: {{ link.get_relationship_type_display }})
-            </li>
-        {% endfor %}
-    </ul>
+<div class="row">
+    <div class="col-md-4 text-center">
+        {% if portrait and portrait.is_image %}
+            <img src="{{ portrait.file.url }}"
+                 alt="{{ portrait.title|default:'Portrait' }}"
+                 class="img-fluid rounded mb-3"
+                 style="max-height:300px; object-fit:cover;">
+        {% else %}
+            <svg class="bd-placeholder-img img-fluid rounded mb-3"
+                 width="200" height="200"
+                 xmlns="http://www.w3.org/2000/svg"
+                 role="img" aria-label="Kein Bild"
+                 preserveAspectRatio="xMidYMid slice"
+                 focusable="false"><title>Kein Bild</title>
+                 <rect width="100%" height="100%" fill="#868e96"></rect>
+                 <text x="50%" y="50%" fill="#dee2e6" dy=".3em" text-anchor="middle">Kein Bild</text>
+            </svg>
+        {% endif %}
 
-    <h3>Family Tree</h3>
-    <div class="mermaid">
-        {{ mermaid_graph|safe }}
+        {# Button zum Ändern / Hinzufügen des Portraits #}
+        <a href="{% url 'genview:media-add-for-person' person.pk %}"
+           class="btn btn-primary btn-sm mt-2">
+            <i class="bi bi-camera"></i> Bild hinzufügen / ändern
+        </a>
     </div>
 
-    <h3>Gallery & Documents</h3>
-    <div class="media-gallery" style="display: flex; gap: 20px; flex-wrap: wrap;">
-        {% for media in individual.media_objects.all %}
-            <div class="media-item" style="border: 1px solid #ccc; padding: 10px; max-width: 250px;">
-                
-                {% if media.is_image %}
-                    <a href="{{ media.file.url }}" target="_blank">
-                        <img src="{{ media.file.url }}" alt="{{ media.title }}" style="max-width: 100%; height: auto;">
-                    </a>
-                {% else %}
-                    <div style="background: #f4f4f4; padding: 40px 20px; text-align: center;">
-                        📄 <a href="{{ media.file.url }}" target="_blank">View Document</a>
+    <div class="col-md-8">
+        <h2 class="mb-3">{{ person.full_name }} <small class="text-muted">{{ person.gedcom_id }}</small></h2>
+
+    {# ---------- Grunddaten ---------- #}
+    <dl class="row">
+        <dt class="col-sm-3">Geschlecht</dt>
+        <dd class="col-sm-9">{{ person.get_sex_display }}</dd>
+
+        <dt class="col-sm-3">Geburtsdatum</dt>
+        <dd class="col-sm-9">
+            {% if person.birth_date %}
+                {{ person.birth_date|date:"d.m.Y" }}
+            {% elif person.birth_date_raw %}
+                {{ person.birth_date_raw }}   {# nicht parsbar, Roh‑String #}
+            {% else %}
+                <span class="text-muted">nicht angegeben</span>
+            {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Sterbedatum</dt>
+        <dd class="col-sm-9">
+            {% if person.death_date %}
+                {{ person.death_date|date:"d.m.Y" }}
+            {% elif person.death_date_raw %}
+                {{ person.death_date_raw }}
+            {% else %}
+                <span class="text-muted">nicht angegeben</span>
+            {% endif %}
+        </dd>
+
+        {% if person.notes %}
+            <dt class="col-sm-3">Notizen</dt>
+            <dd class="col-sm-9">{{ person.notes|linebreaks }}</dd>
+        {% endif %}
+    </dl>
+    </div>
+</div>
+
+<div class="container">
+
+
+    {# ---------- Ehepartner (falls vorhanden) ---------- #}
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            Ehepartner / Partner*in
+        </div>
+        <div class="card-body">
+            {% if spouse %}
+                <!-- Link zur Familien‑Detail‑Seite -->
+                <a href="{% url 'genview:family-detail' family.pk %}"
+                class="text-decoration-none">
+                    {{ family }}   {# das nutzt Family.__str__ → "Family Husb / Wife (F123)" #}
+                </a>
+
+                <a href="{% url 'genview:individual-detail' spouse.pk %}"
+                   class="text-decoration-none">{{ spouse.full_name }}</a>
+                <small class="text-muted">({{ spouse.gedcom_id }})</small>
+
+                <hr class="my-2">
+
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Geburtsdatum</dt>
+                    <dd class="col-sm-8">
+                        {% if spouse.birth_date %}
+                            {{ spouse.birth_date|date:"d.m.Y" }}
+                        {% elif spouse.birth_date_raw %}
+                            {{ spouse.birth_date_raw }}
+                        {% else %}
+                            <span class="text-muted">nicht angegeben</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4">Sterbedatum</dt>
+                    <dd class="col-sm-8">
+                        {% if spouse.death_date %}
+                            {{ spouse.death_date|date:"d.m.Y" }}
+                        {% elif spouse.death_date_raw %}
+                            {{ spouse.death_date_raw }}
+                        {% else %}
+                            <span class="text-muted">nicht angegeben</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+
+            {% else %}
+                <p class="text-muted mb-0">Keine Ehepartner‑Information verfügbar.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------- Kinder (falls vorhanden) ---------- #}
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            Kinder
+        </div>
+        <div class="card-body">
+            {% if children_links %}
+                <ul class="list-group">
+                    {% for link in children_links %}
+                        {% with child=link.child %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="{% url 'genview:individual-detail' child.pk %}"
+                                   class="text-decoration-none">{{ child.full_name }}</a>
+                                <small class="text-muted">({{ link.get_relationship_type_display }})</small>
+                            </div>
+                            <div class="text-end">
+                                <div>
+                                    <strong>Geb.</strong>
+                                    {% if child.birth_date %}
+                                        {{ child.birth_date|date:"d.m.Y" }}
+                                    {% elif child.birth_date_raw %}
+                                        {{ child.birth_date_raw }}
+                                    {% else %}
+                                        <span class="text-muted">‑</span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <strong>Tot.</strong>
+                                    {% if child.death_date %}
+                                        {{ child.death_date|date:"d.m.Y" }}
+                                    {% elif child.death_date_raw %}
+                                        {{ child.death_date_raw }}
+                                    {% else %}
+                                        <span class="text-muted">‑</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endwith %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted mb-0">Keine Kinder registriert.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------- Eltern (falls vorhanden) ---------- #}
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            Eltern
+        </div>
+        <div class="card-body">
+            {% if parent_families %}
+                {% for fam in parent_families %}
+                    <div class="mb-2">
+                        <strong>Familie {{ fam.family.gedcom_id }}</strong><br>
+                        {% if fam.family.husband %}
+                            Vater:
+                            <a href="{% url 'genview:individual-detail' fam.family.husband.pk %}"
+                               class="text-decoration-none">{{ fam.family.husband.full_name }}</a>
+                        {% else %}
+                            <span class="text-muted">Vater unbekannt</span>
+                        {% endif %}
+                        <br>
+                        {% if fam.family.wife %}
+                            Mutter:
+                            <a href="{% url 'genview:individual-detail' fam.family.wife.pk %}"
+                               class="text-decoration-none">{{ fam.family.wife.full_name }}</a>
+                        {% else %}
+                            <span class="text-muted">Mutter unbekannt</span>
+                        {% endif %}
                     </div>
-                {% endif %}
-                
-                <p><strong>{{ media.title }}</strong></p>
-                {% if media.description %}
-                    <p style="font-size: 0.9em; color: #555;">{{ media.description }}</p>
-                {% endif %}
-            </div>
-        {% empty %}
-            <p>No media files attached to this individual.</p>
-        {% endfor %}
-
-        <a href="{% url 'genview:individual_edit' individual.pk %}"><button>Edit Person</button></a>
-
+                {% endfor %}
+            {% else %}
+                <p class="text-muted mb-0">Keine Eltern‑Informationen gefunden.</p>
+            {% endif %}
+        </div>
     </div>
 
-</body>
-</html>
+    {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
+    <h4 class="mt-4">Ereignisse</h4>
+    {% if person.events.all %}
+        <ul class="list-group mb-3">
+            {% for ev in person.events.all %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ ev.get_event_type_display }}
+                    {% if ev.parsed_date %}
+                        <span class="badge bg-primary">{{ ev.parsed_date|date:"d.m.Y" }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ ev.raw_date|default:"Unbekannt" }}</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-muted">Keine Ereignisse erfasst.</p>
+    {% endif %}
+
+    <hr>
+
+
+{# ----------- Bild‑Galerie für die Person ----------- #}
+<h3>Weitere Bilder</h3>
+
+{% if gallery_images %}
+    <div class="row g-3">
+        {% for media in gallery_images %}
+            <div class="col-md-3">
+                <div class="card h-100">
+                    {% if media.is_image %}
+                        <img src="{{ media.file.url }}" class="card-img-top img-fluid"
+                             alt="{{ media.title|default:'Bild' }}" style="height:180px; object-fit:cover;">
+                    {% else %}
+                        <div class="card-body text-center">
+                            <i class="bi bi-file-earmark-text" style="font-size:3rem;"></i>
+                        </div>
+                    {% endif %}
+
+                    <div class="card-body p-2">
+                        <h6 class="card-title text-truncate mb-1">{{ media.title|default:"(ohne Titel)" }}</h6>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'genview:media-edit' media.pk %}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'genview:media-delete' media.pk person.pk %}"
+                               class="btn btn-sm btn-outline-danger"
+                               onclick="return confirm('Bild wirklich löschen?');">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-muted">Noch keine zusätzlichen Bilder vorhanden.</p>
+{% endif %}
+
+<div class="mt-3">
+    <a href="{% url 'genview:media-add-for-person' person.pk %}"
+       class="btn btn-primary">
+        <i class="bi bi-camera"></i> Bild hinzufügen
+    </a>
+</div>
+
+<hr class="my-4">
+
+<a href="{% url 'genview:individual-edit' person.pk %}" class="btn btn-primary">Bearbeiten</a>
+<a href="{% url 'genview:individual-delete' person.pk %}" class="btn btn-danger">Löschen</a>
+<a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+
+</div>
+{% endblock %}

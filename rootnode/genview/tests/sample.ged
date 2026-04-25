@@ -1,0 +1,13 @@
+0 @I1@ INDI
+1 NAME John /Doe/
+1 SEX M
+0 @I2@ INDI
+1 NAME Anna /Miller/
+1 SEX F
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I3@
+0 @I3@ INDI
+1 NAME Luke /Smith/
+1 SEX M

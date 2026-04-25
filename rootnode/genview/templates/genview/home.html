@@ -1,0 +1,19 @@
+{% extends "genview/base.html" %}
+{% block title %}Startseite{% endblock %}
+
+{% block content %}
+<div class="jumbotron py-5 text-center bg-white rounded shadow-sm">
+    <h1 class="display-4">Willkommen beim GEDCOM‑Stammbaum</h1>
+    <p class="lead mt-3">
+        Hier kannst du Personen, Familien und Ereignisse durchsuchen,
+        Stammbäume visualisieren und GEDCOM‑Dateien importieren.
+    </p>
+
+    <a href="{% url 'genview:individual-list' %}" class="btn btn-primary btn-lg me-2">
+        Personen ansehen
+    </a>
+    <a href="{% url 'genview:family-list' %}" class="btn btn-outline-primary btn-lg">
+        Familien ansehen
+    </a>
+</div>
+{% endblock %}

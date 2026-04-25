@@ -29,6 +29,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+INTERNAL_IPS = [
+    # ...
+    "127.0.0.1",
+    # ...
+]
 
 # Application definition
 
@@ -39,6 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'debug_toolbar',                    # TODO remove later
+    'django_bootstrap5',
     'genview',
 ]
 
@@ -50,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware', # TODO remove later
 ]
 
 ROOT_URLCONF = 'rootnode.urls'
@@ -61,6 +69,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug', # TODO: remove later
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -105,7 +114,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'de-DE'
 
 TIME_ZONE = 'UTC'
 
@@ -117,7 +126,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+# ---- Static files -------------------------------------------------
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'          # für collectstatic (Produktiv)
+STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs‑Ordner
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
