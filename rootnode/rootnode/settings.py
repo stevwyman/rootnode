@@ -14,6 +14,10 @@ import os
 
 from pathlib import Path
 
+from logging import getLogger
+
+logger = getLogger(__name__)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -141,3 +145,38 @@ MEDIA_URL = '/media/'
 
 # The absolute folder path on your computer where Django will save the files
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "extended": {
+            "format": "{levelname} {asctime} {name} {funcName} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {funcName}: {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG",
+    },
+    "loggers": {
+        "pymongo": {
+            "handlers": ["console"],
+            "level": "ERROR",
+        }
+    } 
+}

@@ -11,6 +11,11 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.safestring import mark_safe
 from typing import Set, List, Tuple
+
+from logging import getLogger
+
+logger = getLogger(__name__)
+
 from .models import Individual, Family, Event, ChildFamilyLink, MediaObject
 from .forms import IndividualForm, IndividualSearchForm, FamilyForm, ChildFamilyLinkForm, MediaObjectForm
 
@@ -164,8 +169,7 @@ class IndividualDetailView(DetailView):
             person.media_objects.exclude(pk=portrait.pk) if portrait else person.media_objects.all()
         )
 
-        return ctx
-
+        return ctx 
 
 class IndividualCreateView(CreateView):
     model = Individual
