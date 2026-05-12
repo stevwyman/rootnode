@@ -3,6 +3,48 @@
 {% load django_bootstrap5 event_extras %}  
 {% block title %}{{ person.full_name }}{% endblock %}
 
+
+
+{% block extra_head %}
+<script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-dtree@2.4.1/dist/dTree.min.js"></script>
+    <style>
+        /* Basic styling for the interactive tree */
+        #graph {
+            width: 100%;
+            height: 500px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        .node {
+            background-color: #ffffff;
+            border: 2px solid #4a90e2;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .node:hover {
+            background-color: #e3f2fd;
+        }
+        .linage {
+            fill: none;
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .marriage {
+            fill: none;
+            stroke: #333;
+            stroke-width: 2px;
+            stroke-dasharray: 5, 5; /* Dashed line for partners */
+        }
+    </style>
+{% endblock%}
+
 {% block content %}
 
 <div class="row">
@@ -277,5 +319,45 @@
 <a href="{% url 'genview:individual-delete' person.pk %}" class="btn btn-danger">Löschen</a>
 <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
 
+</div>
+<div>
+    <h3>Interactive Family Tree</h3>
+    <div id="graph"></div>
+
+    <script>
+        const treeData = {{ tree_json|safe }};
+
+        dTree.init(treeData, {
+            target: "#graph",
+            debug: false,
+            height: 500,
+            width: 800,
+            // We can adjust the node size here to give the text more room to breathe
+            nodeWidth: 140, 
+            nodeHeight: 60,
+            callbacks: {
+                // This tells dTree to draw our custom HTML instead of basic text
+                nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
+                    
+                    // Check if we have dates to display
+                    let datesHtml = '';
+                    if (extra && extra.dates) {
+                        datesHtml = `<div style="font-size: 11px; color: #666; margin-top: 4px;">${extra.dates}</div>`;
+                    }
+
+                    // Return standard HTML. dTree automatically converts this into an SVG foreignObject!
+                    return `<div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 5px; box-sizing: border-box; cursor: pointer;">
+                                <div style="font-weight: bold; font-size: 14px; text-align: center; line-height: 1.2;">${name}</div>
+                                ${datesHtml}
+                            </div>`;
+                },
+                nodeClick: function(name, extra) {
+                    if (extra && extra.id) {
+                        window.location.href = "/genview/people/" + extra.id + "/";
+                    }
+                }
+            }
+        });
+    </script>
 </div>
 {% endblock %}

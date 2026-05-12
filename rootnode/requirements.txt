@@ -1,5 +1,6 @@
 django
 django-bootstrap5
+django-debug-toolbar
 python-dateutil
 django-mptt
 pytest
