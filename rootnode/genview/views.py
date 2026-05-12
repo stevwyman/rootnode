@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from django.contrib import messages
 from django.db.models import Count, Prefetch
 from django.db.models import Q
@@ -168,6 +169,92 @@ class IndividualDetailView(DetailView):
         ctx['gallery_images'] = (
             person.media_objects.exclude(pk=portrait.pk) if portrait else person.media_objects.all()
         )
+
+        #
+        # for tree view
+        #
+
+        # Helper function to format a person for dTree
+        def format_person(p):
+            if not p: return None
+
+            birth_date = ""
+            death_date = ""
+
+            # Check the person's events to find birth and death dates
+            # We use .all() and loop to avoid hitting the database multiple times per person
+            for event in p.events.all():
+                if event.event_type == 'BIRT' and not birth_date:
+                    birth_date = event.raw_date
+                elif event.event_type == 'DEAT' and not death_date:
+                    death_date = event.raw_date
+
+            # Format the date string nicely
+            date_str = ""
+            if birth_date or death_date:
+                b_str = birth_date if birth_date else "?"
+                d_str = death_date if death_date else "Present"
+                
+                if not death_date:
+                    date_str = f"b. {b_str}"
+                else:
+                    date_str = f"{b_str} - {d_str}"
+
+            return {
+                "name": f"{p.given_name} {p.surname}",
+                "class": "node",
+                "extra": {
+                    "id": p.pk,
+                    "gedcom_id": p.gedcom_id,
+                    "dates": date_str  # Add our new date string here!
+                }
+            }
+        
+        tree_data = []
+        parent_link = person.parental_families.first()
+        
+        if parent_link and (parent_link.family.husband or parent_link.family.wife):
+            family = parent_link.family
+            root_person = family.husband if family.husband else family.wife
+            spouse_person = family.wife if family.husband else None
+
+            root_node = format_person(root_person)
+            target_node = format_person(person)
+            target_node["marriages"] = []
+            
+            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
+            
+            for fam in spouse_families:
+                partner = fam.wife if fam.husband == person else fam.husband
+                marriage_data = {
+                    "spouse": format_person(partner) if partner else {"name": "Unknown Partner"},
+                    "children": []
+                }
+                for child_link in fam.children.all():
+                    marriage_data["children"].append(format_person(child_link.child))
+                target_node["marriages"].append(marriage_data)
+
+            root_node["marriages"] = [{
+                "spouse": format_person(spouse_person) if spouse_person else {"name": "Unknown"},
+                "children": [target_node]
+            }]
+            tree_data.append(root_node)
+
+        else:
+            target_node = format_person(person)
+            target_node["marriages"] = []
+            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
+            for fam in spouse_families:
+                partner = fam.wife if fam.husband == person else fam.husband
+                marriage_data = {
+                    "spouse": format_person(partner) if partner else {"name": "Unknown Partner"},
+                    "children": [format_person(c.child) for c in fam.children.all()]
+                }
+                target_node["marriages"].append(marriage_data)
+            tree_data.append(target_node)
+
+        # Convert the Python dictionary to a JSON string for the template
+        ctx['tree_json'] = json.dumps(tree_data)
 
         return ctx 
 
