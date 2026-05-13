@@ -49,9 +49,9 @@ Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
             {% endif %}
         </td>
         <td>
-            <a href="{% url 'genview:individual-edit' person.pk %}"
+            <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
                class="btn btn-sm btn-outline-primary">Edit</a>
-            <a href="{% url 'genview:individual-delete' person.pk %}"
+            <a href="{% url 'genview:individual-delete' tree_id person.pk %}"
                class="btn btn-sm btn-outline-danger">Del</a>
         </td>
     </tr>

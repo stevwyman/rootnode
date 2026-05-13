@@ -9,10 +9,10 @@
         Stammbäume visualisieren und GEDCOM‑Dateien importieren.
     </p>
 
-    <a href="{% url 'genview:individual-list' %}" class="btn btn-primary btn-lg me-2">
+    <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-primary btn-lg me-2">
         Personen ansehen
     </a>
-    <a href="{% url 'genview:family-list' %}" class="btn btn-outline-primary btn-lg">
+    <a href="{% url 'genview:family-list' tree_id %}" class="btn btn-outline-primary btn-lg">
         Familien ansehen
     </a>
 </div>

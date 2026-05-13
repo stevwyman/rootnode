@@ -140,6 +140,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs‑Ord
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+LOGIN_REDIRECT_URL = '/'
+
 # The URL path where files will be accessible in the browser
 MEDIA_URL = '/media/'
 

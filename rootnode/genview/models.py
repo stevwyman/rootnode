@@ -4,11 +4,39 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
+from django.contrib.auth.models import User
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from mptt.models import MPTTModel, TreeForeignKey
 
+class Tree(models.Model):
+    """Represents a distinct family tree (a GEDCOM file import)."""
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class TreeMembership(models.Model):
+    """Maps a User to a Tree and defines what they can do."""
+    ROLE_CHOICES = [
+        ('VIEWER', 'Can only view data'),
+        ('EDITOR', 'Can edit individuals and families'),
+        ('ADMIN', 'Can edit data, import GEDCOMs, and invite users'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='memberships')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='VIEWER')
+
+    class Meta:
+        # A user can only have one permission level per tree
+        unique_together = ('user', 'gedcom_tree')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.gedcom_tree.name} ({self.role})"
 
 # ----------------------------------------------------------------------
 # 1️⃣ Helper‑Mixin – überall wo ein GEDCOM‑ID‑Feld nötig ist
@@ -20,7 +48,7 @@ class GedcomIdMixin(models.Model):
     """
     gedcom_id = models.CharField(
         max_length=20,
-        unique=True,
+        # unique=True,
         help_text="GEDCOM‑Referenz, z. B. @I1@, @F2@ …",
     )
 
@@ -44,6 +72,8 @@ class Source(models.Model):
     author = models.CharField(max_length=255, blank=True)
     publication_facts = models.CharField(max_length=255, blank=True)
     text = models.TextField(blank=True)
+
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='sources')
 
     class Meta:
         ordering = ["title"]
@@ -76,6 +106,8 @@ class Individual(GedcomIdMixin):
 
     notes = models.TextField(blank=True)
 
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='individuals')
+
     # Quellen, in denen diese Person auftaucht
     sources = models.ManyToManyField(
         Source,
@@ -85,6 +117,7 @@ class Individual(GedcomIdMixin):
 
     class Meta:
         ordering = ["surname", "given_name"]
+        unique_together = ('gedcom_tree', 'gedcom_id')
         indexes = [
             models.Index(fields=["surname", "given_name"]),
             models.Index(fields=["sex"]),
@@ -105,7 +138,10 @@ class Individual(GedcomIdMixin):
         return " ".join(p for p in parts if p).strip() or "Unnamed"
     
     def get_absolute_url(self):
-        return reverse("genview:individual-detail", kwargs={"pk": self.pk})
+        return reverse("genview:individual-detail", kwargs={
+            "tree_id": self.gedcom_tree_id, 
+            "pk": self.pk
+        })
 
     # --------------------------------------------------------------
     # ★★ Neu: Convenience‑Properties für Geburts‑ und Sterbedatum ★★
@@ -194,6 +230,7 @@ class Family(MPTTModel, GedcomIdMixin):
     class Meta:
         verbose_name_plural = "Families"
         ordering = ["gedcom_id"]
+        unique_together = ('gedcom_tree', 'gedcom_id')
 
     # Ehepartner (optional – GEDCOM erlaubt leere Rollen)
     husband = models.ForeignKey(
@@ -229,13 +266,18 @@ class Family(MPTTModel, GedcomIdMixin):
         related_name="families",
     )
 
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='families')
+
     def __str__(self) -> str:
         husb = self.husband.surname if self.husband else "?"
         wife = self.wife.surname if self.wife else "?"
         return f"Family {husb} / {wife} ({self.gedcom_id})"
     
     def get_absolute_url(self):
-        return reverse("genview:family_detail", kwargs={"pk": self.pk})
+        return reverse("genview:family-detail", kwargs={
+            "tree_id": self.gedcom_tree_id, 
+            "pk": self.pk
+        })
 
     # ------------------------------------------------------------------
     # Convenience‑Methode – liefert ein QuerySet aller Kinder‑Individuals
@@ -339,6 +381,8 @@ class Event(models.Model):
 
     event_type = models.CharField(max_length=10, choices=EventType.choices)
 
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='events')
+
     # **Exklusiver** FK – nur einer von beiden darf gesetzt sein
     individual = models.ForeignKey(
         Individual,
@@ -438,6 +482,8 @@ class MediaObject(models.Model):
         help_text="Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt.",
         db_index=True,
     )
+
+    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='mediaobjects')
 
     class Meta:
         ordering = ["-is_portrait", "title"]   # Portrait‑Bilder zuerst

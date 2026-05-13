@@ -101,15 +101,15 @@
 
             {# ----------------------------------------------------------- #}
             <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-secondary">
                     Zurück zur Übersicht
                 </a>
 
                 {% if view.object %}
-                    <a href="{% url 'genview:individual-detail' view.object.pk %}"
+                    <a href="{% url 'genview:individual-detail' tree_id view.object.pk %}"
                        class="btn btn-outline-primary">Abbrechen</a>
                 {% else %}
-                    <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-primary">
+                    <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-primary">
                         Abbrechen
                     </a>
                 {% endif %}

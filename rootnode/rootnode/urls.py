@@ -24,8 +24,10 @@ from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('accounts/', include('django.contrib.auth.urls')),
     # ------------------ Home / Startseite ------------------
-    path('', genview_views.home, name='home'),   
+    #path('', genview_views.home, name='home'),   
+    path('', genview_views.TreeListView.as_view(), name='tree_list'),
     # ------------------ App‑bezogene URLs -----------------
     path('genview/', include('genview.urls'))
 ] + debug_toolbar_urls()

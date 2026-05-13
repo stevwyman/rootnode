@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
 from django.db.models import Q
 from django.http import JsonResponse
@@ -17,8 +19,9 @@ from logging import getLogger
 
 logger = getLogger(__name__)
 
-from .models import Individual, Family, Event, ChildFamilyLink, MediaObject
+from .models import Individual, Family, Event, ChildFamilyLink, MediaObject, Tree, TreeMembership
 from .forms import IndividualForm, IndividualSearchForm, FamilyForm, ChildFamilyLinkForm, MediaObjectForm
+from .mixins import TreeAccessMixin, TreeEditAccessMixin
 
 def home(request):
     """
@@ -28,23 +31,42 @@ def home(request):
     return render(request, "genview/home.html")
 
 # ----------------------------------------------------------------------
+# Trees
+# ----------------------------------------------------------------------
+
+class TreeListView(LoginRequiredMixin, ListView):
+    model = Tree
+    template_name = 'genview/tree_list.html'
+    context_object_name = 'trees'
+
+    def get_queryset(self):
+        # Only show trees where the user has a membership
+        allowed_tree_ids = TreeMembership.objects.filter(
+            user=self.request.user
+        ).values_list('gedcom_tree_id', flat=True)
+        return Tree.objects.filter(id__in=allowed_tree_ids)
+
+# ----------------------------------------------------------------------
 # Individuals
 # ----------------------------------------------------------------------
 
-class IndividualListView(ListView):
+class IndividualListView(LoginRequiredMixin, TreeAccessMixin, ListView):
     model = Individual
     template_name = 'genview/individual_list.html'
     context_object_name = 'people'
     paginate_by = 25  # Helpful if you have thousands of records
 
     def get_queryset(self):
+        tree_id = self.kwargs.get('tree_id')
+
         birth_qs = Event.objects.filter(event_type=Event.EventType.BIRTH)
-        return Individual.objects.prefetch_related(
+
+        return Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
             Prefetch('events', queryset=birth_qs, to_attr='birth_events')
         ).order_by('surname', 'given_name')
 
 
-class IndividualDetailView(DetailView):
+class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
     model = Individual
     template_name = 'genview/individual_detail.html'
     context_object_name = 'person'
@@ -58,8 +80,9 @@ class IndividualDetailView(DetailView):
         * Kinder‑Links (Family.children) – selektiert über das Through‑Model.
         * Eltern‑Familien (person.parental_families) – ebenfalls über Prefetch.
         """
+        tree_id = self.kwargs.get('tree_id')
         return (
-            Individual.objects.prefetch_related(
+            Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
                 # 1️⃣ Events (einfaches Related‐Name)
                 Prefetch("events", queryset=Event.objects.all()),
 
@@ -206,10 +229,19 @@ class IndividualDetailView(DetailView):
                 "extra": {
                     "id": p.pk,
                     "gedcom_id": p.gedcom_id,
-                    "dates": date_str  # Add our new date string here!
+                    "dates": date_str,
+                    "url": p.get_absolute_url()
                 }
             }
         
+        # helper to build the marriage string
+        def get_marriage_str(fam):
+            if not fam: return ""
+            m_date = fam.marriage_date_raw
+            m_place = fam.marriage_place
+            parts = [p for p in (m_date, m_place) if p]
+            return "⚭ " + ", ".join(parts) if parts else ""
+
         tree_data = []
         parent_link = person.parental_families.first()
         
@@ -222,35 +254,59 @@ class IndividualDetailView(DetailView):
             target_node = format_person(person)
             target_node["marriages"] = []
             
+            # --- TARGET'S MARRIAGES ---
             spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
             
             for fam in spouse_families:
                 partner = fam.wife if fam.husband == person else fam.husband
+                # Ensure we always have a dictionary, even for unknown partners
+                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
+                
+                # Inject marriage info
+                m_str = get_marriage_str(fam)
+                if m_str and "extra" in spouse_node:
+                    spouse_node["extra"]["marriage_info"] = m_str
+                
                 marriage_data = {
-                    "spouse": format_person(partner) if partner else {"name": "Unknown Partner"},
-                    "children": []
-                }
-                for child_link in fam.children.all():
-                    marriage_data["children"].append(format_person(child_link.child))
-                target_node["marriages"].append(marriage_data)
-
-            root_node["marriages"] = [{
-                "spouse": format_person(spouse_person) if spouse_person else {"name": "Unknown"},
-                "children": [target_node]
-            }]
-            tree_data.append(root_node)
-
-        else:
-            target_node = format_person(person)
-            target_node["marriages"] = []
-            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
-            for fam in spouse_families:
-                partner = fam.wife if fam.husband == person else fam.husband
-                marriage_data = {
-                    "spouse": format_person(partner) if partner else {"name": "Unknown Partner"},
+                    "spouse": spouse_node,
                     "children": [format_person(c.child) for c in fam.children.all()]
                 }
                 target_node["marriages"].append(marriage_data)
+
+            # --- PARENTS' MARRIAGE ---
+            spouse_node = format_person(spouse_person) if spouse_person else {"name": "Unknown Partner", "class": "node", "extra": {}}
+            m_str = get_marriage_str(family)
+            if m_str and "extra" in spouse_node:
+                spouse_node["extra"]["marriage_info"] = m_str
+
+            root_node["marriages"] = [{
+                "spouse": spouse_node,
+                "children": [target_node]
+            }]
+            
+            tree_data.append(root_node)
+
+        else:
+            # If no parents, target node is the root
+            target_node = format_person(person)
+            target_node["marriages"] = []
+            
+            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
+            for fam in spouse_families:
+                partner = fam.wife if fam.husband == person else fam.husband
+                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
+                
+                # Inject marriage info
+                m_str = get_marriage_str(fam)
+                if m_str and "extra" in spouse_node:
+                    spouse_node["extra"]["marriage_info"] = m_str
+
+                marriage_data = {
+                    "spouse": spouse_node,
+                    "children": [format_person(c.child) for c in fam.children.all()]
+                }
+                target_node["marriages"].append(marriage_data)
+                
             tree_data.append(target_node)
 
         # Convert the Python dictionary to a JSON string for the template
@@ -258,7 +314,8 @@ class IndividualDetailView(DetailView):
 
         return ctx 
 
-class IndividualCreateView(CreateView):
+
+class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Individual
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
@@ -272,7 +329,7 @@ class IndividualCreateView(CreateView):
         return reverse_lazy("genview:individual-detail", kwargs={"pk": self.object.pk})
 
 
-class IndividualUpdateView(UpdateView):
+class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = Individual
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
@@ -283,16 +340,19 @@ class IndividualUpdateView(UpdateView):
         return response
 
     def get_success_url(self):
-        return reverse_lazy("genview:individual-detail", kwargs={"pk": self.object.pk})
+        return reverse_lazy("genview:individual-detail", kwargs={
+            "tree_id": self.object.gedcom_tree_id,
+            "pk": self.object.pk
+        })
 
 
-class IndividualDeleteView(DeleteView):
+class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Individual
     template_name = "genview/individual_confirm_delete.html"
     success_url = reverse_lazy("genview:individual-list")
 
 
-class IndividualSearchView(ListView):
+class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
     """
     Listet Personen und filtert nach dem Suchbegriff `q`.
     Der Suchbegriff wird in mehreren Feldern geprüft:
@@ -337,13 +397,17 @@ class IndividualSearchView(ListView):
         return qs
 
 
-class IndividualSearchAjaxView(ListView):
+class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
     model = Individual
     paginate_by = 25
     ordering = ["surname", "given_name"]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        # 1. SECURITY FIX: Lock the base queryset to the current tree FIRST
+        tree_id = self.kwargs.get('tree_id')
+        qs = Individual.objects.filter(gedcom_tree_id=tree_id).order_by(*self.ordering)
+
+        # 2. Apply the search query terms
         query = self.request.GET.get("q", "").strip()
         if query:
             terms = query.split()
@@ -366,30 +430,31 @@ class IndividualSearchAjaxView(ListView):
             "pager":    "<nav>…</nav>"
         }
         """
+        # Add our custom search query variable directly into the main context
+        context["search_query"] = self.request.GET.get("q", "").strip()
+
+        # TEMPLATE FIX: Pass the ENTIRE context dictionary to render_to_string.
+        # This ensures your fragments have access to 'tree_id', 'user', etc.
         table_html = render_to_string(
-            "genview/_individual_table.html",   # <tbody>‑Fragment
-            {"object_list": context["object_list"]},
+            "genview/_individual_table.html",
+            context,
             request=self.request,
         )
         pager_html = render_to_string(
-            "genview/_individual_pager.html",   # komplette Pagination‑Leiste
-            {
-                "page_obj": context["page_obj"],
-                "paginator": context["paginator"],
-                "is_paginated": context["is_paginated"],
-                "search_query": self.request.GET.get("q", "").strip(),
-            },
+            "genview/_individual_pager.html",
+            context,
             request=self.request,
         )
+        
         return JsonResponse({"table": table_html, "pager": pager_html})
-    
+        
 # ----------------------------------------------------------------------
 # Families
 # ----------------------------------------------------------------------
 
-class FamilyListView(ListView):
+class FamilyListView(LoginRequiredMixin, TreeAccessMixin, ListView):
     """
-    Zeigt eine paginierte Liste aller Familien.
+    Zeigt eine paginierte Liste aller Familien des ausgewählten Baums.
     Zusätzliche Annotationen:
     * `children_count` – wie viele Kinder in der Familie verknüpft sind.
     * `husband_name` / `wife_name` – für schnellere Anzeige (keine extra Query).
@@ -400,16 +465,20 @@ class FamilyListView(ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        # Anzahl der Kinder pro Familie ermitteln (via annotate)
+        # 1. Grab the tree_id from the URL
+        tree_id = self.kwargs.get('tree_id')
+
+        # 2. Filter by the tree FIRST, then do your joins and annotations
         qs = (
-            Family.objects.select_related("husband", "wife")
+            Family.objects.filter(gedcom_tree_id=tree_id) 
+            .select_related("husband", "wife")
             .annotate(children_count=Count("children"))
             .order_by("gedcom_id")
         )
         return qs
 
 
-class FamilyDetailView(DetailView):
+class FamilyDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
     """
     Detail‑Ansicht einer Familie.
     - `husband` und `wife` werden bereits über `select_related` geladen.
@@ -442,9 +511,14 @@ class FamilyDetailView(DetailView):
             )
             .order_by("-id")
         )
+    
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['tree_id'] = self.kwargs.get('tree_id')
+        return ctx
 
 
-class FamilyCreateView(CreateView):
+class FamilyCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Family
     form_class = FamilyForm
     template_name = "genview/family_form.html"
@@ -457,7 +531,7 @@ class FamilyCreateView(CreateView):
         return reverse_lazy("genview:family-detail", kwargs={"pk": self.object.pk})
 
 
-class FamilyUpdateView(UpdateView):
+class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = Family
     form_class = FamilyForm
     template_name = "genview/family_form.html"
@@ -467,10 +541,13 @@ class FamilyUpdateView(UpdateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("genview:family_detail", kwargs={"pk": self.object.pk})
+        return reverse_lazy("genview:family-detail", kwargs={
+            "tree_id": self.object.gedcom_tree_id, 
+            "pk": self.object.pk
+        })
 
 
-class FamilyDeleteView(DeleteView):
+class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Family
     template_name = "genview/family_confirm_delete.html"
     success_url = reverse_lazy("genview:family-list")
@@ -479,7 +556,7 @@ class FamilyDeleteView(DeleteView):
 # ----------------------------------------------------------------------
 #  Kind‑zu‑Familie‑Link – hinzufügen / bearbeiten
 # ----------------------------------------------------------------------
-class ChildFamilyLinkCreateView(CreateView):
+class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = ChildFamilyLink
     form_class = ChildFamilyLinkForm
     template_name = "genview/childfamilylink_form.html"
@@ -491,7 +568,7 @@ class ChildFamilyLinkCreateView(CreateView):
         )
 
 
-class ChildFamilyLinkDeleteView(DeleteView):
+class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = ChildFamilyLink
     template_name = "genview/childfamilylink_confirm_delete.html"
 
@@ -505,81 +582,146 @@ class ChildFamilyLinkDeleteView(DeleteView):
 # --------------------------------------------------------------
 #  Medien‑Liste (optional – Übersicht aller Medien)
 # --------------------------------------------------------------
-class MediaObjectListView(ListView):
+class MediaObjectListView(LoginRequiredMixin, TreeAccessMixin, ListView):
     model = MediaObject
     template_name = "genview/mediaobject_list.html"
     context_object_name = "media"
     paginate_by = 20
-    ordering = ["title"]
+
+    def get_queryset(self):
+        # 1. Grab the tree ID from the URL
+        tree_id = self.kwargs.get('tree_id')
+
+        # 2. SECURITY FIX: Return ONLY media belonging to this specific tree
+        return MediaObject.objects.filter(
+            gedcom_tree_id=tree_id
+        ).order_by("title")
 
 
 # --------------------------------------------------------------
 #  Bild‑Upload & Zuordnung zu Personen
 # --------------------------------------------------------------
-class MediaObjectCreateView(CreateView):
+class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = MediaObject
     form_class = MediaObjectForm
     template_name = "genview/mediaobject_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        """
-        Holt die Person (falls `person_pk` in der URL übergeben wurde) und
-        speichert sie im View‑Objekt, damit wir sie im `get_form_kwargs()`
-        weitergeben können.
-        """
         self.person = None
         person_pk = kwargs.get("person_pk")
         if person_pk:
-            self.person = get_object_or_404(Individual, pk=person_pk)
+            # Sicherstellen, dass die Person auch zum aktuellen Baum gehört
+            self.person = get_object_or_404(
+                Individual, 
+                pk=person_pk, 
+                gedcom_tree_id=kwargs.get("tree_id")
+            )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        # Wir übergeben die Person‑Instanz (oder None) an das Form‑Konstruktor‑Argument.
         kwargs["person"] = self.person
         return kwargs
 
+    def form_valid(self, form):
+        """
+        Hier weisen wir dem neuen MediaObject den aktuellen Baum zu,
+        bevor es in die Datenbank geschrieben wird.
+        """
+        tree_id = self.kwargs.get("tree_id")
+        form.instance.gedcom_tree_id = tree_id
+        
+        # Falls eine Person verknüpft ist, fügen wir sie direkt dem ManyToMany-Feld hinzu
+        # (Das muss nach dem super().form_valid passieren, da das Objekt erst eine ID braucht)
+        response = super().form_valid(form)
+        if self.person:
+            self.object.individuals.add(self.person)
+        
+        return response
+
     def get_success_url(self):
-        """
-        Nach erfolgreichem Upload zurück zur Detail‑Seite der Person,
-        zu der das Bild gerade hochgeladen wurde.
-        """
+        tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Bild erfolgreich hochgeladen.")
+        
         if self.person:
             return reverse_lazy(
-                "genview:individual-detail",
-                kwargs={"pk": self.person.pk},
+                "genview:individual-detail", # Achte auf Konsistenz (Unterstrich vs Bindestrich)
+                kwargs={
+                    "tree_id": tree_id, 
+                    "pk": self.person.pk
+                },
             )
-        # Fallback: Zur Medien‑Übersicht
-        return reverse_lazy("genview:media-list")
+        
+        # Fallback: Zur Medien-Übersicht des Baums
+        return reverse_lazy(
+            "genview:media-list", 
+            kwargs={"tree_id": tree_id}
+        )
+
 
 # --------------------------------------------------------------
-# 3️⃣  Bild‑Bearbeitung (für ein beliebiges MediaObject)
+# 3️⃣ Bild-Bearbeitung
 # --------------------------------------------------------------
-class MediaObjectUpdateView(UpdateView):
+class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = MediaObject
     form_class = MediaObjectForm
     template_name = "genview/mediaobject_form.html"
 
+    def get_queryset(self):
+        # SICHERHEITS-FIX: Stelle sicher, dass das gesuchte Media-Objekt
+        # auch wirklich zu dem Baum in der URL gehört!
+        tree_id = self.kwargs.get("tree_id")
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+
     def get_success_url(self):
-        # Nach dem Ändern zurück zur Person‑Detail‑Seite
+        tree_id = self.kwargs.get("tree_id")
+        
+        # Versuche die erste verknüpfte Person zu finden
         person = self.object.individuals.first()
-        return reverse_lazy("genview:individual_detail", kwargs={"pk": person.pk})
+        
+        if person:
+            # Achte darauf, ob dein URL-Name einen Bindestrich oder Unterstrich hat!
+            # Meistens ist es 'individual_detail'
+            return reverse_lazy("genview:individual-detail", kwargs={
+                "tree_id": tree_id, 
+                "pk": person.pk
+            })
+            
+        # Fallback, falls das Bild an keine Person gehängt ist (z.B. Familienbild)
+        messages.success(self.request, "Bild aktualisiert.")
+        return reverse_lazy("genview:tree-list") # Oder deine Medien-Übersicht
 
 
 # --------------------------------------------------------------
-# 4️⃣  Bild‑Löschung (nach Bestätigung)
+# 4️⃣ Bild-Löschung (nach Bestätigung)
 # --------------------------------------------------------------
-class MediaObjectDeleteView(DeleteView):
+class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = MediaObject
     template_name = "genview/mediaobject_confirm_delete.html"
 
+    def get_queryset(self):
+        # SICHERHEITS-FIX: Verhindert, dass Bilder anderer Bäume gelöscht werden
+        tree_id = self.kwargs.get("tree_id")
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Reiche die person_pk aus der URL an das Template weiter (falls vorhanden)
+        context['person_pk'] = self.kwargs.get('person_pk')
+        return context
+
     def get_success_url(self):
-        """
-        Wir leiten zurück zur Person‑Detail‑Seite,
-        von der aus das Bild gelöscht wurde (person_pk via URL übergeben).
-        """
+        tree_id = self.kwargs.get("tree_id")
         person_pk = self.kwargs.get("person_pk")
+        
         messages.success(self.request, "Bild wurde entfernt.")
-        return reverse_lazy("genview:individual_detail", kwargs={"pk": person_pk})
+        
+        if person_pk:
+            return reverse_lazy("genview:individual-detail", kwargs={
+                "tree_id": tree_id, 
+                "pk": person_pk
+            })
+            
+        # Fallback, falls kein person_pk in der URL übergeben wurde
+        return reverse_lazy("genview:tree-list")
     

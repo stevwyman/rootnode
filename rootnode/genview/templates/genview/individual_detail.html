@@ -3,10 +3,8 @@
 {% load django_bootstrap5 event_extras %}  
 {% block title %}{{ person.full_name }}{% endblock %}
 
-
-
 {% block extra_head %}
-<script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-dtree@2.4.1/dist/dTree.min.js"></script>
     <style>
@@ -75,7 +73,7 @@
         {% endif %}
 
         {# Button zum Ändern / Hinzufügen des Portraits #}
-        <a href="{% url 'genview:media-add-for-person' person.pk %}"
+        <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}"
            class="btn btn-primary btn-sm mt-2">
             <i class="bi bi-camera"></i> Bild hinzufügen / ändern
         </a>
@@ -133,7 +131,7 @@
                             <strong>Familie {{ fam.family.gedcom_id }}</strong><br>
                             {% if fam.family.husband %}
                                 Vater:
-                                <a href="{% url 'genview:individual-detail' fam.family.husband.pk %}"
+                                <a href="{% url 'genview:individual-detail' tree_id fam.family.husband.pk %}"
                                 class="text-decoration-none">{{ fam.family.husband.full_name }}</a>
                             {% else %}
                                 <span class="text-muted">Vater unbekannt</span>
@@ -141,7 +139,7 @@
                             <br>
                             {% if fam.family.wife %}
                                 Mutter:
-                                <a href="{% url 'genview:individual-detail' fam.family.wife.pk %}"
+                                <a href="{% url 'genview:individual-detail' tree_id fam.family.wife.pk %}"
                                 class="text-decoration-none">{{ fam.family.wife.full_name }}</a>
                             {% else %}
                                 <span class="text-muted">Mutter unbekannt</span>
@@ -157,27 +155,149 @@
 </div>
 
 
-<div class="row">
+<div class="row mt-3">
+    <!-- left column for detail tabs -->
     <div class="col-8">
-        {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
-        <h4 class="mt-4">Ereignisse</h4>
-        {% if person.events.all %}
-            <ul class="list-group mb-3">
-                {% for ev in person.events.all %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ ev.get_event_type_display }}
-                        {% if ev.parsed_date %}
-                            <span class="badge bg-primary">{{ ev.parsed_date|date:"d.m.Y" }}</span>
-                        {% else %}
-                            <span class="badge bg-secondary">{{ ev.raw_date|default:"Unbekannt" }}</span>
-                        {% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="text-muted">Keine Ereignisse erfasst.</p>
-        {% endif %}
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Home</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pictures-tab" data-bs-toggle="tab" data-bs-target="#pictures" type="button" role="tab" aria-controls="pictures" aria-selected="false">Bilder</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="contact-tab" data-bs-toggle="tab" data-bs-target="#contact" type="button" role="tab" aria-controls="contact" aria-selected="false">Contact</button>
+            </li>
+        </ul>
+
+        <div class="tab-content mt-3" id="myTabContent">
+            <!-- events tab content -->
+            <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
+                {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
+                <h4 class="mt-4">Ereignisse</h4>
+                {% if person.events.all %}
+                    <ul class="list-group mb-3">
+                        {% for ev in person.events.all %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ ev.get_event_type_display }}
+                                {% if ev.parsed_date %}
+                                    <span class="badge bg-primary">{{ ev.parsed_date|date:"d.m.Y" }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ ev.raw_date|default:"Unbekannt" }}</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Keine Ereignisse erfasst.</p>
+                {% endif %}
+            </div>
+            <!-- pictures tab content -->
+            <div class="tab-pane fade" id="pictures" role="tabpanel" aria-labelledby="pictures-tab">
+                {# ----------- Bild‑Galerie für die Person ----------- #}
+                <h3>Weitere Bilder</h3>
+
+                {% if gallery_images %}
+                    <div class="row g-3">
+                        {% for media in gallery_images %}
+                            <div class="col-md-3">
+                                <div class="card h-100">
+                                    {% if media.is_image %}
+                                        <img src="{{ media.file.url }}" class="card-img-top img-fluid"
+                                            alt="{{ media.title|default:'Bild' }}" style="height:180px; object-fit:cover;">
+                                    {% else %}
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-file-earmark-text" style="font-size:3rem;"></i>
+                                        </div>
+                                    {% endif %}
+
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title text-truncate mb-1">{{ media.title|default:"(ohne Titel)" }}</h6>
+
+                                        <div class="d-flex justify-content-between">
+                                            <a href="{% url 'genview:media-edit' tree_id media.pk %}"
+                                            class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{% url 'genview:media-delete' tree_id media.pk person.pk %}"
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Bild wirklich löschen?');">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">Noch keine zusätzlichen Bilder vorhanden.</p>
+                {% endif %}
+                <div class="mt-3">
+                    <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}"
+                    class="btn btn-primary">
+                        <i class="bi bi-camera"></i> Bild hinzufügen
+                    </a>
+                </div>
+            </div>
+            <!-- static tree content -->
+            <div class="tab-pane fade" id="contact" role="tabpanel" aria-labelledby="contact-tab">
+                <table class="table-custom">
+                    <tbody>
+                        <tr>
+                            <th>Home Person</th>
+                            <th>Parents</th>
+                            <th>Grand Parents</th>
+                        </tr>
+                        <tr>
+                            <td rowspan="4" id="homePerson" class="person line-bottom">Home Person</td>
+                            <td rowspan="2" id="Father" class="person line-bottom">Father</td>
+                            <td id="Grandfather" class="person grand line-bottom">Grandfather</td>
+                        </tr>
+                        <tr>
+                            <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
+                                Date here</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="2" class="bio line-left-down"><progress value="70" max="100">70 %</progress>
+                            Date here
+                            </td>
+                            <td class="person line-bottom grand line-left-up">Grandmother</td>
+                        </tr>
+                        <tr>
+                            <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
+                            Date here
+                            </td>
+                    </tr>
+                    <tr>
+                        <td rowspan="4" class="bio"><progress value="78" max="100">78 %</progress>
+                            1940 - 2018
+                        </td>
+                        <td rowspan="2" class="person line-bottom line-left-up">Mother</td>
+                        <td class="person grand line-bottom">Grandfther</td>
+                    </tr>
+                    <tr>
+                        <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
+                            Date Here
+                        </td>
+                    </tr>
+                        <tr>
+                            <td rowspan="2" class="bio"><progress value="70" max="100">70 %</progress>
+                                Date Here
+                            </td>
+                            <td class="person grand line-bottom line-left-up">Grandmother</td>
+                        </tr>
+                        <tr>
+                            <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
+                                Date here
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
+    <!-- right columns for family navigation-->
     <div class="col-4">
         {# ---------- Ehepartner (falls vorhanden) ---------- #}
         <div class="card mb-4">
@@ -187,18 +307,40 @@
             <div class="card-body">
                 {% if spouse %}
                     <!-- Link zur Familien‑Detail‑Seite -->
-                    <a href="{% url 'genview:family-detail' family.pk %}"
+                    <a href="{% url 'genview:family-detail' tree_id family.pk %}"
                     class="text-decoration-none">
                         {{ family }}   {# das nutzt Family.__str__ → "Family Husb / Wife (F123)" #}
                     </a>
-
-                    <a href="{% url 'genview:individual-detail' spouse.pk %}"
+                    <br>
+                    <a href="{% url 'genview:individual-detail' tree_id spouse.pk %}"
                     class="text-decoration-none">{{ spouse.full_name }}</a>
                     <small class="text-muted">({{ spouse.gedcom_id }})</small>
                     <ul class="list-unstyled">
                         <li>
                             <div>
-                                <strong>*</strong>
+                                {% if family.marriage_event %}
+                                <div>
+                                    ⚭ 
+                                    {% if family.marriage_date_parsed %}
+                                        {{ family.marriage_date_parsed|date:"d. M. Y" }}
+                                    {% elif family.marriage_date_raw %}
+                                        {{ family.marriage_date_raw }}
+                                    {% else %}
+                                        <span class="text-muted">nicht angegeben</span>
+                                    {% endif %}
+
+                                    {% if family.marriage_place %}
+                                        in {{ family.marriage_place }}
+                                    {% else %}
+                                        <span class="text-muted">nicht angegeben</span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                            </div>
+                        </li>
+                        <li>
+                            <div>
+                                *
                                 {% if spouse.birth_date %}
                                     {{ spouse.birth_date|date:"d. M. Y" }}
                                 {% elif spouse.birth_date_raw %}
@@ -206,11 +348,17 @@
                                 {% else %}
                                     <span class="text-muted">nicht angegeben</span>
                                 {% endif %}
+
+                                {% if spouse.birth_place %}
+                                    in {{ spouse.birth_place }}
+                                {% else %}
+                                    <span class="text-muted">nicht angegeben</span>
+                                {% endif %}
                             </div>
                         </li>
                         <li>
                             <div>
-                                <strong>†</strong>
+                                †
                                 {% if spouse.death_date %}
                                     {{ spouse.death_date|date:"d. M. Y" }}
                                 {% elif spouse.death_date_raw %}
@@ -238,7 +386,7 @@
                             {% with child=link.child %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <div>
-                                    <a href="{% url 'genview:individual-detail' child.pk %}"
+                                    <a href="{% url 'genview:individual-detail' tree_id child.pk %}"
                                     class="text-decoration-none">{{ child.full_name }}</a>
                                     <small class="text-muted">({{ link.get_relationship_type_display }})</small>
                                     <ul class="list-unstyled">
@@ -280,120 +428,23 @@
     </div>
 </div>
 
-<hr>
 
-<div class="container">
 
-{# ----------- Bild‑Galerie für die Person ----------- #}
-<h3>Weitere Bilder</h3>
-
-{% if gallery_images %}
-    <div class="row g-3">
-        {% for media in gallery_images %}
-            <div class="col-md-3">
-                <div class="card h-100">
-                    {% if media.is_image %}
-                        <img src="{{ media.file.url }}" class="card-img-top img-fluid"
-                             alt="{{ media.title|default:'Bild' }}" style="height:180px; object-fit:cover;">
-                    {% else %}
-                        <div class="card-body text-center">
-                            <i class="bi bi-file-earmark-text" style="font-size:3rem;"></i>
-                        </div>
-                    {% endif %}
-
-                    <div class="card-body p-2">
-                        <h6 class="card-title text-truncate mb-1">{{ media.title|default:"(ohne Titel)" }}</h6>
-
-                        <div class="d-flex justify-content-between">
-                            <a href="{% url 'genview:media-edit' media.pk %}"
-                               class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <a href="{% url 'genview:media-delete' media.pk person.pk %}"
-                               class="btn btn-sm btn-outline-danger"
-                               onclick="return confirm('Bild wirklich löschen?');">
-                                <i class="bi bi-trash"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-{% else %}
-    <p class="text-muted">Noch keine zusätzlichen Bilder vorhanden.</p>
-{% endif %}
-
-<div class="mt-3">
-    <a href="{% url 'genview:media-add-for-person' person.pk %}"
-       class="btn btn-primary">
-        <i class="bi bi-camera"></i> Bild hinzufügen
-    </a>
-</div>
-
-<hr class="my-4">
-
-<a href="{% url 'genview:individual-edit' person.pk %}" class="btn btn-primary">Bearbeiten</a>
-<a href="{% url 'genview:individual-delete' person.pk %}" class="btn btn-danger">Löschen</a>
-<a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
-
-</div>
-
-<!-- tree -->
 <div class="row">
     <div class="col">
-        <table class="table-custom">
-            <tbody>
-                <tr>
-                <th>Home Person</th>
-                <th>Parents</th>
-                <th>Grand Parents</th>
-                </tr>
-                <tr>
-                <td rowspan="4" id="homePerson" class="person line-bottom">Home Person</td>
-                <td rowspan="2" id="Father" class="person line-bottom">Father</td>
-                <td id="Grandfather" class="person grand line-bottom">Grandfather</td>
-                </tr>
-                <tr>
-                    <td class="bio grandDate line-left-down">
-                        <progress value="70" max="100">70 %</progress>
-                        Date here</td>
-                </tr>
-                <tr>
-                    <td rowspan="2" class="bio line-left-down"><progress value="70" max="100">70 %</progress>
-                    Date here</td>
-                    <td class="person line-bottom grand line-left-up">Grandmother</td>
-                </tr>
-                <tr>
-                    <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                    Date here</td>
-            </tr>
-            <tr>
-                <td rowspan="4" class="bio"><progress value="78" max="100">78 %</progress>
-                1940 - 2018</td>
-                <td rowspan="2" class="person line-bottom line-left-up">Mother</td>
-                <td class="person grand line-bottom">Grandfther</td>
-            </tr>
-            <tr>
-                <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
-                Date Here</td>
-            </tr>
-                <tr>
-                    <td rowspan="2" class="bio"><progress value="70" max="100">70 %</progress>
-                    Date Here</td>
-                    <td class="person grand line-bottom line-left-up">Grandmother</td>
-                </tr>
-                <tr>
-                    <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                    Date here</td>
-                </tr>
-            </tbody>
-        </table>
+        <a href="{% url 'genview:individual-edit' tree_id person.pk %}" class="btn btn-primary">Bearbeiten</a>
+        <a href="{% url 'genview:individual-delete' tree_id person.pk %}" class="btn btn-danger">Löschen</a>
+        <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
     </div>
 </div>
-<div>
-    <h3>Interactive Family Tree</h3>
-    <div id="graph"></div>
+
+<div class="row">
+    <div class="col">
+        <h3>Interactive Family Tree</h3>
+        <div id="graph"></div>
+    </div>
+</div>
+    
 
     <script>
         const treeData = {{ tree_json|safe }};
@@ -404,8 +455,8 @@
             height: 500,
             width: 800,
             // We can adjust the node size here to give the text more room to breathe
-            nodeWidth: 140, 
-            nodeHeight: 60,
+            nodeWidth: 150, 
+            nodeHeight: 75,
             callbacks: {
                 // This tells dTree to draw our custom HTML instead of basic text
                 nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
@@ -416,19 +467,29 @@
                         datesHtml = `<div style="font-size: 11px; color: #666; margin-top: 4px;">${extra.dates}</div>`;
                     }
 
+                    // NEW: Check for marriage info
+                    let marriageHtml = '';
+                    if (extra && extra.marriage_info) {
+                        // Added an italic style and distinct color to separate it from birth/death dates
+                        marriageHtml = `<div style="font-size: 11px; color: #d97706; margin-top: 2px; font-style: italic;">
+                                            ${extra.marriage_info}
+                                        </div>`;
+                    }
+
                     // Return standard HTML. dTree automatically converts this into an SVG foreignObject!
                     return `<div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 5px; box-sizing: border-box; cursor: pointer;">
                                 <div style="font-weight: bold; font-size: 14px; text-align: center; line-height: 1.2;">${name}</div>
                                 ${datesHtml}
+                                ${marriageHtml}
                             </div>`;
                 },
                 nodeClick: function(name, extra) {
                     if (extra && extra.id) {
-                        window.location.href = "/genview/people/" + extra.id + "/";
+                        window.location.href = extra.url;
                     }
                 }
             }
         });
     </script>
-</div>
+
 {% endblock %}

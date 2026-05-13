@@ -13,7 +13,7 @@
             <li class="list-group-item">
                 <strong>Vater / Husband:</strong><br>
                 {% if family.husband %}
-                    <a href="{% url 'genview:individual-detail' family.husband.pk %}">
+                    <a href="{% url 'genview:individual-detail' tree_id family.husband.pk %}">
                         {{ family.husband.full_name }}
                     </a> ({{ family.husband.get_sex_display }})
                 {% else %}
@@ -23,7 +23,7 @@
             <li class="list-group-item">
                 <strong>Mutter / Wife:</strong><br>
                 {% if family.wife %}
-                    <a href="{% url 'genview:individual-detail' family.wife.pk %}">
+                    <a href="{% url 'genview:individual-detail' tree_id family.wife.pk %}">
                         {{ family.wife.full_name }}
                     </a> ({{ family.wife.get_sex_display }})
                 {% else %}
@@ -40,7 +40,7 @@
             <ul class="list-group mb-3">
                 {% for link in family.children.all %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <a href="{% url 'genview:individual-detail' link.child.pk %}">
+                        <a href="{% url 'genview:individual-detail' tree_id link.child.pk %}">
                             {{ link.child.full_name }}
                         </a>
                         <span class="badge bg-secondary">
@@ -156,7 +156,7 @@
 {% endif %}
 
 <hr>
-<a href="{% url 'genview:family-edit' family.pk %}" class="btn btn-primary">Bearbeiten</a>
-<a href="{% url 'genview:family-delete' family.pk %}" class="btn btn-danger">Löschen</a>
-<a href="{% url 'genview:family-list' %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+<a href="{% url 'genview:family-edit' tree_id family.pk %}" class="btn btn-primary">Bearbeiten</a>
+<a href="{% url 'genview:family-delete' tree_id family.pk %}" class="btn btn-danger">Löschen</a>
+<a href="{% url 'genview:family-list' tree_id %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
 {% endblock %}

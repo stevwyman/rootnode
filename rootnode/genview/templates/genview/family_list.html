@@ -35,7 +35,7 @@
             </td>
             <td>{{ fam.children_count }}</td>
             <td>
-                <a href="{% url 'genview:family-detail' fam.pk %}"
+                <a href="{% url 'genview:family-detail' tree_id fam.pk %}"
                    class="btn btn-sm btn-outline-primary">
                     Details
                 </a>

@@ -82,15 +82,15 @@
 
             {# ---------- Buttons ---------- #}
             <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'genview:family-list' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'genview:family-list' tree_id %}" class="btn btn-outline-secondary">
                     Zurück zur Übersicht
                 </a>
 
                 {% if view.object %}
-                    <a href="{% url 'genview:family-detail' view.object.pk %}"
+                    <a href="{% url 'genview:family-detail' tree_id view.object.pk %}"
                        class="btn btn-outline-primary">Abbrechen</a>
                 {% else %}
-                    <a href="{% url 'genview:family-list' %}"
+                    <a href="{% url 'genview:family-list' tree_id %}"
                        class="btn btn-outline-primary">Abbrechen</a>
                 {% endif %}
 

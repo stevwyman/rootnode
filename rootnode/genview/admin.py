@@ -1,8 +1,8 @@
 # gedcom_app/admin.py
 from django.contrib import admin
-from .models import Individual, Family, Event, Source, MediaObject, ChildFamilyLink
+from .models import Individual, Family, Event, Source, MediaObject, ChildFamilyLink, Tree, TreeMembership
 
-admin.site.register([Individual, Family, Event, Source, ChildFamilyLink])
+admin.site.register([Tree, TreeMembership, Individual, Family, Event, Source, ChildFamilyLink])
 
 class IsImageFilter(admin.SimpleListFilter):
     title = 'Bildtyp'            # Anzeigename im Admin

@@ -47,10 +47,10 @@
         {% if view.object %}Änderungen speichern{% else %}Bild speichern{% endif %}
     </button>
     {% if view.object %}
-        <a href="{% url 'genview:individual-detail' view.object.individuals.first.pk %}"
+        <a href="{% url 'genview:individual-detail' tree_id view.object.individuals.first.pk %}"
            class="btn btn-outline-secondary ms-2">Abbrechen</a>
     {% else %}
-        <a href="{% url 'genview:individual-list' %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
+        <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
     {% endif %}
 </form>
 {% endblock %}

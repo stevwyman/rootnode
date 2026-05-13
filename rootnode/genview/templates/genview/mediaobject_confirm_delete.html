@@ -12,7 +12,13 @@
 <form method="post">
     {% csrf_token %}
     <button type="submit" class="btn btn-danger">Ja, Bild entfernen</button>
-    <a href="{% url 'genview:individual-detail' person_pk %}"
-       class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    
+    {% if person_pk %}
+        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person_pk %}"
+           class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    {% else %}
+        <a href="{% url 'genview:tree-list' %}"
+           class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    {% endif %}
 </form>
 {% endblock %}
