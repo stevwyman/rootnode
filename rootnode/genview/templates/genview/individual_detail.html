@@ -158,9 +158,10 @@
 <div class="row mt-3">
     <!-- left column for detail tabs -->
     <div class="col-8">
+        <!-- internal navigation -->
         <ul class="nav nav-tabs" id="myTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Home</button>
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Timeline</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="pictures-tab" data-bs-toggle="tab" data-bs-target="#pictures" type="button" role="tab" aria-controls="pictures" aria-selected="false">Bilder</button>
@@ -170,27 +171,43 @@
             </li>
         </ul>
 
+        <!-- Content -->
         <div class="tab-content mt-3" id="myTabContent">
             <!-- events tab content -->
             <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
                 {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
-                <h4 class="mt-4">Ereignisse</h4>
-                {% if person.events.all %}
-                    <ul class="list-group mb-3">
-                        {% for ev in person.events.all %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ ev.get_event_type_display }}
-                                {% if ev.parsed_date %}
-                                    <span class="badge bg-primary">{{ ev.parsed_date|date:"d.m.Y" }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ ev.raw_date|default:"Unbekannt" }}</span>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted">Keine Ereignisse erfasst.</p>
-                {% endif %}
+                <h3>Lebensereignisse</h3>
+                <ul class="list-group">
+                    {% for event in timeline_events %}
+                        <li class="list-group-item">
+                            <strong>{{ event.get_event_type_display }}:</strong> 
+
+                            {% if event.parsed_date %}
+                                {{ event.parsed_date|date:"j N Y" }}
+                                <span style="color: #999; font-size: 0.85em;">({{ event.raw_date }})</span>
+                            {% elif event.raw_date %}
+                                {{ event.raw_date }}
+                            {% endif %}
+
+                            {% if event.place %}
+                                in {{ event.place }}
+                            {% endif %}
+
+                            {% if event.event_type == 'MARR' and event.family %}
+                                <span style="color: #555; font-style: italic;">
+                                    (Spouse: 
+                                    {% if event.family.husband.pk == person.pk %}
+                                        {{ event.family.wife.given_name }} {{ event.family.wife.surname }}
+                                    {% else %}
+                                        {{ event.family.husband.given_name }} {{ event.family.husband.surname }}
+                                    {% endif %})
+                                </span>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">No events recorded for this person.</li>
+                    {% endfor %}
+                </ul>
             </div>
             <!-- pictures tab content -->
             <div class="tab-pane fade" id="pictures" role="tabpanel" aria-labelledby="pictures-tab">

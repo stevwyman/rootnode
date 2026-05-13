@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
-from django.db.models import Q
+from django.db.models import Q, F
 from django.http import JsonResponse
 from django.views.generic import ListView, DetailView, CreateView, DeleteView
 from django.views.generic.edit import UpdateView
@@ -31,7 +31,7 @@ def home(request):
     return render(request, "genview/home.html")
 
 # ----------------------------------------------------------------------
-# Trees
+# 1️⃣ Trees
 # ----------------------------------------------------------------------
 
 class TreeListView(LoginRequiredMixin, ListView):
@@ -47,7 +47,7 @@ class TreeListView(LoginRequiredMixin, ListView):
         return Tree.objects.filter(id__in=allowed_tree_ids)
 
 # ----------------------------------------------------------------------
-# Individuals
+# 2️⃣ Individuals
 # ----------------------------------------------------------------------
 
 class IndividualListView(LoginRequiredMixin, TreeAccessMixin, ListView):
@@ -180,6 +180,19 @@ class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         ctx["parent_families"] = list(person.parental_families.all())
         #   Jeder Familie hat bereits husband und wife via `select_related` oben.
+
+
+        # -------------------------------------------------------------
+        # 4️⃣ Events
+        # -------------------------------------------------------------
+        # Fetch events where the person is the individual, OR the husband, OR the wife
+        combined_events = Event.objects.filter(
+            Q(individual=person) | 
+            Q(family__husband=person) | 
+            Q(family__wife=person)
+        ).order_by(F('parsed_date').asc(nulls_last=True)) # Sorts by date, puts None values at the end
+        
+        ctx['timeline_events'] = combined_events
 
         # -------------- Portrait holen --------------
         portrait = person.media_objects.filter(is_portrait=True).first()
@@ -449,7 +462,7 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return JsonResponse({"table": table_html, "pager": pager_html})
         
 # ----------------------------------------------------------------------
-# Families
+# 3️⃣ Families
 # ----------------------------------------------------------------------
 
 class FamilyListView(LoginRequiredMixin, TreeAccessMixin, ListView):
@@ -554,7 +567,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
 
 # ----------------------------------------------------------------------
-#  Kind‑zu‑Familie‑Link – hinzufügen / bearbeiten
+#  4️⃣ Kind‑zu‑Familie‑Link – hinzufügen / bearbeiten
 # ----------------------------------------------------------------------
 class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = ChildFamilyLink
@@ -578,6 +591,10 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
             kwargs={"pk": self.object.family.pk},
         )
       
+
+# ----------------------------------------------------------------------
+# 5️⃣ Families
+# ----------------------------------------------------------------------
 
 # --------------------------------------------------------------
 #  Medien‑Liste (optional – Übersicht aller Medien)
@@ -660,7 +677,7 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
 
 # --------------------------------------------------------------
-# 3️⃣ Bild-Bearbeitung
+# Bild-Bearbeitung
 # --------------------------------------------------------------
 class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = MediaObject
@@ -693,7 +710,7 @@ class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView)
 
 
 # --------------------------------------------------------------
-# 4️⃣ Bild-Löschung (nach Bestätigung)
+# Bild-Löschung (nach Bestätigung)
 # --------------------------------------------------------------
 class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = MediaObject
