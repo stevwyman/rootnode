@@ -282,7 +282,7 @@ class ChildFamilyLinkForm(ModelForm):
 # ----------------------------------------------------------------------
 #  MediaObjectForm – für Bilder
 # ----------------------------------------------------------------------
-class MediaObjectForm(ModelForm):
+class MediaObjectForm(forms.ModelForm):
     """
     Formular zum Hochladen eines Bildes (oder anderer Medien) und zur
     Zuordnung zu einer oder mehreren Personen.
@@ -290,11 +290,11 @@ class MediaObjectForm(ModelForm):
     class Meta:
         model = MediaObject
         fields = [
-            "gedcom_id",      # optional
+            "gedcom_id",
             "title",
-            "file",           # ImageField / FileField
+            "file",
             "description",
-            "individuals",    # ManyToMany → Personen / Das versteckte Feld wird in __init__ hinzugefügt
+            "individuals",
             "sources",
             "is_portrait",
         ]
@@ -303,67 +303,52 @@ class MediaObjectForm(ModelForm):
             "title": forms.TextInput(attrs={"class": "form-control"}),
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
-            "individuals": CheckboxSelectMultiple(),
-            "sources": CheckboxSelectMultiple(),
+            "individuals": forms.CheckboxSelectMultiple(),
+            "sources": forms.CheckboxSelectMultiple(),
             "is_portrait": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
-    def __init__(self, *args, person=None, **kwargs):
-        """
-        `person` ist optional – wenn sie übergeben wird, erzeugen wir ein
-        Hidden‑Field, das automatisch ausgefüllt ist.
-        """
+    # Füge tree_id als optionalen Parameter hinzu, um Daten-Leaks zu verhindern!
+    def __init__(self, *args, person=None, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Wir brauchen das Hidden‑Field *nur*, wenn eine Person vorgegeben ist.
-        if person is not None:
-            # Das Feld existiert nur intern – nicht im Model, sondern als
-            # Hilfs‑Attribute, das wir später im `save()` auswerten.
-            self.person_instance = person   # Merken für späteres save()
-            self.fields["person_hidden"] = forms.IntegerField(
-                initial=person.pk,
-                widget=forms.HiddenInput(),
-                required=False,
-            )
+        # 1. SICHERHEIT: Finde heraus, in welchem Baum wir uns befinden
+        current_tree_id = tree_id
+        if person:
+            current_tree_id = person.gedcom_tree_id
+        elif self.instance and self.instance.pk:
+            current_tree_id = self.instance.gedcom_tree_id
+
+        # 2. QUERYSETS FILTERN: Nur Personen/Quellen aus DIESEM Baum anzeigen!
+        if current_tree_id:
+            self.fields["individuals"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            if "sources" in self.fields:
+                self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
         else:
-            # Wenn kein `person` angegeben ist, erlauben wir die manuelle Auswahl.
-            self.fields["individuals"] = forms.ModelMultipleChoiceField(
-                queryset=Individual.objects.all(),
-                required=False,
-                widget=forms.CheckboxSelectMultiple(),
-                label="Personen (optional)",
-            )
+            # Fallback: Falls kein Baum gefunden wird, zeige sicherheitshalber nichts an
+            self.fields["individuals"].queryset = Individual.objects.none()
+
+        # 3. PRESELECTION: Person in der Checkbox-Liste anhaken
+        if person:
+            self.fields["individuals"].initial = [person]
 
     # ------------------------------------------------------------------
-    # Überschreiben von save() – speichert das MediaObject und verbindet
-    # automatisch die übergebene Person (falls vorhanden).
+    # Überschreiben von save() – Portrait-Logik sicher ausführen
     # ------------------------------------------------------------------
     def save(self, commit=True):
-        # 1️⃣ erst das Objekt speichern (damit wir eine PK haben)
         media = super().save(commit=False)
 
-        # 2️⃣ Wenn das Bild als Portrait markiert wurde,
-        #    alle anderen Bilder der beteiligten Personen zurücksetzen.
-        if media.is_portrait:
-            # `individuals` ist ein M2M‑Manager – wir iterieren über alle Personen,
-            # für die dieses Bild gespeichert wird.
-            for person in media.individuals.all():
-                MediaObject.objects.filter(
-                    individuals=person,
-                    is_portrait=True
-                ).exclude(pk=media.pk).update(is_portrait=False)
-
         if commit:
-            media.save()
-            self.save_m2m()   # speichert ggf. Sources
+            media.save()      # Speichert das Bild (gibt ihm eine ID)
+            self.save_m2m()   # Speichert die Personen & Quellen in der Datenbank
 
-        # ---- automatische Zuordnung, falls wir über die URL kamen ----
-        if hasattr(self, "person_instance"):
-            media.individuals.add(self.person_instance)
-
-        # ---- falls das Formular *kein* person‑Argument hat (fallback) ----
-        elif "individuals" in self.cleaned_data:
-            for ind in self.cleaned_data["individuals"]:
-                media.individuals.add(ind)
+            # WICHTIG: Erst NACHDEM save_m2m() gelaufen ist, weiß Django, 
+            # welche Personen mit dem Bild verknüpft sind!
+            if media.is_portrait:
+                for person in media.individuals.all():
+                    MediaObject.objects.filter(
+                        individuals=person,
+                        is_portrait=True
+                    ).exclude(pk=media.pk).update(is_portrait=False)
 
         return media

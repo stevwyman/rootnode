@@ -27,11 +27,14 @@ urlpatterns = [
     path("tree/<int:tree_id>/links/add/", views.ChildFamilyLinkCreateView.as_view(), name="link-add"),
     path("tree/<int:tree_id>/links/<int:pk>/delete/", views.ChildFamilyLinkDeleteView.as_view(), name="link-delete"),
     # ---- Medien‑Management -------------------------------------------
+    # Secure Media File Tunnel
+    path('tree/<int:tree_id>/media/<int:pk>/file/', views.ProtectedMediaFileView.as_view(), name='media-file'),
     path("tree/<int:tree_id>/media/", views.MediaObjectListView.as_view(), name="media-list"),
     path("tree/<int:tree_id>/media/add/", views.MediaObjectCreateView.as_view(), name="media-add"),
     # ----- Bild‑Bearbeiten (optional, wenn du das erlauben willst) -----
     path("tree/<int:tree_id>/media/<int:pk>/edit/", views.MediaObjectUpdateView.as_view(), name="media-edit"),
     # Wir benötigen die `person_pk`, damit wir nach dem Löschen zurück zur richtigen Seite gehen:
+    path('tree/<int:tree_id>/media/<int:pk>/delete/', views.MediaObjectDeleteView.as_view(), name='media-delete'),
     path("tree/<int:tree_id>/media/<int:pk>/delete/<int:person_pk>/", views.MediaObjectDeleteView.as_view(),
          name="media-delete"),
 ]
