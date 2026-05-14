@@ -10,6 +10,21 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from mptt.models import MPTTModel, TreeForeignKey
 
+import os
+
+def tree_media_directory_path(instance, filename):
+    """
+    Dynamically generates the upload path for a media file based on its Tree ID.
+    Example: MEDIA_ROOT/trees/tree_5/my_photo.jpg
+    """
+    # Grab the tree ID. Fallback to 'unassigned' just in case, 
+    # though your forms should prevent this.
+    tree_id = instance.gedcom_tree_id or 'unassigned'
+    
+    # Build the path: trees/tree_<id>/<filename>
+    return f'trees/tree_{tree_id}/{filename}'
+
+
 class Tree(models.Model):
     """Represents a distinct family tree (a GEDCOM file import)."""
     name = models.CharField(max_length=255)
@@ -18,6 +33,7 @@ class Tree(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class TreeMembership(models.Model):
     """Maps a User to a Tree and defines what they can do."""
@@ -457,7 +473,13 @@ class MediaObject(models.Model):
         db_index=True,
     )
     title = models.CharField(max_length=255, blank=True)
-    file = models.FileField(upload_to="gedcom_media/")
+    
+    # file = models.FileField(upload_to="gedcom_media/")
+    file = models.FileField(
+            upload_to=tree_media_directory_path, 
+            verbose_name="Datei/Bild"
+        )
+
     description = models.TextField(blank=True)
 
     # Beziehungen zu den anderen Entitäten

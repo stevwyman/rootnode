@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
 from django.db.models import Q, F
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
 from django.views.generic import ListView, DetailView, CreateView, DeleteView
 from django.views.generic.edit import UpdateView
 from django.shortcuts import render, get_object_or_404
@@ -596,6 +597,32 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
 # 5️⃣ Media
 # ----------------------------------------------------------------------
 
+class ProtectedMediaFileView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+    """
+    Acts as a secure tunnel to serve media files ONLY if the user 
+    has access to the specific family tree.
+    """
+    model = MediaObject
+
+    def get_queryset(self):
+        # SECURITY FIX: Ensure the requested media belongs to this tree
+        tree_id = self.kwargs.get('tree_id')
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+
+    def get(self, request, *args, **kwargs):
+        # 1. get_object() automatically applies the get_queryset() filter
+        # and the TreeAccessMixin automatically checks user permissions!
+        media_obj = self.get_object()
+
+        # 2. Check if the file actually exists on the hard drive
+        if not media_obj.file or not os.path.exists(media_obj.file.path):
+            raise Http404("Datei nicht gefunden.")
+
+        # 3. Serve the file securely
+        # FileResponse automatically guesses the correct MIME type (e.g., image/jpeg)
+        file_handle = open(media_obj.file.path, 'rb')
+        return FileResponse(file_handle)
+
 # --------------------------------------------------------------
 #  Medien‑Liste (optional – Übersicht aller Medien)
 # --------------------------------------------------------------
@@ -637,7 +664,13 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["person"] = self.person
+        
+        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
+        kwargs["person"] = getattr(self, "person", None)
+        
+        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        
         return kwargs
 
     def form_valid(self, form):
@@ -647,6 +680,8 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         """
         tree_id = self.kwargs.get("tree_id")
         form.instance.gedcom_tree_id = tree_id
+
+        self.object = form.save()
         
         # Falls eine Person verknüpft ist, fügen wir sie direkt dem ManyToMany-Feld hinzu
         # (Das muss nach dem super().form_valid passieren, da das Objekt erst eine ID braucht)
@@ -654,7 +689,8 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         if self.person:
             self.object.individuals.add(self.person)
         
-        return response
+        # return response
+        return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
@@ -683,6 +719,17 @@ class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView)
     model = MediaObject
     form_class = MediaObjectForm
     template_name = "genview/mediaobject_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        
+        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
+        kwargs["person"] = getattr(self, "person", None)
+        
+        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        
+        return kwargs
 
     def get_queryset(self):
         # SICHERHEITS-FIX: Stelle sicher, dass das gesuchte Media-Objekt
