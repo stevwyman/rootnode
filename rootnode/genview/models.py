@@ -12,21 +12,23 @@ from mptt.models import MPTTModel, TreeForeignKey
 
 import os
 
+
 def tree_media_directory_path(instance, filename):
     """
     Dynamically generates the upload path for a media file based on its Tree ID.
     Example: MEDIA_ROOT/trees/tree_5/my_photo.jpg
     """
-    # Grab the tree ID. Fallback to 'unassigned' just in case, 
+    # Grab the tree ID. Fallback to 'unassigned' just in case,
     # though your forms should prevent this.
-    tree_id = instance.gedcom_tree_id or 'unassigned'
-    
+    tree_id = instance.gedcom_tree_id or "unassigned"
+
     # Build the path: trees/tree_<id>/<filename>
-    return f'trees/tree_{tree_id}/{filename}'
+    return f"trees/tree_{tree_id}/{filename}"
 
 
 class Tree(models.Model):
     """Represents a distinct family tree (a GEDCOM file import)."""
+
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -37,22 +39,26 @@ class Tree(models.Model):
 
 class TreeMembership(models.Model):
     """Maps a User to a Tree and defines what they can do."""
+
     ROLE_CHOICES = [
-        ('VIEWER', 'Can only view data'),
-        ('EDITOR', 'Can edit individuals and families'),
-        ('ADMIN', 'Can edit data, import GEDCOMs, and invite users'),
+        ("VIEWER", "Can only view data"),
+        ("EDITOR", "Can edit individuals and families"),
+        ("ADMIN", "Can edit data, import GEDCOMs, and invite users"),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='memberships')
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='VIEWER')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="memberships"
+    )
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="VIEWER")
 
     class Meta:
         # A user can only have one permission level per tree
-        unique_together = ('user', 'gedcom_tree')
+        unique_together = ("user", "gedcom_tree")
 
     def __str__(self):
         return f"{self.user.username} - {self.gedcom_tree.name} ({self.role})"
+
 
 # ----------------------------------------------------------------------
 # 1️⃣ Helper‑Mixin – überall wo ein GEDCOM‑ID‑Feld nötig ist
@@ -62,6 +68,7 @@ class GedcomIdMixin(models.Model):
     Gemeinsames Feld für alle GEDCOM‑Objekte, die eine externe
     GEDCOM‑Referenz besitzen (z. B. @I1@, @F2@, @S3@ …).
     """
+
     gedcom_id = models.CharField(
         max_length=20,
         # unique=True,
@@ -77,6 +84,7 @@ class GedcomIdMixin(models.Model):
 # ----------------------------------------------------------------------
 class Source(models.Model):
     """Quelle (SOUR) oder Repository (REPO)."""
+
     gedcom_id = models.CharField(
         max_length=20,
         blank=True,
@@ -89,7 +97,9 @@ class Source(models.Model):
     publication_facts = models.CharField(max_length=255, blank=True)
     text = models.TextField(blank=True)
 
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='sources')
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="sources"
+    )
 
     class Meta:
         ordering = ["title"]
@@ -112,17 +122,19 @@ class Individual(GedcomIdMixin):
 
     given_name = models.CharField(max_length=150, blank=True)
     surname = models.CharField(max_length=150, blank=True)
-    name_prefix = models.CharField(max_length=50, blank=True,
-                                   help_text="z. B. Dr., Sir")
-    name_suffix = models.CharField(max_length=50, blank=True,
-                                   help_text="z. B. Jr., III")
-    sex = models.CharField(max_length=1,
-                           choices=Sex.choices,
-                           default=Sex.UNKNOWN)
+    name_prefix = models.CharField(
+        max_length=50, blank=True, help_text="z. B. Dr., Sir"
+    )
+    name_suffix = models.CharField(
+        max_length=50, blank=True, help_text="z. B. Jr., III"
+    )
+    sex = models.CharField(max_length=1, choices=Sex.choices, default=Sex.UNKNOWN)
 
     notes = models.TextField(blank=True)
 
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='individuals')
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="individuals"
+    )
 
     # Quellen, in denen diese Person auftaucht
     sources = models.ManyToManyField(
@@ -133,7 +145,7 @@ class Individual(GedcomIdMixin):
 
     class Meta:
         ordering = ["surname", "given_name"]
-        unique_together = ('gedcom_tree', 'gedcom_id')
+        unique_together = ("gedcom_tree", "gedcom_id")
         indexes = [
             models.Index(fields=["surname", "given_name"]),
             models.Index(fields=["sex"]),
@@ -147,17 +159,14 @@ class Individual(GedcomIdMixin):
 
     def full_name(self) -> str:
         """Vollständiger Name inkl. Prä‑ und Suffix, leere Teile werden weggelassen."""
-        parts = [self.name_prefix,
-                 self.given_name,
-                 self.surname,
-                 self.name_suffix]
+        parts = [self.name_prefix, self.given_name, self.surname, self.name_suffix]
         return " ".join(p for p in parts if p).strip() or "Unnamed"
-    
+
     def get_absolute_url(self):
-        return reverse("genview:individual-detail", kwargs={
-            "tree_id": self.gedcom_tree_id, 
-            "pk": self.pk
-        })
+        return reverse(
+            "genview:individual-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
 
     # --------------------------------------------------------------
     # ★★ Neu: Convenience‑Properties für Geburts‑ und Sterbedatum ★★
@@ -181,7 +190,7 @@ class Individual(GedcomIdMixin):
     @property
     def birth_date(self) -> Optional[date]:
         """
-        Das geparste Geburtsdatum (``Event.parsed_date``).  
+        Das geparste Geburtsdatum (``Event.parsed_date``).
         Falls das Event existiert, aber kein ``parsed_date`` gesetzt ist,
         wird ``None`` zurückgegeben – das kann dann im Template mit ``raw_date``
         ausgegeben werden.
@@ -246,7 +255,7 @@ class Family(MPTTModel, GedcomIdMixin):
     class Meta:
         verbose_name_plural = "Families"
         ordering = ["gedcom_id"]
-        unique_together = ('gedcom_tree', 'gedcom_id')
+        unique_together = ("gedcom_tree", "gedcom_id")
 
     # Ehepartner (optional – GEDCOM erlaubt leere Rollen)
     husband = models.ForeignKey(
@@ -282,18 +291,20 @@ class Family(MPTTModel, GedcomIdMixin):
         related_name="families",
     )
 
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='families')
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="families"
+    )
 
     def __str__(self) -> str:
         husb = self.husband.surname if self.husband else "?"
         wife = self.wife.surname if self.wife else "?"
         return f"Family {husb} / {wife} ({self.gedcom_id})"
-    
+
     def get_absolute_url(self):
-        return reverse("genview:family-detail", kwargs={
-            "tree_id": self.gedcom_tree_id, 
-            "pk": self.pk
-        })
+        return reverse(
+            "genview:family-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
 
     # ------------------------------------------------------------------
     # Convenience‑Methode – liefert ein QuerySet aller Kinder‑Individuals
@@ -304,7 +315,7 @@ class Family(MPTTModel, GedcomIdMixin):
         verknüpft sind. (Kurzschreibweise: ``family.children().all()``)
         """
         return Individual.objects.filter(parental_families__family=self)
-    
+
     # ------------------------------------------------------------------
     #  Helfer‑Property: das zugehörige MARR‑Event (falls vorhanden)
     # ------------------------------------------------------------------
@@ -341,6 +352,7 @@ class ChildFamilyLink(models.Model):
     """
     Verbindet ein Kind (CHIL) mit einer Familie (FAMC) und kennt die Art der Beziehung.
     """
+
     class Relationship(models.TextChoices):
         BIOLOGICAL = "B", "Biological"
         ADOPTED = "A", "Adopted"
@@ -352,14 +364,14 @@ class ChildFamilyLink(models.Model):
     child = models.ForeignKey(
         Individual,
         on_delete=models.CASCADE,
-        related_name="parental_families",   # <‑‑ Families, in denen das Kind vorkommt
+        related_name="parental_families",  # <‑‑ Families, in denen das Kind vorkommt
     )
 
     # --- 2️⃣ Die Familie, zu der das Kind gehört ----
     family = models.ForeignKey(
         Family,
         on_delete=models.CASCADE,
-        related_name="children",            # <‑‑ **WICHTIG:** das ist das Feld, das wir prefetchen
+        related_name="children",  # <‑‑ **WICHTIG:** das ist das Feld, das wir prefetchen
     )
 
     relationship_type = models.CharField(
@@ -397,7 +409,9 @@ class Event(models.Model):
 
     event_type = models.CharField(max_length=10, choices=EventType.choices)
 
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='events')
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="events"
+    )
 
     # **Exklusiver** FK – nur einer von beiden darf gesetzt sein
     individual = models.ForeignKey(
@@ -455,7 +469,7 @@ class Event(models.Model):
             )
 
     def save(self, *args, **kwargs):
-        self.full_clean()      # ruft ``clean`` auf
+        self.full_clean()  # ruft ``clean`` auf
         super().save(*args, **kwargs)
 
 
@@ -473,12 +487,11 @@ class MediaObject(models.Model):
         db_index=True,
     )
     title = models.CharField(max_length=255, blank=True)
-    
+
     # file = models.FileField(upload_to="gedcom_media/")
     file = models.FileField(
-            upload_to=tree_media_directory_path, 
-            verbose_name="Datei/Bild"
-        )
+        upload_to=tree_media_directory_path, verbose_name="Datei/Bild"
+    )
 
     description = models.TextField(blank=True)
 
@@ -505,10 +518,12 @@ class MediaObject(models.Model):
         db_index=True,
     )
 
-    gedcom_tree = models.ForeignKey(Tree, on_delete=models.CASCADE, related_name='mediaobjects')
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="mediaobjects"
+    )
 
     class Meta:
-        ordering = ["-is_portrait", "title"]   # Portrait‑Bilder zuerst
+        ordering = ["-is_portrait", "title"]  # Portrait‑Bilder zuerst
 
     def __str__(self) -> str:
         return self.title or f"Media {self.id}"
@@ -521,4 +536,3 @@ class MediaObject(models.Model):
         return self.file.name.lower().endswith(
             (".png", ".jpg", ".jpeg", ".gif", ".webp")
         )
-    

@@ -3,6 +3,7 @@ from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from .models import MediaObject, Individual
 
+
 @receiver(m2m_changed, sender=MediaObject.individuals.through)
 def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
     """
@@ -14,8 +15,7 @@ def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
         # Für jede neu verknüpfte Person das Flag bei anderen MediaObjects zurücksetzen
         for person_id in pk_set:
             MediaObject.objects.filter(
-                individuals__pk=person_id,
-                is_portrait=True
+                individuals__pk=person_id, is_portrait=True
             ).exclude(pk=instance.pk).update(is_portrait=False)
 
 
@@ -27,7 +27,6 @@ def portrait_cleanup_on_save(sender, instance, created, **kwargs):
     """
     if instance.is_portrait:
         for person in instance.individuals.all():
-            MediaObject.objects.filter(
-                individuals=person,
-                is_portrait=True
-            ).exclude(pk=instance.pk).update(is_portrait=False)
+            MediaObject.objects.filter(individuals=person, is_portrait=True).exclude(
+                pk=instance.pk
+            ).update(is_portrait=False)

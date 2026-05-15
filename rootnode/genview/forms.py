@@ -13,13 +13,16 @@ class IndividualForm(ModelForm):
     Die Felder `birth_date` und `death_date` sind *virtuell* – sie werden im
     `save()`‑Methoden‑Override auf die zugehörigen Event‑Objekte geschrieben.
     """
+
     # --------------------------------------------------------------
     # Virtuelle Felder
     # --------------------------------------------------------------
     birth_date_raw = forms.CharField(
         required=False,
         label="Geburts‑Datum (Roh‑String, z. B. 'ABT 1900')",
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. 12 JAN 1885"}),
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "z. B. 12 JAN 1885"}
+        ),
     )
     birth_date_parsed = forms.DateField(
         required=False,
@@ -29,7 +32,9 @@ class IndividualForm(ModelForm):
     death_date_raw = forms.CharField(
         required=False,
         label="Sterbe‑Datum (Roh‑String)",
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. 5 MAY 1972"}),
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "z. B. 5 MAY 1972"}
+        ),
     )
     death_date_parsed = forms.DateField(
         required=False,
@@ -107,7 +112,7 @@ class IndividualForm(ModelForm):
 
         if commit:
             individual.save()
-            self.save_m2m()   # speichert ManyToMany‑Beziehungen (Sources)
+            self.save_m2m()  # speichert ManyToMany‑Beziehungen (Sources)
 
         # 2️⃣ jetzt die Events für Geburt und Tod updaten
         #    (nur wenn mindestens ein Feld ausgefüllt ist)
@@ -152,6 +157,7 @@ class IndividualSearchForm(forms.Form):
     Einfaches Suchformular für Personen.
     Das Feld `q` wird per GET übermittelt (kein CSRF nötig).
     """
+
     q = forms.CharField(
         required=False,
         label="Suche",
@@ -164,6 +170,7 @@ class IndividualSearchForm(forms.Form):
         ),
     )
 
+
 # ----------------------------------------------------------------------
 #  FamilyForm – für Familien‑Datensatz
 # ----------------------------------------------------------------------
@@ -172,11 +179,14 @@ class FamilyForm(ModelForm):
     Standard‑Formular für Familie + zwei zusätzliche Felder für das
     Heirats‑Event (Roh‑String, geparstes Datum und Ort).
     """
+
     # ---------- Virtuelle Felder ----------
     marriage_raw_date = forms.CharField(
         required=False,
         label="Heirats‑Datum (Roh‑String, z. B. '15 JUN 1890')",
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. 15 JUN 1890"}),
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "z. B. 15 JUN 1890"}
+        ),
     )
     marriage_parsed_date = forms.DateField(
         required=False,
@@ -186,7 +196,9 @@ class FamilyForm(ModelForm):
     marriage_place = forms.CharField(
         required=False,
         label="Heirats‑Ort",
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "z. B. Berlin, Deutschland"}),
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "z. B. Berlin, Deutschland"}
+        ),
     )
 
     class Meta:
@@ -195,7 +207,7 @@ class FamilyForm(ModelForm):
             "gedcom_id",
             "husband",
             "wife",
-            "parent",          # MPTT‑Hierarchie (optional)
+            "parent",  # MPTT‑Hierarchie (optional)
             "notes",
             "sources",
         ]
@@ -238,11 +250,11 @@ class FamilyForm(ModelForm):
     #  Override save() – speichert die virtuellen Felder in das Event
     # --------------------------------------------------------------
     def save(self, commit=True):
-        family = super().save(commit=False)          # speichert Family‑Stammdaten
+        family = super().save(commit=False)  # speichert Family‑Stammdaten
 
         if commit:
             family.save()
-            self.save_m2m()                          # Sources‑ManyToMany
+            self.save_m2m()  # Sources‑ManyToMany
 
         # ----- Heirats‑Daten schreiben / ggf. Event löschen ----------
         raw = self.cleaned_data.get("marriage_raw_date")
@@ -277,7 +289,7 @@ class ChildFamilyLinkForm(ModelForm):
             "family": forms.Select(attrs={"class": "form-select"}),
             "relationship_type": forms.Select(attrs={"class": "form-select"}),
         }
-        
+
 
 # ----------------------------------------------------------------------
 #  MediaObjectForm – für Bilder
@@ -287,6 +299,7 @@ class MediaObjectForm(forms.ModelForm):
     Formular zum Hochladen eines Bildes (oder anderer Medien) und zur
     Zuordnung zu einer oder mehreren Personen.
     """
+
     class Meta:
         model = MediaObject
         fields = [
@@ -321,9 +334,13 @@ class MediaObjectForm(forms.ModelForm):
 
         # 2. QUERYSETS FILTERN: Nur Personen/Quellen aus DIESEM Baum anzeigen!
         if current_tree_id:
-            self.fields["individuals"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            self.fields["individuals"].queryset = Individual.objects.filter(
+                gedcom_tree_id=current_tree_id
+            )
             if "sources" in self.fields:
-                self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+                self.fields["sources"].queryset = Source.objects.filter(
+                    gedcom_tree_id=current_tree_id
+                )
         else:
             # Fallback: Falls kein Baum gefunden wird, zeige sicherheitshalber nichts an
             self.fields["individuals"].queryset = Individual.objects.none()
@@ -339,16 +356,15 @@ class MediaObjectForm(forms.ModelForm):
         media = super().save(commit=False)
 
         if commit:
-            media.save()      # Speichert das Bild (gibt ihm eine ID)
-            self.save_m2m()   # Speichert die Personen & Quellen in der Datenbank
+            media.save()  # Speichert das Bild (gibt ihm eine ID)
+            self.save_m2m()  # Speichert die Personen & Quellen in der Datenbank
 
-            # WICHTIG: Erst NACHDEM save_m2m() gelaufen ist, weiß Django, 
+            # WICHTIG: Erst NACHDEM save_m2m() gelaufen ist, weiß Django,
             # welche Personen mit dem Bild verknüpft sind!
             if media.is_portrait:
                 for person in media.individuals.all():
                     MediaObject.objects.filter(
-                        individuals=person,
-                        is_portrait=True
+                        individuals=person, is_portrait=True
                     ).exclude(pk=media.pk).update(is_portrait=False)
 
         return media
