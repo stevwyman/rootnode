@@ -150,6 +150,9 @@
                 </div>
             </div>
         {% endfor %}
+        <a href="{% url 'genview:media-create-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-primary">
+            + Dokument/Bild hinzufügen
+        </a>
     </div>
 {% else %}
     <p class="text-muted">Keine Medien verknüpft.</p>

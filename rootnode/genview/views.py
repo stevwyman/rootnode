@@ -670,6 +670,17 @@ class ProtectedMediaFileView(LoginRequiredMixin, TreeAccessMixin, DetailView):
         return FileResponse(file_handle)
 
 
+class MediaObjectDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+    model = MediaObject
+    template_name = "genview/mediaobject_detail.html"
+    context_object_name = "media"
+
+    def get_queryset(self):
+        # SECURITY FIX: Ensure the media belongs to the requested tree
+        tree_id = self.kwargs.get("tree_id")
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+    
+
 # --------------------------------------------------------------
 #  Medien‑Liste (optional – Übersicht aller Medien)
 # --------------------------------------------------------------
@@ -697,12 +708,17 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
     def dispatch(self, request, *args, **kwargs):
         self.person = None
+        self.family = None
+
+        tree_id = kwargs.get("tree_id")
         person_pk = kwargs.get("person_pk")
+        family_pk = kwargs.get("family_pk")
+
         if person_pk:
-            # Sicherstellen, dass die Person auch zum aktuellen Baum gehört
-            self.person = get_object_or_404(
-                Individual, pk=person_pk, gedcom_tree_id=kwargs.get("tree_id")
-            )
+            self.person = get_object_or_404(Individual, pk=person_pk, gedcom_tree_id=tree_id)
+        if family_pk:
+            self.family = get_object_or_404(Family, pk=family_pk, gedcom_tree_id=tree_id)
+
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -710,6 +726,8 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
         # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
         kwargs["person"] = getattr(self, "person", None)
+
+        kwargs["family"] = self.family
 
         # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
         kwargs["tree_id"] = self.kwargs.get("tree_id")
@@ -731,6 +749,8 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         response = super().form_valid(form)
         if self.person:
             self.object.individuals.add(self.person)
+        if self.family:
+            self.object.families.add(self.family)
 
         # return response
         return HttpResponseRedirect(self.get_success_url())
@@ -741,9 +761,13 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
         if self.person:
             return reverse_lazy(
-                "genview:individual-detail",  # Achte auf Konsistenz (Unterstrich vs Bindestrich)
+                "genview:individual-detail",  
                 kwargs={"tree_id": tree_id, "pk": self.person.pk},
             )
+        if self.family:
+            return reverse_lazy(
+                "genview:family-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.family.pk})
 
         # Fallback: Zur Medien-Übersicht des Baums
         return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})

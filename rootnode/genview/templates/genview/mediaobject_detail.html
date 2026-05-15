@@ -1,0 +1,90 @@
+{% extends "genview/base.html" %}
+
+{% block title %}{{ media.title }} - Details{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{{ media.title }}</h2>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">&larr; Zurück</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 text-center bg-light p-3 rounded border">
+            {% if media.is_image and media.file %}
+                <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" 
+                     class="img-fluid rounded shadow-sm" 
+                     style="max-height: 70vh; object-fit: contain;" 
+                     alt="{{ media.title }}">
+            {% elif media.file %}
+                <div class="py-5">
+                    <h1 class="display-1 text-muted">📄</h1>
+                    <p class="lead">Dieses Dokument kann nicht direkt im Browser angezeigt werden.</p>
+                    <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="btn btn-primary btn-lg mt-3" target="_blank">
+                        Datei öffnen / Herunterladen
+                    </a>
+                </div>
+            {% else %}
+                <p class="text-danger mt-5">Keine Datei gefunden.</p>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4 mt-4 mt-md-0">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title border-bottom pb-2">Details</h5>
+                    
+                    {% if media.description %}
+                        <p class="card-text">{{ media.description|linebreaks }}</p>
+                    {% else %}
+                        <p class="card-text text-muted fst-italic">Keine Beschreibung vorhanden.</p>
+                    {% endif %}
+
+                    {% if media.individuals.exists %}
+                        <h6 class="mt-4">Verknüpfte Personen:</h6>
+                        <ul class="list-unstyled">
+                            {% for person in media.individuals.all %}
+                                <li>
+                                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}">
+                                        {{ person.given_name }} {{ person.surname }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    {% if media.families.exists %}
+                        <h6 class="mt-4">Verknüpfte Familien:</h6>
+                        <ul class="list-unstyled">
+                            {% for fam in media.families.all %}
+                                <li>
+                                    <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.pk %}">
+                                        Familie: 
+                                        {% if fam.husband %}{{ fam.husband.surname }}{% endif %}
+                                        {% if fam.husband and fam.wife %} - {% endif %}
+                                        {% if fam.wife %}{{ fam.wife.surname }}{% endif %}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    {% if media.sources.exists %}
+                        <h6 class="mt-4">Quellen:</h6>
+                        <ul>
+                            {% for source in media.sources.all %}
+                                <li>{{ source.title }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                
+                <div class="card-footer bg-white d-flex justify-content-between">
+                    <a href="{% url 'genview:media-edit' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-primary">✎ Bearbeiten</a>
+                    <a href="{% url 'genview:media-delete' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-danger">🗑 Löschen</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

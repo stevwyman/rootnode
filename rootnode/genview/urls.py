@@ -78,6 +78,11 @@ urlpatterns = [
         views.FamilyDeleteView.as_view(),
         name="family-delete",
     ),
+    path(
+        'tree/<int:tree_id>/family/<int:family_pk>/media/add/', 
+        views.MediaObjectCreateView.as_view(), 
+        name='media-create-family'
+    ),
     # ----------------------------------------------
     # ---- Child‑Family‑Link 
     # ----------------------------------------------
@@ -98,6 +103,11 @@ urlpatterns = [
         "tree/<int:tree_id>/media/<int:pk>/file/",
         views.ProtectedMediaFileView.as_view(),
         name="media-file",
+    ),
+    path(
+        'tree/<int:tree_id>/media/<int:pk>/', 
+        views.MediaObjectDetailView.as_view(), 
+        name='media-detail'
     ),
     path(
         "tree/<int:tree_id>/media/",

@@ -308,6 +308,7 @@ class MediaObjectForm(forms.ModelForm):
             "file",
             "description",
             "individuals",
+            "families",
             "sources",
             "is_portrait",
         ]
@@ -317,18 +318,21 @@ class MediaObjectForm(forms.ModelForm):
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "individuals": forms.CheckboxSelectMultiple(),
+            "families": forms.CheckboxSelectMultiple(),
             "sources": forms.CheckboxSelectMultiple(),
             "is_portrait": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     # Füge tree_id als optionalen Parameter hinzu, um Daten-Leaks zu verhindern!
-    def __init__(self, *args, person=None, tree_id=None, **kwargs):
+    def __init__(self, *args, person=None, family=None, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # 1. SICHERHEIT: Finde heraus, in welchem Baum wir uns befinden
         current_tree_id = tree_id
         if person:
             current_tree_id = person.gedcom_tree_id
+        elif family:
+            current_tree_id = family.gedcom_tree_id
         elif self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
@@ -337,6 +341,9 @@ class MediaObjectForm(forms.ModelForm):
             self.fields["individuals"].queryset = Individual.objects.filter(
                 gedcom_tree_id=current_tree_id
             )
+            if "families" in self.fields:
+                self.fields["families"].queryset = Family.objects.filter(
+                    gedcom_tree_id=current_tree_id)
             if "sources" in self.fields:
                 self.fields["sources"].queryset = Source.objects.filter(
                     gedcom_tree_id=current_tree_id
@@ -344,10 +351,14 @@ class MediaObjectForm(forms.ModelForm):
         else:
             # Fallback: Falls kein Baum gefunden wird, zeige sicherheitshalber nichts an
             self.fields["individuals"].queryset = Individual.objects.none()
+            if "families" in self.fields:
+                self.fields["families"].queryset = Family.objects.none()
 
         # 3. PRESELECTION: Person in der Checkbox-Liste anhaken
         if person:
             self.fields["individuals"].initial = [person]
+        if family and "families" in self.fields:
+            self.fields["families"].initial = [family]
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen
