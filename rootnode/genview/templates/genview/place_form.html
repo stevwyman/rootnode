@@ -1,0 +1,48 @@
+{% extends "genview/base.html" %}
+
+{% block title %}
+    {% if object %}Ort bearbeiten{% else %}Neuen Ort hinzufügen{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        {% if object %}
+                            📍 Ort bearbeiten: {{ object.name }}
+                        {% else %}
+                            📍 Neuen Ort hinzufügen
+                        {% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {{ form.as_p }}
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            {% if object %}
+                                <a href="{% url 'genview:place-detail' tree_id=tree_id pk=object.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% else %}
+                                <a href="{% url 'genview:place-list' tree_id=tree_id %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% endif %}
+                            
+                            <button type="submit" class="btn btn-success">
+                                {% if object %}Änderungen speichern{% else %}Ort speichern{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-3 small">
+                <strong>Tipp:</strong> Koordinaten (Breiten- und Längengrad) sollten im Dezimalformat eingegeben werden (z.B. <code>52.520000</code> für Berlin).
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

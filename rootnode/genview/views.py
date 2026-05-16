@@ -29,6 +29,7 @@ from .models import (
     Tree,
     TreeMembership,
     Source,
+    Place,
 )
 from .forms import (
     IndividualForm,
@@ -38,6 +39,7 @@ from .forms import (
     MediaObjectForm,
     EventForm,
     SourceForm,
+    PlaceForm,
 )
 from .mixins import TreeAccessMixin, TreeEditAccessMixin
 
@@ -584,6 +586,13 @@ class FamilyCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     form_class = FamilyForm
     template_name = "genview/family_form.html"
 
+    def get_form_kwargs(self):
+        # Holt die Standard-Argumente (wie instance, data etc.)
+        kwargs = super().get_form_kwargs()
+        # Packt unsere tree_id aus der URL mit dazu!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
     def form_valid(self, form):
         messages.success(self.request, "Familie angelegt.")
         return super().form_valid(form)
@@ -596,6 +605,13 @@ class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = Family
     form_class = FamilyForm
     template_name = "genview/family_form.html"
+
+    def get_form_kwargs(self):
+        # Holt die Standard-Argumente (wie instance, data etc.)
+        kwargs = super().get_form_kwargs()
+        # Packt unsere tree_id aus der URL mit dazu!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
 
     def form_valid(self, form):
         messages.success(self.request, "Familie wurde aktualisiert.")
@@ -641,7 +657,7 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
 
 
 # ----------------------------------------------------------------------
-# 5️⃣ Media
+# 8️⃣ Media
 # ----------------------------------------------------------------------
 
 
@@ -811,6 +827,7 @@ class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView)
         messages.success(self.request, "Medium erfolgreich aktualisiert.")
         return reverse_lazy("genview:media-detail", kwargs={"tree_id": tree_id, "pk": self.object.pk})
 
+
 class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = MediaObject
     template_name = "genview/mediaobject_confirm_delete.html"
@@ -843,8 +860,116 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
 
 
 # --------------------------------------------------------------
-# 6️⃣ Events
+# 6️⃣ Places
 # --------------------------------------------------------------
+
+# --- 1. List View ---
+class PlaceListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+    model = Place
+    template_name = "genview/place_list.html"
+    context_object_name = "places"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        # Fetch places for this tree, count the linked events, and sort alphabetically
+        return Place.objects.filter(gedcom_tree_id=tree_id).annotate(
+            event_count=Count('events')
+        ).order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Pass the tree_id so we can build links in the template
+        context["tree_id"] = self.kwargs.get("tree_id")
+        return context
+
+# --- 2. Detail View ---
+class PlaceDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+    model = Place
+    template_name = "genview/place_detail.html"
+    context_object_name = "place"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        # Wir laden den Ort und direkt alle verknüpften Ereignisse + Personen mit!
+        return Place.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            'events__individual', 
+            'events__family__husband', 
+            'events__family__wife'
+        )
+
+# --- 3. Create View ---
+class PlaceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
+    model = Place
+    form_class = PlaceForm
+    template_name = "genview/place_form.html"
+
+    def form_valid(self, form):
+        form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Ort erfolgreich hinzugefügt.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy("genview:place-list", kwargs={"tree_id": self.kwargs.get("tree_id")})
+    
+# --- 4. Update View ---
+class PlaceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+    model = Place
+    form_class = PlaceForm
+    template_name = "genview/place_form.html"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return Place.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Orte aktualisiert.")
+        return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
+
+# --- 5. Delete View ---
+class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+    model = Place
+    template_name = "genview/place_confirm_delete.html"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return Source.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Quelle gelöscht.")
+        return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
+    
+
+# --------------------------------------------------------------
+# 7️⃣ Events
+# --------------------------------------------------------------
+
+# --- 1. List View ---
+class EventListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+    model = Event
+    template_name = "genview/event_list.html"
+    context_object_name = "events"
+    paginate_by = 50  # Shows 50 events per page for faster loading
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        
+        return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
+            'individual', 
+            'family__husband', 
+            'family__wife', 
+            'place'
+        ).order_by(
+            # Sort chronologically, but put events with missing dates at the end
+            F('parsed_date').asc(nulls_last=True)
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["tree_id"] = self.kwargs.get("tree_id")
+        return context
+
 
 class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Event
@@ -987,7 +1112,7 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
 
 # --------------------------------------------------------------
-# 7️⃣ Sources
+# 2️⃣ Sources
 # --------------------------------------------------------------
 
 # --- 1. List View ---
@@ -1057,3 +1182,4 @@ class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Quelle gelöscht.")
         return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+    

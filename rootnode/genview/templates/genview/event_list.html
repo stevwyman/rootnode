@@ -1,0 +1,112 @@
+{% extends "genview/base.html" %}
+
+{% block title %}Ereignisse im Stammbaum{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📅 Alle Ereignisse</h2>
+        </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Datum</th>
+                            <th>Ereignis</th>
+                            <th>Betroffene Person / Familie</th>
+                            <th>Ort</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                            <tr>
+                                <td class="text-nowrap">
+                                    {% if event.parsed_date %}
+                                        <strong>{{ event.parsed_date|date:"d.m.Y" }}</strong>
+                                    {% else %}
+                                        <span class="text-muted fst-italic">{{ event.raw_date|default:"Unbekannt" }}</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        {{ event.get_event_type_display }}
+                                    </span>
+                                </td>
+                                
+                                <td>
+                                    {% if event.individual %}
+                                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
+                                            👤 {{ event.individual.given_name }} {{ event.individual.surname }}
+                                        </a>
+                                    {% elif event.family %}
+                                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
+                                            👪 Familie: 
+                                            {{ event.family.husband.surname|default:"?" }} & 
+                                            {{ event.family.wife.surname|default:"?" }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-danger">Unverknüpftes Ereignis</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {% if event.place %}
+                                        <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.pk %}" class="text-decoration-none text-muted">
+                                            📍 {{ event.place.name }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted small">-</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="text-end">
+                                    <a href="{% url 'genview:even-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
+                                        ✎
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    In diesem Stammbaum wurden noch keine Ereignisse erfasst.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if is_paginated %}
+        <nav class="mt-4" aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
+                {% endif %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
+</div>
+{% endblock %}

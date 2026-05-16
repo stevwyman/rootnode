@@ -1,166 +1,331 @@
 import os
 import re
 from datetime import date
+
 from django.core.management.base import BaseCommand
-from gedcom.parser import Parser
-from gedcom.element.individual import IndividualElement
-from gedcom.element.family import FamilyElement
-from genview.models import Individual, Family, ChildFamilyLink, Tree, Event # Added Event here
+from django.db import transaction
+from genview.models import Tree, Individual, Family, Event, Source, Place, ChildFamilyLink
 
 class Command(BaseCommand):
-    help = 'Imports a GEDCOM file, parses dates, and creates Events'
+    help = 'Importiert eine GEDCOM-Datei und erstellt dabei einen neuen Stammbaum, Orte und Quellen.'
 
     def add_arguments(self, parser):
-        parser.add_argument('file_path', type=str, help='Path to the GEDCOM file')
+        parser.add_argument('gedcom_file', type=str, help='Pfad zur GEDCOM-Datei')
+        parser.add_argument('--tree-name', type=str, help='Name des neuen Stammbaums', required=True)
 
-    def handle(self, *args, **kwargs):
-        file_path = kwargs['file_path']
+    def handle(self, *args, **options):
+        file_path = options['gedcom_file']
+        tree_name = options['tree_name']
 
         if not os.path.exists(file_path):
-            self.stdout.write(self.style.ERROR(f'File not found: {file_path}'))
+            self.stdout.write(self.style.ERROR(f'Datei {file_path} nicht gefunden.'))
             return
 
-        base_name = os.path.basename(file_path)
-        tree_name, _ = os.path.splitext(base_name)
+        # Alles in einer Transaktion: Schlägt der Import fehl, wird nichts in der DB gespeichert!
+        with transaction.atomic():
+            self.stdout.write(self.style.SUCCESS(f'Erstelle neuen Stammbaum: {tree_name}'))
+            tree = Tree.objects.create(name=tree_name)
 
-        target_tree = Tree.objects.create(
-            name=tree_name.replace('_', ' ').title(),
-            description=f"Automatically imported from {base_name}"
-        )
+            # Dictionary-Caches für schnelle Zuweisungen (GEDCOM-ID -> Django-Objekt)
+            self.source_map = {}
+            self.person_map = {}
+            self.family_map = {}
+
+            # Die Datei in Abschnitte zerlegen (getrennt durch Level 0)
+            records = self._parse_to_records(file_path)
+
+            self.stdout.write('Phase 1: Importiere Quellen (SOUR)...')
+            self._import_sources(tree, records)
+
+            self.stdout.write('Phase 2: Importiere Personen (INDI) und Orte (PLAC)...')
+            self._import_individuals(tree, records)
+
+            self.stdout.write('Phase 3: Importiere Familien (FAM)...')
+            self._import_families(tree, records)
+
+            self.stdout.write(self.style.SUCCESS('GEDCOM Import erfolgreich abgeschlossen!'))
+
+    # -------------------------------------------------------------------------
+    # HILFSFUNKTIONEN FÜR DAS PARSING
+    # -------------------------------------------------------------------------
+    def _parse_to_records(self, file_path):
+        """Teilt die GEDCOM Datei in logische Blöcke (jeder startet mit '0')."""
+        records = []
+        current_record = []
         
-        self.stdout.write(self.style.SUCCESS(f'Created new Tree: "{target_tree.name}"'))
-        self.stdout.write(self.style.NOTICE(f'Parsing {base_name}...'))
-        
-        gedcom_parser = Parser()
-        gedcom_parser.parse_file(file_path, False)
-        root_child_elements = gedcom_parser.get_root_child_elements()
-
-        # STEP 1: Import Individuals & Their Events
-        self.stdout.write('Importing Individuals and Events (Birth/Death)...')
-        for element in root_child_elements:
-            if isinstance(element, IndividualElement):
-                gedcom_id = element.get_pointer()
-                (first, last) = element.get_name()
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            for line in f:
+                line = line.strip()
+                if not line: continue
                 
-                # Save the individual
-                person_obj, _ = Individual.objects.update_or_create(
-                    gedcom_id=gedcom_id,
-                    gedcom_tree=target_tree,
-                    defaults={
-                        'given_name': first,
-                        'surname': last,
-                        'sex': element.get_gender() or 'U',
-                    }
-                )
-
-                # Find Birth and Death Events
-                for child in element.get_child_elements():
-                    tag = child.get_tag()
-                    if tag in ['BIRT', 'DEAT']:
-                        raw_date = self._get_first_child_value(child, 'DATE') or ""
-                        place = self._get_first_child_value(child, 'PLAC') or ""
-                        
-                        if raw_date or place:
-                            Event.objects.create(
-                                event_type=Event.EventType.BIRTH if tag == 'BIRT' else Event.EventType.DEATH,
-                                gedcom_tree=target_tree,
-                                individual=person_obj,
-                                raw_date=raw_date,
-                                parsed_date=self._parse_gedcom_date(raw_date),
-                                place=place
-                            )
-
-        # STEP 2: Import Families & Marriages
-        self.stdout.write('Importing Families and Marriages...')
-        for element in root_child_elements:
-            if isinstance(element, FamilyElement):
-                fam_id = element.get_pointer()
+                parts = line.split(' ', 2)
+                level = parts[0]
                 
-                husb_id = self._get_first_child_value(element, 'HUSB')
-                wife_id = self._get_first_child_value(element, 'WIFE')
-
-                husband = Individual.objects.filter(gedcom_id=husb_id, gedcom_tree=target_tree).first() if husb_id else None
-                wife = Individual.objects.filter(gedcom_id=wife_id, gedcom_tree=target_tree).first() if wife_id else None
-
-                family_obj, _ = Family.objects.update_or_create(
-                    gedcom_id=fam_id,
-                    gedcom_tree=target_tree,
-                    defaults={
-                        'husband': husband,
-                        'wife': wife,
-                    }
-                )
-
-                # Link Children
-                for child_elem in element.get_child_elements():
-                    if child_elem.get_tag() == 'CHIL':
-                        child_id = child_elem.get_value()
-                        child_obj = Individual.objects.filter(gedcom_id=child_id, gedcom_tree=target_tree).first()
-                        
-                        if child_obj:
-                            ChildFamilyLink.objects.update_or_create(
-                                child=child_obj,
-                                family=family_obj,
-                                defaults={'relationship_type': 'B'} 
-                            )
+                if level == '0' and current_record:
+                    records.append(current_record)
+                    current_record = []
+                current_record.append(line)
                 
-                # Find Marriage Events
-                for child in element.get_child_elements():
-                    if child.get_tag() == 'MARR':
-                        raw_date = self._get_first_child_value(child, 'DATE') or ""
-                        place = self._get_first_child_value(child, 'PLAC') or ""
-                        
-                        if raw_date or place:
-                            Event.objects.create(
-                                event_type=Event.EventType.MARRIAGE,
-                                gedcom_tree=target_tree,
-                                family=family_obj,
-                                raw_date=raw_date,
-                                parsed_date=self._parse_gedcom_date(raw_date),
-                                place=place
-                            )
+        if current_record:
+            records.append(current_record)
+        return records
 
-        self.stdout.write(self.style.SUCCESS(f'Successfully imported all data into "{target_tree.name}"!'))
+    def _extract_tags(self, record, parent_tag):
+        """Findet alle Unter-Tags für ein bestimmtes Tag (z.B. PLAC, DATE, SOUR innerhalb von BIRT)."""
+        tags = {}
+        in_target_block = False
+        target_level = None
 
-    def _get_first_child_value(self, element, tag):
-        for child in element.get_child_elements():
-            if child.get_tag() == tag:
-                return child.get_value()
-        return None
+        for line in record:
+            parts = line.split(' ', 2)
+            level = int(parts[0])
+            tag = parts[1] if len(parts) > 1 else ""
+            value = parts[2] if len(parts) > 2 else ""
 
-    def _parse_gedcom_date(self, raw_date):
-        """
-        Attempts to parse a messy GEDCOM date string into a Python datetime.date object.
-        Defaults to Jan 1st if only a year is provided.
-        """
-        if not raw_date:
-            return None
+            # Block starten
+            if tag == parent_tag:
+                in_target_block = True
+                target_level = level
+                continue
             
-        months_map = {
+            # Block beenden, wenn wir wieder auf der gleichen oder einer höheren Ebene sind
+            if in_target_block and level <= target_level:
+                in_target_block = False
+
+            if in_target_block:
+                if tag not in tags:
+                    tags[tag] = []
+                tags[tag].append(value)
+                
+        return tags
+
+    # -------------------------------------------------------------------------
+    # PHASE 1: QUELLEN
+    # -------------------------------------------------------------------------
+    def _import_sources(self, tree, records):
+        for record in records:
+            header = record[0].split(' ', 2)
+            if len(header) > 2 and header[2] == 'SOUR':
+                gedcom_id = header[1]
+                
+                # Sehr simples Parsing für Quellen-Metadaten
+                title = ""
+                author = ""
+                for line in record:
+                    if line.startswith("1 TITL "): title = line[7:]
+                    if line.startswith("1 AUTH "): author = line[7:]
+
+                source = Source.objects.create(
+                    gedcom_tree=tree,
+                    gedcom_id=gedcom_id,
+                    title=title or f"Unbenannte Quelle ({gedcom_id})",
+                    author=author
+                )
+                self.source_map[gedcom_id] = source
+
+    # -------------------------------------------------------------------------
+    # PHASE 2: PERSONEN (Und ihre Ereignisse/Orte)
+    # -------------------------------------------------------------------------
+    def _import_individuals(self, tree, records):
+        for record in records:
+            header = record[0].split(' ', 2)
+            if len(header) > 2 and header[2] == 'INDI':
+                gedcom_id = header[1]
+                
+                # --- NEUE NAME-PARSING LOGIK ---
+                given_name = "Unbekannt"
+                surname = "Unbekannt"
+                
+                # Zuerst nach der '1 NAME' Zeile suchen
+                for i, line in enumerate(record):
+                    if line.startswith("1 NAME "):
+                        raw_name = line[7:].strip()
+                        
+                        # Nachnamen aus den Schrägstrichen /.../ extrahieren
+                        if '/' in raw_name:
+                            parts = raw_name.split('/')
+                            if len(parts) >= 2:
+                                # Vor dem ersten Slash ist der Vorname, dazwischen der Nachname
+                                parsed_given = parts[0].strip()
+                                parsed_sur = parts[1].strip()
+                                
+                                if parsed_given: given_name = parsed_given
+                                if parsed_sur: surname = parsed_sur
+                        else:
+                            # Falls keine Schrägstriche da sind, nehmen wir alles als Vorname
+                            if raw_name: given_name = raw_name
+                            
+                        # Jetzt prüfen wir, ob die GEDCOM-Datei noch präzisere Unter-Tags liefert.
+                        # Wir schauen uns die nächsten Zeilen an, solange sie mit '2' anfangen.
+                        j = i + 1
+                        while j < len(record) and record[j].startswith("2 "):
+                            if record[j].startswith("2 GIVN "):
+                                given_name = record[j][7:].strip()
+                            elif record[j].startswith("2 SURN "):
+                                surname = record[j][7:].strip()
+                            j += 1
+                            
+                        break # Name erfolgreich extrahiert, innere Schleife abbrechen!
+
+                # Person in der Datenbank erstellen
+                person = Individual.objects.create(
+                    gedcom_tree=tree, 
+                    gedcom_id=gedcom_id,
+                    given_name=given_name, 
+                    surname=surname
+                )
+                self.person_map[gedcom_id] = person
+
+                # Ereignisse parsen (z.B. Geburt)
+                self._create_events_from_record(tree, record, individual=person)
+
+    # -------------------------------------------------------------------------
+    # PHASE 3: FAMILIEN (Mit Eltern UND Kindern über ChildFamilyLink)
+    # -------------------------------------------------------------------------
+    def _import_families(self, tree, records):
+        for record in records:
+            header = record[0].split(' ', 2)
+            if len(header) > 2 and header[2] == 'FAM':
+                gedcom_id = header[1]
+                
+                # Familie in DB erstellen
+                family = Family.objects.create(
+                    gedcom_tree=tree,
+                    gedcom_id=gedcom_id
+                )
+                self.family_map[gedcom_id] = family
+
+                for line in record:
+                    # 1. Ehemann verknüpfen (ForeignKey)
+                    if line.startswith("1 HUSB "):
+                        husb_id = line[7:].strip()
+                        if husb_id in self.person_map:
+                            family.husband = self.person_map[husb_id]
+                            
+                    # 2. Ehefrau verknüpfen (ForeignKey)
+                    elif line.startswith("1 WIFE "):
+                        wife_id = line[7:].strip()
+                        if wife_id in self.person_map:
+                            family.wife = self.person_map[wife_id]
+                            
+                    # 3. NEU: Kinder über ChildFamilyLink verknüpfen!
+                    elif line.startswith("1 CHIL "):
+                        chil_id = line[7:].strip()
+                        if chil_id in self.person_map:
+                            # Wir erstellen den Link explizit. Standard ist BIOLOGICAL,
+                            # wie in deinem Model definiert.
+                            ChildFamilyLink.objects.create(
+                                child=self.person_map[chil_id],
+                                family=family,
+                                relationship_type=ChildFamilyLink.Relationship.BIOLOGICAL
+                            )
+
+                # Änderungen für husband und wife speichern
+                family.save()
+
+                # Ereignisse parsen (z.B. Hochzeit)
+                self._create_events_from_record(tree, record, family=family)
+
+    # -------------------------------------------------------------------------
+    # EREIGNIS-ERSTELLUNG (Hier passiert die Magie für PLAC und SOUR!)
+    # -------------------------------------------------------------------------
+    def _create_events_from_record(self, tree, record, individual=None, family=None):
+        # Liste der GEDCOM Ereignis-Tags, die du unterstützen möchtest
+        event_tags = ['BIRT', 'DEAT', 'MARR', 'CHR', 'BURI'] 
+        
+        for e_tag in event_tags:
+            event_data = self._extract_tags(record, e_tag)
+            
+            if not event_data:
+                continue # Dieses Ereignis gibt es in diesem Record nicht
+
+            # 1. ORT (PLAC) VERARBEITEN
+            place_obj = None
+            if 'PLAC' in event_data and event_data['PLAC']:
+                place_name = event_data['PLAC'][0]
+                # get_or_create verhindert, dass "Berlin" hundertmal angelegt wird!
+                place_obj, created = Place.objects.get_or_create(
+                    gedcom_tree=tree, 
+                    name=place_name
+                )
+
+            raw_date_str = event_data['DATE'][0] if 'DATE' in event_data else ''
+            parsed_date_obj = self._parse_gedcom_date(raw_date_str)
+
+            # 2. EREIGNIS (EVENT) ERSTELLEN
+            event = Event.objects.create(
+                gedcom_tree=tree,
+                event_type=e_tag,
+                raw_date=raw_date_str,
+                parsed_date=parsed_date_obj,
+                place=place_obj, # Hier wird der ForeignKey zugewiesen!
+                individual=individual,
+                family=family
+            )
+
+            # 3. QUELLEN (SOUR) VERKNÜPFEN
+            if 'SOUR' in event_data:
+                for sour_id in event_data['SOUR']:
+                    # Wenn die Quelle in Phase 1 gefunden wurde, verbinden!
+                    if sour_id in self.source_map:
+                        event.sources.add(self.source_map[sour_id])
+
+    # -------------------------------------------------------------------------
+    # DATUM-PARSING LOGIK
+    # -------------------------------------------------------------------------
+    def _parse_gedcom_date(self, raw_date_str):
+        """
+        Versucht, aus einem chaotischen GEDCOM-Datum ein echtes Python Date-Objekt 
+        für die chronologische Sortierung zu machen.
+        """
+        if not raw_date_str:
+            return None
+
+        # 1. Bereinigen und in Großbuchstaben umwandeln
+        d = raw_date_str.upper().strip()
+        
+        # Wenn es eine Zeitspanne ist (z.B. BET 1850 AND 1860), 
+        # nehmen wir das erste Datum für die Sortierung in der Timeline.
+        if d.startswith('BET ') and ' AND ' in d:
+            d = d.split(' AND ')[0].replace('BET ', '').strip()
+        elif d.startswith('FROM ') and ' TO ' in d:
+            d = d.split(' TO ')[0].replace('FROM ', '').strip()
+
+        # GEDCOM-Präfixe (Ungefähr, Vor, Nach, Geschätzt) entfernen
+        prefixes = ['ABT ', 'CAL ', 'EST ', 'BEF ', 'AFT ', 'ABOUT ']
+        for p in prefixes:
+            if d.startswith(p):
+                d = d.replace(p, '').strip()
+
+        # 2. Jahr, Monat, Tag extrahieren
+        months = {
             'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
             'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
         }
+
+        # Suchen nach einem 4-stelligen Jahr (Das Wichtigste!)
+        year_match = re.search(r'\d{4}', d)
+        if not year_match:
+            return None # Ohne Jahr können wir kein Date-Objekt bauen
         
-        # Clean the string of common GEDCOM text modifiers
-        clean_str = raw_date.upper()
-        for prefix in ['ABT', 'CAL', 'EST', 'BEF', 'AFT', 'BET', 'AND', 'TO', 'FROM']:
-            clean_str = clean_str.replace(prefix, '')
-            
-        # Regex to find: (Optional 1-2 digit Day) (Optional 3-letter Month) (3-4 digit Year)
-        match = re.search(r'(?:(\d{1,2})\s+)?(?:([A-Z]{3})\s+)?(\d{3,4})', clean_str)
+        year = int(year_match.group())
+        month = 1 # Fallback, falls nur das Jahr da ist
+        day = 1   # Fallback, falls nur Jahr/Monat da ist
+
+        # Suchen nach dem Monat
+        for m_str, m_num in months.items():
+            if m_str in d:
+                month = m_num
+                break
+
+        # Suchen nach dem Tag (1 oder 2 Ziffern, meist ganz vorne)
+        day_match = re.search(r'^\d{1,2}\b', d)
+        if day_match:
+            day = int(day_match.group())
+
+        # Sicherstellen, dass das Datum gültig ist (z.B. kein 31. Februar)
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
         
-        if match:
-            day_str, month_str, year_str = match.groups()
-            
-            try:
-                year = int(year_str)
-                # Fallback to 1 if month or day are missing
-                month = months_map.get(month_str, 1) if month_str else 1
-                day = int(day_str) if day_str else 1
-                
-                return date(year, month, day)
-            except ValueError:
-                # Catches impossible dates like '31 FEB 1900'
-                return None
-                
-        return None

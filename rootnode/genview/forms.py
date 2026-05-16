@@ -1,7 +1,7 @@
 # genview/forms.py
 from django import forms
 from django.forms import ModelForm, CheckboxSelectMultiple, DateInput
-from .models import Individual, Family, ChildFamilyLink, Event, MediaObject, Source
+from .models import Individual, Family, ChildFamilyLink, Event, MediaObject, Source, Place
 
 
 # ----------------------------------------------------------------------
@@ -191,14 +191,19 @@ class FamilyForm(ModelForm):
     marriage_parsed_date = forms.DateField(
         required=False,
         label="Heirats‑Datum (geparst)",
-        widget=DateInput(attrs={"class": "form-control", "type": "date"}),
+        widget=forms.DateInput(
+                format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
+                attrs={
+                    'class': 'form-control', 
+                    'type': 'date'  # Öffnet den nativen Browser-Kalender
+                }
+            ),
     )
-    marriage_place = forms.CharField(
+    marriage_place = forms.ModelChoiceField(
+        queryset=Place.objects.none(), 
         required=False,
-        label="Heirats‑Ort",
-        widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "z. B. Berlin, Deutschland"}
-        ),
+        label="Heiratsort",
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
 
     class Meta:
@@ -223,8 +228,21 @@ class FamilyForm(ModelForm):
     # --------------------------------------------------------------
     #  Initial‑Daten für die virtuellen Felder befüllen
     # --------------------------------------------------------------
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # 1. Versuche die tree_id aus den View-Argumenten zu holen
+        current_tree_id = tree_id
+        
+        # 2. Fallback: Wenn wir bearbeiten (Update), hat die Instanz selbst eine tree_id
+        if not current_tree_id and self.instance and self.instance.pk:
+            current_tree_id = self.instance.gedcom_tree_id
+
+        # 3. Dropdown befüllen!
+        if current_tree_id and 'marriage_place' in self.fields:
+            self.fields['marriage_place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
+        elif 'marriage_place' in self.fields:
+            self.fields['marriage_place'].queryset = Place.objects.none()
 
         if self.instance.pk:
             ev = self.instance.marriage_event
@@ -385,6 +403,17 @@ class MediaObjectForm(forms.ModelForm):
         return media
 
 
+class PlaceForm(forms.ModelForm):
+    class Meta:
+        model = Place
+        fields = ['name', 'latitude', 'longitude']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. Berlin, Deutschland'}),
+            'latitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+            'longitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        }
+
+
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
@@ -393,7 +422,14 @@ class EventForm(forms.ModelForm):
         widgets = {
             'event_type': forms.Select(attrs={'class': 'form-select'}),
             'date_raw': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
-            'place': forms.TextInput(attrs={'class': 'form-control'}),
+            'parsed_date': forms.DateInput(
+                format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
+                attrs={
+                    'class': 'form-control', 
+                    'type': 'date'  # Öffnet den nativen Browser-Kalender
+                }
+            ),
+            'place': forms.Select(attrs={'class': 'form-select'}), # Change to Select
             'sources': forms.CheckboxSelectMultiple(),
         }
 
@@ -410,10 +446,16 @@ class EventForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
-        if current_tree_id and 'sources' in self.fields:
-            self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
-        elif 'sources' in self.fields:
-            self.fields['sources'].queryset = Source.objects.none()
+        if current_tree_id:
+            if 'sources' in self.fields:
+                self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+            if 'place' in self.fields:
+                self.fields['place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id) # NEW
+        else:
+            if 'sources' in self.fields:
+                self.fields['sources'].queryset = Source.objects.none()
+            if 'place' in self.fields:
+                self.fields['place'].queryset = Place.objects.none() # NEW
 
 
 class SourceForm(forms.ModelForm):

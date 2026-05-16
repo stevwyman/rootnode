@@ -332,7 +332,10 @@ class Family(MPTTModel, GedcomIdMixin):
     @property
     def marriage_place(self) -> str:
         ev = self.marriage_event
-        return ev.place if ev else ""
+        # Gib den Namen des Ortes zurück, falls es einen Ort gibt
+        if ev and ev.place:
+            return ev.place.name
+        return ""
 
     @property
     def marriage_date_raw(self) -> str:
@@ -389,7 +392,30 @@ class ChildFamilyLink(models.Model):
 
 
 # ----------------------------------------------------------------------
-# 6️⃣ EVENTS – können einer Person ODER einer Familie zugeordnet sein
+# 6️⃣ Places GEDCOM:PLAC
+# ----------------------------------------------------------------------
+class Place(models.Model):
+    # Security: Tie the place to a specific tree
+    gedcom_tree = models.ForeignKey('Tree', on_delete=models.CASCADE, related_name='places')
+    
+    name = models.CharField(max_length=255, verbose_name="Ortsname")
+    
+    # Coordinates (DecimalField is best for GPS coordinates)
+    # 9 digits total, 6 after the decimal point gives sub-meter accuracy!
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Breitengrad (Latitude)")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Längengrad (Longitude)")
+
+    class Meta:
+        # Prevent duplicate places in the same tree
+        unique_together = ('gedcom_tree', 'name')
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+    
+
+# ----------------------------------------------------------------------
+# 7️⃣ EVENTS – können einer Person ODER einer Familie zugeordnet sein
 # ----------------------------------------------------------------------
 class Event(models.Model):
     """Einzel‑Event (z. B. BIRT, DEAT, MARR, DIV …)."""
@@ -434,13 +460,21 @@ class Event(models.Model):
         blank=True,
         help_text="Original GEDCOM‑Datum‑String, z. B. 'ABT 1900'",
     )
+
     parsed_date = models.DateField(
         null=True,
         blank=True,
         help_text="Geparstes Datum (für Sortierung/Filter)",
         db_index=True,
     )
-    place = models.CharField(max_length=255, blank=True)
+    place = models.ForeignKey(
+        Place, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='events',
+        verbose_name="Ort"
+    )
     description = models.TextField(blank=True)
 
     sources = models.ManyToManyField(
@@ -475,7 +509,7 @@ class Event(models.Model):
 
 
 # ----------------------------------------------------------------------
-# 7️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
+# 8️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
 # ----------------------------------------------------------------------
 class MediaObject(models.Model):
     """Multimedia‑Objekt (OBJE)."""

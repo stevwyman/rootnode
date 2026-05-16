@@ -147,6 +147,7 @@ urlpatterns = [
     # ----------------------------------------------
     # ---- event management 
     # ----------------------------------------------
+    path('tree/<int:tree_id>/events/', views.EventListView.as_view(), name='event-list'),
     path(
         "tree/<int:tree_id>/event/<int:pk>/edit/",
         views.EventUpdateView.as_view(),
@@ -169,4 +170,12 @@ urlpatterns = [
     path('tree/<int:tree_id>/sources/<int:pk>/edit/', views.SourceUpdateView.as_view(), name='source-edit'),
     path('tree/<int:tree_id>/sources/<int:pk>/delete/', views.SourceDeleteView.as_view(), name='source-delete'),
     path('tree/<int:tree_id>/sources/<int:source_pk>/media/add/', views.MediaObjectCreateView.as_view(), name='media-create-source'),
+
+    # Place Management
+    path('tree/<int:tree_id>/places/', views.PlaceListView.as_view(), name='place-list'),
+    path('tree/<int:tree_id>/places/add/', views.PlaceCreateView.as_view(), name='place-create'),
+    path('tree/<int:tree_id>/places/<int:pk>/', views.PlaceDetailView.as_view(), name='place-detail'),
+    path('tree/<int:tree_id>/places/<int:pk>/edit/', views.PlaceUpdateView.as_view(), name='place-edit'),
+    path('tree/<int:tree_id>/places/<int:pk>/delete/', views.PlaceDeleteView.as_view(), name='place-delete'),
+
 ]

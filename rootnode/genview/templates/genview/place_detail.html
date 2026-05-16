@@ -1,0 +1,87 @@
+{% extends "genview/base.html" %}
+{% load l10n %}
+
+{% block title %}{{ place.name }} - Ort{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📍 {{ place.name }}</h2>
+        <a href="{% url 'genview:place-list' tree_id=tree_id %}" class="btn btn-outline-secondary">&larr; Zurück zur Ortsliste</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Orts-Details</h5>
+                </div>
+                <div class="card-body">
+                    {% if place.latitude and place.longitude %}
+                        <p class="mb-1 text-muted small">Koordinaten:</p>
+                        <p class="fw-bold">{{ place.latitude|floatformat:4 }}, {{ place.longitude|floatformat:4 }}</p>
+                        
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="https://www.google.com/maps/search/?api=1&query={{ place.latitude|unlocalize }},{{ place.longitude|unlocalize }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                🗺 Auf Google Maps ansehen
+                            </a>
+                            <a href="https://www.openstreetmap.org/?mlat={{ place.latitude|unlocalize }}&mlon={{ place.longitude|unlocalize }}&zoom=14" target="_blank" class="btn btn-outline-success btn-sm">
+                                🌍 Auf OpenStreetMap ansehen
+                            </a>
+                        </div>
+                    {% else %}
+                        <p class="text-muted fst-italic mb-0">Keine exakten Koordinaten (Breiten-/Längengrad) für diesen Ort hinterlegt.</p>
+                    {% endif %}
+                </div>
+                
+                <div class="card-footer bg-white d-flex justify-content-between">
+                    <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-primary">✎ Bearbeiten</a>
+                    <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-outline-danger">🗑 Löschen</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Ereignisse an diesem Ort</h5>
+                    <span class="badge bg-light text-primary">{{ place.events.count }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for event in place.events.all|dictsort:"parsed_date" %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1 fw-bold">{{ event.get_event_type_display }}</h6>
+                                    <small class="text-muted">
+                                        {{ event.parsed_date|date:"j. F Y"|default:event.raw_date|default:"Ohne Datum" }}
+                                    </small>
+                                </div>
+                                
+                                <p class="mb-1 mt-2">
+                                    {% if event.individual %}
+                                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
+                                            👤 {{ event.individual.given_name }} {{ event.individual.surname }}
+                                        </a>
+                                    {% elif event.family %}
+                                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
+                                            👪 Familie: 
+                                            {{ event.family.husband.surname|default:"Unbekannt" }} & {{ event.family.wife.surname|default:"Unbekannt" }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">Keine Person/Familie zugeordnet</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        {% empty %}
+                            <div class="list-group-item text-center py-4 text-muted">
+                                <p class="mb-0">Bisher sind keine Ereignisse mit diesem Ort verknüpft.</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
