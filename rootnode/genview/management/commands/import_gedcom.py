@@ -123,7 +123,7 @@ class Command(BaseCommand):
                 )
                 self.source_map[gedcom_id] = source
 
-    # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
     # PHASE 2: PERSONEN (Und ihre Ereignisse/Orte)
     # -------------------------------------------------------------------------
     def _import_individuals(self, tree, records):
@@ -132,31 +132,27 @@ class Command(BaseCommand):
             if len(header) > 2 and header[2] == 'INDI':
                 gedcom_id = header[1]
                 
-                # --- NEUE NAME-PARSING LOGIK ---
+                # Default values
                 given_name = "Unbekannt"
                 surname = "Unbekannt"
+                sex = "U"  # Default to Individual.Sex.UNKNOWN
                 
-                # Zuerst nach der '1 NAME' Zeile suchen
                 for i, line in enumerate(record):
+                    # 1. Parse Name
                     if line.startswith("1 NAME "):
                         raw_name = line[7:].strip()
                         
-                        # Nachnamen aus den Schrägstrichen /.../ extrahieren
                         if '/' in raw_name:
                             parts = raw_name.split('/')
                             if len(parts) >= 2:
-                                # Vor dem ersten Slash ist der Vorname, dazwischen der Nachname
                                 parsed_given = parts[0].strip()
                                 parsed_sur = parts[1].strip()
-                                
                                 if parsed_given: given_name = parsed_given
                                 if parsed_sur: surname = parsed_sur
                         else:
-                            # Falls keine Schrägstriche da sind, nehmen wir alles als Vorname
                             if raw_name: given_name = raw_name
                             
-                        # Jetzt prüfen wir, ob die GEDCOM-Datei noch präzisere Unter-Tags liefert.
-                        # Wir schauen uns die nächsten Zeilen an, solange sie mit '2' anfangen.
+                        # Look for specific GIVN and SURN sub-tags
                         j = i + 1
                         while j < len(record) and record[j].startswith("2 "):
                             if record[j].startswith("2 GIVN "):
@@ -165,14 +161,25 @@ class Command(BaseCommand):
                                 surname = record[j][7:].strip()
                             j += 1
                             
-                        break # Name erfolgreich extrahiert, innere Schleife abbrechen!
+                        # WE REMOVED THE `break` HERE! 
+                        # Now the loop continues to check the other lines in the block.
+                    
+                    # 2. Parse Sex
+                    elif line.startswith("1 SEX "):
+                        parsed_sex = line[6:].strip().upper()
+                        # Map standard GEDCOM sex to our Django choices
+                        if parsed_sex in ['M', 'F']:
+                            sex = parsed_sex
+                        else:
+                            sex = "U"
 
                 # Person in der Datenbank erstellen
                 person = Individual.objects.create(
                     gedcom_tree=tree, 
                     gedcom_id=gedcom_id,
                     given_name=given_name, 
-                    surname=surname
+                    surname=surname,
+                    sex=sex  
                 )
                 self.person_map[gedcom_id] = person
 
