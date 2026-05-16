@@ -776,6 +776,7 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Bild erfolgreich hochgeladen.")
+        logger.debug("Bild erfolgreich hochgeladen.")
 
         if self.person:
             return reverse_lazy(
@@ -1059,7 +1060,7 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         # SICHERHEITS-FIX: Stelle sicher, dass das gesuchte Media-Objekt
         # auch wirklich zu dem Baum in der URL gehört!
         tree_id = self.kwargs.get("tree_id")
-        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+        return Event.objects.filter(gedcom_tree_id=tree_id)
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")

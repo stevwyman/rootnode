@@ -71,27 +71,24 @@ class GedcomIdMixin(models.Model):
 
     gedcom_id = models.CharField(
         max_length=20,
-        # unique=True,
-        help_text="GEDCOM‑Referenz, z. B. @I1@, @F2@ …",
+        blank=True,
+        null=True,
+        help_text="GEDCOM Referenz, z.B. @I1@, @F2@ …",
     )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
 
 
 # ----------------------------------------------------------------------
-# 2️⃣ SOURCE / REPOSITORY
+# 2️⃣ SOURCE / REPOSITORY GEDCOM:SOUR
 # ----------------------------------------------------------------------
-class Source(models.Model):
+class Source(GedcomIdMixin):
     """Quelle (SOUR) oder Repository (REPO)."""
 
-    gedcom_id = models.CharField(
-        max_length=20,
-        blank=True,
-        null=True,
-        help_text="z. B. @S1@",
-        db_index=True,
-    )
     title = models.CharField(max_length=255, help_text="Titel / Kurzbeschreibung")
     author = models.CharField(max_length=255, blank=True)
     publication_facts = models.CharField(max_length=255, blank=True)
@@ -110,7 +107,7 @@ class Source(models.Model):
 
 
 # ----------------------------------------------------------------------
-# 3️⃣ INDIVIDUAL (Person)
+# 3️⃣ INDIVIDUAL (Person) GEDCOM:INDI
 # ----------------------------------------------------------------------
 class Individual(GedcomIdMixin):
     """GEDCOM‑Person (INDI)."""
@@ -247,7 +244,7 @@ class Individual(GedcomIdMixin):
 
 
 # ----------------------------------------------------------------------
-# 4️⃣ FAMILY – MPTT‑Baumstruktur
+# 4️⃣ FAMILY – MPTT‑Baumstruktur GEDCOM:FAM
 # ----------------------------------------------------------------------
 class Family(MPTTModel, GedcomIdMixin):
     """Familie (FAM). Durch MPTT kann eine Familie Unter‑Familien besitzen."""
@@ -383,6 +380,9 @@ class ChildFamilyLink(models.Model):
         default=Relationship.BIOLOGICAL,
     )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         unique_together = ("child", "family")
         indexes = [models.Index(fields=["child", "family"])]
@@ -394,7 +394,7 @@ class ChildFamilyLink(models.Model):
 # ----------------------------------------------------------------------
 # 6️⃣ Places GEDCOM:PLAC
 # ----------------------------------------------------------------------
-class Place(models.Model):
+class Place(GedcomIdMixin):
     # Security: Tie the place to a specific tree
     gedcom_tree = models.ForeignKey('Tree', on_delete=models.CASCADE, related_name='places')
     
@@ -484,6 +484,9 @@ class Event(models.Model):
         verbose_name="Quellen"
     )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         indexes = [
             models.Index(fields=["event_type", "parsed_date"]),
@@ -511,16 +514,9 @@ class Event(models.Model):
 # ----------------------------------------------------------------------
 # 8️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
 # ----------------------------------------------------------------------
-class MediaObject(models.Model):
+class MediaObject(GedcomIdMixin):
     """Multimedia‑Objekt (OBJE)."""
 
-    gedcom_id = models.CharField(
-        max_length=20,
-        blank=True,
-        null=True,
-        help_text="Optional GEDCOM‑Referenz",
-        db_index=True,
-    )
     title = models.CharField(max_length=255, blank=True)
 
     # file = models.FileField(upload_to="gedcom_media/")

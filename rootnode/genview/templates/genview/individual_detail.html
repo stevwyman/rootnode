@@ -227,6 +227,9 @@
                                     {% endif %})
                                 </span>
                             {% endif %}
+                                <a href="{% url 'genview:even-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
+                                    ✎
+                                </a>
                         </li>
                     {% empty %}
                         <li class="list-group-item text-muted">No events recorded for this person.</li>

@@ -41,20 +41,22 @@
 
 <a href="{% url 'genview:individual-add' tree_id=tree_id %}" class="btn btn-success mb-3">Neue Person</a>
 
-<table class="table table-striped table-hover" id="people-table">
-    <thead class="table-primary">
-        <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Geschlecht</th>
-            <th>Alter</th>
-            <th>Geburtsdatum</th>
-            <th>Sterbedatum</th>
-            <th>Aktionen</th>
-        </tr>
-    </thead>
-    {% include "genview/_individual_table.html" with object_list=people %}
-</table>
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0" id="people-table">
+        <thead class="table-primary">
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Geschlecht</th>
+                <th>Alter</th>
+                <th>Geburtsdatum</th>
+                <th>Sterbedatum</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        {% include "genview/_individual_table.html" with object_list=people %}
+    </table>
+</div>
 
 <div id="pagination-container">
     {% include "genview/_individual_pager.html" %}
