@@ -19,7 +19,14 @@
                         {{ form.as_p }}
                         
                         <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% if person %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% elif family %}
+                                <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% else %}
+                                <a href="{% url 'genview:event_list' tree_id=tree_id %}" class="btn btn-outline-secondary">Abbrechen</a>
+                            {% endif %}
+
                             <button type="submit" class="btn btn-success">Ereignis speichern</button>
                         </div>
                     </form>

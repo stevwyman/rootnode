@@ -633,6 +633,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 # ----------------------------------------------------------------------
 #  4️⃣ Kind‑zu‑Familie‑Link – hinzufügen / bearbeiten
 # ----------------------------------------------------------------------
+
 class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = ChildFamilyLink
     form_class = ChildFamilyLinkForm
@@ -1047,38 +1048,31 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-
-        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
-        kwargs["person"] = getattr(self, "person", None)
-
-        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
         kwargs["tree_id"] = self.kwargs.get("tree_id")
-
         return kwargs
 
     def get_queryset(self):
-        # SICHERHEITS-FIX: Stelle sicher, dass das gesuchte Media-Objekt
-        # auch wirklich zu dem Baum in der URL gehört!
         tree_id = self.kwargs.get("tree_id")
         return Event.objects.filter(gedcom_tree_id=tree_id)
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["tree_id"] = self.kwargs.get("tree_id")
+        
+        context["person"] = self.object.individual
+        context["family"] = self.object.family
+        return context
+    
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-
-        # Versuche die erste verknüpfte Person zu finden
-        person = self.object.individuals.first()
-
-        if person:
-            # Achte darauf, ob dein URL-Name einen Bindestrich oder Unterstrich hat!
-            # Meistens ist es 'individual_detail'
-            return reverse_lazy(
-                "genview:individual-detail",
-                kwargs={"tree_id": tree_id, "pk": person.pk},
-            )
-
-        # Fallback, falls das Bild an keine Person gehängt ist (z.B. Familienbild)
         messages.success(self.request, "Bild aktualisiert.")
-        return reverse_lazy("genview:tree-list")  # Oder deine Medien-Übersicht
+        
+        if self.object.individual:
+            return reverse_lazy("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
+        elif self.object.family:
+            return reverse_lazy("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
+        else:
+            return reverse_lazy("genview:event-list", kwargs={"tree_id": tree_id})
 
 
 class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
