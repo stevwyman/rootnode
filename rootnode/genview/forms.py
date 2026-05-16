@@ -324,7 +324,7 @@ class MediaObjectForm(forms.ModelForm):
         }
 
     # Füge tree_id als optionalen Parameter hinzu, um Daten-Leaks zu verhindern!
-    def __init__(self, *args, person=None, family=None, tree_id=None, **kwargs):
+    def __init__(self, *args, person=None, family=None, source=None, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # 1. SICHERHEIT: Finde heraus, in welchem Baum wir uns befinden
@@ -333,6 +333,8 @@ class MediaObjectForm(forms.ModelForm):
             current_tree_id = person.gedcom_tree_id
         elif family:
             current_tree_id = family.gedcom_tree_id
+        elif source:
+            current_tree_id = source.gedcom_tree_id
         elif self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
@@ -359,6 +361,8 @@ class MediaObjectForm(forms.ModelForm):
             self.fields["individuals"].initial = [person]
         if family and "families" in self.fields:
             self.fields["families"].initial = [family]
+        if source and "sources" in self.fields:
+            self.fields["sources"].initial = [source]
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen
@@ -379,3 +383,48 @@ class MediaObjectForm(forms.ModelForm):
                     ).exclude(pk=media.pk).update(is_portrait=False)
 
         return media
+
+
+class EventForm(forms.ModelForm):
+    class Meta:
+        model = Event
+        # Include your other event fields here too
+        fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'sources'] 
+        widgets = {
+            'event_type': forms.Select(attrs={'class': 'form-select'}),
+            'date_raw': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
+            'place': forms.TextInput(attrs={'class': 'form-control'}),
+            'sources': forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, tree_id=None, person=None, family=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if person:
+            self.instance.individual = person
+        if family:
+            self.instance.family = family
+        
+        # SECURITY FIX: Only show sources belonging to THIS tree
+        current_tree_id = tree_id
+        if self.instance and self.instance.pk:
+            current_tree_id = self.instance.gedcom_tree_id
+
+        if current_tree_id and 'sources' in self.fields:
+            self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+        elif 'sources' in self.fields:
+            self.fields['sources'].queryset = Source.objects.none()
+
+
+class SourceForm(forms.ModelForm):
+    class Meta:
+        model = Source
+        # Adjust these fields based on exactly what is in your models.py!
+        fields = ["gedcom_id", "title", "author", "publication_facts", "text"]
+        widgets = {
+            "gedcom_id": forms.TextInput(attrs={"class": "form-control"}),
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "author": forms.TextInput(attrs={"class": "form-control"}),
+            "publication_facts": forms.TextInput(attrs={"class": "form-control"}),
+            "text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        }

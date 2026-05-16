@@ -179,7 +179,12 @@
             <!-- events tab content -->
             <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
                 {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
-                <h3>Lebensereignisse</h3>
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                    <h3 class="mb-0">Lebensereignisse</h3>
+                    <a href="{% url 'genview:event-create-person' tree_id=tree_id person_pk=person.pk %}" class="btn btn-sm btn-primary">
+                        + Ereignis hinzufügen
+                    </a>
+                </div>
                 <ul class="list-group">
                     {% for event in timeline_events %}
                         <li class="list-group-item">
@@ -194,6 +199,23 @@
 
                             {% if event.place %}
                                 in {{ event.place }}
+                            {% endif %}
+
+                            source
+                            {% if event.sources.all %}
+                                <div class="event-sources mt-2 p-2 bg-light rounded" style="font-size: 0.85em; border-left: 3px solid #6c757d;">
+                                    <strong class="text-muted">📚 Quellen:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        {% for source in event.sources.all %}
+                                            <li>
+                                                <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="text-decoration-none text-secondary">
+                                                    {{ source.title }}
+                                                    {% if source.author %} ({{ source.author }}){% endif %}
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
                             {% endif %}
 
                             {% if event.event_type == 'MARR' and event.family %}

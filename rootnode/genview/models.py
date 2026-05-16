@@ -447,6 +447,7 @@ class Event(models.Model):
         Source,
         blank=True,
         related_name="events",
+        verbose_name="Quellen"
     )
 
     class Meta:

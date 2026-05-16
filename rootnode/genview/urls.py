@@ -50,6 +50,11 @@ urlpatterns = [
         views.MediaObjectCreateView.as_view(),
         name="media-add-for-person",
     ),
+    path(
+        "tree/<int:tree_id>/people/<int:person_pk>/event/add/",
+        views.EventCreateView.as_view(),
+        name="event-add-for-person",
+    ),
     # ----------------------------------------------
     # --- families
     # ----------------------------------------------
@@ -82,6 +87,11 @@ urlpatterns = [
         'tree/<int:tree_id>/family/<int:family_pk>/media/add/', 
         views.MediaObjectCreateView.as_view(), 
         name='media-create-family'
+    ),
+    path(
+        'tree/<int:tree_id>/family/<int:family_pk>/event/add/', 
+        views.EventCreateView.as_view(), 
+        name='event-create-family'
     ),
     # ----------------------------------------------
     # ---- Child‑Family‑Link 
@@ -134,4 +144,29 @@ urlpatterns = [
         views.MediaObjectDeleteView.as_view(),
         name="media-delete",
     ),
+    # ----------------------------------------------
+    # ---- event management 
+    # ----------------------------------------------
+    path(
+        "tree/<int:tree_id>/event/<int:pk>/edit/",
+        views.EventUpdateView.as_view(),
+        name="even-edit",
+    ),
+    path(
+        "tree/<int:tree_id>/event/<int:pk>/delete/",
+        views.EventDeleteView.as_view(),
+        name="event-delete",
+    ),
+    path(
+        'tree/<int:tree_id>/people/<int:person_pk>/events/add/', 
+        views.EventCreateView.as_view(), 
+        name='event-create-person'
+    ),
+
+    path('tree/<int:tree_id>/sources/', views.SourceListView.as_view(), name='source-list'),
+    path('tree/<int:tree_id>/sources/add/', views.SourceCreateView.as_view(), name='source-create'),
+    path('tree/<int:tree_id>/sources/<int:pk>/', views.SourceDetailView.as_view(), name='source-detail'),
+    path('tree/<int:tree_id>/sources/<int:pk>/edit/', views.SourceUpdateView.as_view(), name='source-edit'),
+    path('tree/<int:tree_id>/sources/<int:pk>/delete/', views.SourceDeleteView.as_view(), name='source-delete'),
+    path('tree/<int:tree_id>/sources/<int:source_pk>/media/add/', views.MediaObjectCreateView.as_view(), name='media-create-source'),
 ]

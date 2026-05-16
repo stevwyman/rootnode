@@ -46,11 +46,19 @@
     <button type="submit" class="btn btn-success">
         {% if view.object %}Änderungen speichern{% else %}Bild speichern{% endif %}
     </button>
-    {% if view.object %}
-        <a href="{% url 'genview:individual-detail' tree_id view.object.individuals.first.pk %}"
-           class="btn btn-outline-secondary ms-2">Abbrechen</a>
+
+    <div class="d-flex justify-content-between mt-4">
+    {% if object %}
+        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=object.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+    {% elif person %}
+        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+    {% elif family %}
+        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+    {% elif source %}
+        <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
     {% else %}
-        <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
+        <a href="{% url 'genview:media-list' tree_id=tree_id %}" class="btn btn-outline-secondary">Abbrechen</a>
     {% endif %}
+    </div>
 </form>
 {% endblock %}

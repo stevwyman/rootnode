@@ -28,6 +28,7 @@ from .models import (
     MediaObject,
     Tree,
     TreeMembership,
+    Source,
 )
 from .forms import (
     IndividualForm,
@@ -35,6 +36,8 @@ from .forms import (
     FamilyForm,
     ChildFamilyLinkForm,
     MediaObjectForm,
+    EventForm,
+    SourceForm,
 )
 from .mixins import TreeAccessMixin, TreeEditAccessMixin
 
@@ -209,7 +212,7 @@ class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
         # Fetch events where the person is the individual, OR the husband, OR the wife
         combined_events = Event.objects.filter(
             Q(individual=person) | Q(family__husband=person) | Q(family__wife=person)
-        ).order_by(
+        ).prefetch_related('sources').order_by(
             F("parsed_date").asc(nulls_last=True)
         )  # Sorts by date, puts None values at the end
 
@@ -681,9 +684,6 @@ class MediaObjectDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
         return MediaObject.objects.filter(gedcom_tree_id=tree_id)
     
 
-# --------------------------------------------------------------
-#  Medien‑Liste (optional – Übersicht aller Medien)
-# --------------------------------------------------------------
 class MediaObjectListView(LoginRequiredMixin, TreeAccessMixin, ListView):
     model = MediaObject
     template_name = "genview/mediaobject_list.html"
@@ -698,9 +698,6 @@ class MediaObjectListView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return MediaObject.objects.filter(gedcom_tree_id=tree_id).order_by("title")
 
 
-# --------------------------------------------------------------
-#  Bild‑Upload & Zuordnung zu Personen
-# --------------------------------------------------------------
 class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = MediaObject
     form_class = MediaObjectForm
@@ -709,15 +706,16 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
     def dispatch(self, request, *args, **kwargs):
         self.person = None
         self.family = None
+        self.source = None
 
         tree_id = kwargs.get("tree_id")
-        person_pk = kwargs.get("person_pk")
-        family_pk = kwargs.get("family_pk")
 
-        if person_pk:
-            self.person = get_object_or_404(Individual, pk=person_pk, gedcom_tree_id=tree_id)
-        if family_pk:
-            self.family = get_object_or_404(Family, pk=family_pk, gedcom_tree_id=tree_id)
+        if "person_pk" in kwargs:
+            self.person = get_object_or_404(Individual, pk=kwargs.get("person_pk"), gedcom_tree_id=tree_id)
+        if "family_pk" in kwargs:
+            self.family = get_object_or_404(Family, pk=kwargs.get("family_pk"), gedcom_tree_id=tree_id)
+        if "source_pk" in kwargs:
+            self.source = get_object_or_404(Source, pk=kwargs.get("source_pk"), gedcom_tree_id=tree_id)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -725,9 +723,11 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         kwargs = super().get_form_kwargs()
 
         # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
-        kwargs["person"] = getattr(self, "person", None)
+        kwargs["person"] = getattr(self, "person", None) # TODO: decide later which way to implement
 
         kwargs["family"] = self.family
+
+        kwargs["source"] = self.source
 
         # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
         kwargs["tree_id"] = self.kwargs.get("tree_id")
@@ -751,9 +751,143 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
             self.object.individuals.add(self.person)
         if self.family:
             self.object.families.add(self.family)
+        if self.source:
+            self.object.sources.add(self.source)
 
         # return response
         return HttpResponseRedirect(self.get_success_url())
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Bild erfolgreich hochgeladen.")
+
+        if self.person:
+            return reverse_lazy(
+                "genview:individual-detail",  
+                kwargs={"tree_id": tree_id, "pk": self.person.pk},
+            )
+        if self.family:
+            return reverse_lazy(
+                "genview:family-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.family.pk}
+            )
+        if self.source:
+            return reverse_lazy(
+                "genview:source-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.source.pk}
+            )
+
+        # Fallback: Zur Medien-Übersicht des Baums
+        return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})
+
+
+class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+    model = MediaObject
+    form_class = MediaObjectForm
+    template_name = "genview/mediaobject_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+
+        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
+        kwargs["person"] = getattr(self, "person", None)
+
+        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+
+        return kwargs
+
+    def get_queryset(self):
+        # SICHERHEITS-FIX: Stelle sicher, dass das gesuchte Media-Objekt
+        # auch wirklich zu dem Baum in der URL gehört!
+        tree_id = self.kwargs.get("tree_id")
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+
+        # LOGIK: Nach dem Update einfach auf die Detail-Seite des Bildes leiten!
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Medium erfolgreich aktualisiert.")
+        return reverse_lazy("genview:media-detail", kwargs={"tree_id": tree_id, "pk": self.object.pk})
+
+class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+    model = MediaObject
+    template_name = "genview/mediaobject_confirm_delete.html"
+
+    def get_queryset(self):
+        # SICHERHEITS-FIX: Verhindert, dass Bilder anderer Bäume gelöscht werden
+        tree_id = self.kwargs.get("tree_id")
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Reiche die person_pk aus der URL an das Template weiter (falls vorhanden)
+        context["person_pk"] = self.kwargs.get("person_pk")
+        return context
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        person_pk = self.kwargs.get("person_pk")
+
+        messages.success(self.request, "Bild wurde entfernt.")
+
+        if person_pk:
+            return reverse_lazy(
+                "genview:individual-detail",
+                kwargs={"tree_id": tree_id, "pk": person_pk},
+            )
+
+        # Fallback, falls kein person_pk in der URL übergeben wurde
+        return reverse_lazy("genview:tree-list")
+
+
+# --------------------------------------------------------------
+# 6️⃣ Events
+# --------------------------------------------------------------
+
+class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
+    model = Event
+    form_class = EventForm
+    template_name = "genview/event_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.person = None
+        self.family = None
+
+        tree_id = kwargs.get("tree_id")
+        person_pk = kwargs.get("person_pk")
+        family_pk = kwargs.get("family_pk")
+
+        if person_pk:
+            self.person = get_object_or_404(Individual, pk=person_pk, gedcom_tree_id=tree_id)
+        if family_pk:
+            self.family = get_object_or_404(Family, pk=family_pk, gedcom_tree_id=tree_id)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+
+        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
+        kwargs["person"] = getattr(self, "person", None)
+
+        kwargs["family"] = getattr(self, "family", None)
+
+        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+
+        return kwargs
+
+    def form_valid(self, form):
+        
+        form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
+        
+        messages.success(self.request, "Ereignis erfolgreich hinzugefügt.")
+        
+        # super().form_valid(form) speichert das Objekt in der Datenbank 
+        # und leitet automatisch zur success_url weiter!
+        return super().form_valid(form)
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
@@ -771,15 +905,19 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
         # Fallback: Zur Medien-Übersicht des Baums
         return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Wir geben die Person und die Tree-ID ans Template weiter
+        context["person"] = getattr(self, "person", None)
+        context["tree_id"] = self.kwargs.get("tree_id")
+        return context
 
 
-# --------------------------------------------------------------
-# Bild-Bearbeitung
-# --------------------------------------------------------------
-class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
-    model = MediaObject
-    form_class = MediaObjectForm
-    template_name = "genview/mediaobject_form.html"
+class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+    model = Event
+    form_class = EventForm
+    template_name = "genview/event_form.html"
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -817,12 +955,9 @@ class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView)
         return reverse_lazy("genview:tree-list")  # Oder deine Medien-Übersicht
 
 
-# --------------------------------------------------------------
-# Bild-Löschung (nach Bestätigung)
-# --------------------------------------------------------------
-class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
-    model = MediaObject
-    template_name = "genview/mediaobject_confirm_delete.html"
+class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+    model = Event
+    template_name = "genview/event_confirm_delete.html"
 
     def get_queryset(self):
         # SICHERHEITS-FIX: Verhindert, dass Bilder anderer Bäume gelöscht werden
@@ -849,3 +984,76 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
 
         # Fallback, falls kein person_pk in der URL übergeben wurde
         return reverse_lazy("genview:tree-list")
+
+
+# --------------------------------------------------------------
+# 7️⃣ Sources
+# --------------------------------------------------------------
+
+# --- 1. List View ---
+class SourceListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+    model = Source
+    template_name = "genview/source_list.html"
+    context_object_name = "sources"
+    paginate_by = 25
+
+    def get_queryset(self):
+        # SECURITY FIX: Only show sources for this tree
+        tree_id = self.kwargs.get("tree_id")
+        return Source.objects.filter(gedcom_tree_id=tree_id).order_by("title")
+
+# --- 2. Detail View ---
+class SourceDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+    model = Source
+    template_name = "genview/source_detail.html"
+    context_object_name = "source"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return Source.objects.filter(gedcom_tree_id=tree_id)
+
+# --- 3. Create View ---
+class SourceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
+    model = Source
+    form_class = SourceForm
+    template_name = "genview/source_form.html"
+
+    def form_valid(self, form):
+        # Automatically assign the source to the current tree
+        tree_id = self.kwargs.get("tree_id")
+        form.instance.gedcom_tree_id = tree_id
+        messages.success(self.request, "Quelle erfolgreich erstellt.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+
+# --- 4. Update View ---
+class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+    model = Source
+    form_class = SourceForm
+    template_name = "genview/source_form.html"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return Source.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Quelle aktualisiert.")
+        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+
+# --- 5. Delete View ---
+class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+    model = Source
+    template_name = "genview/source_confirm_delete.html"
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return Source.objects.filter(gedcom_tree_id=tree_id)
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Quelle gelöscht.")
+        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})

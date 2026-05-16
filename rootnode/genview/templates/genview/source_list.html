@@ -1,0 +1,99 @@
+{% extends "genview/base.html" %}
+
+{% block title %}Quellen-Verzeichnis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Quellen-Verzeichnis</h1>
+        <a href="{% url 'genview:source-create' tree_id=tree_id %}" class="btn btn-primary">
+            + Neue Quelle anlegen
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th scope="col" class="ps-4">Titel</th>
+                            <th scope="col">Autor</th>
+                            <th scope="col">Publikation</th>
+                            <th scope="col" class="text-center">GEDCOM ID</th>
+                            <th scope="col" class="text-end pe-4">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for source in sources %}
+                            <tr>
+                                <td class="ps-4">
+                                    <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="text-decoration-none fw-bold">
+                                        {{ source.title }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if source.author %}
+                                        {{ source.author }}
+                                    {% else %}
+                                        <span class="text-muted fst-italic">Unbekannt</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if source.publication_facts %}
+                                        {{ source.publication_facts|truncatechars:40 }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary">{{ source.gedcom_id|default:"-" }}</span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group">
+                                        <a href="{% url 'genview:source-edit' tree_id=tree_id pk=source.pk %}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
+                                        <a href="{% url 'genview:source-delete' tree_id=tree_id pk=source.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <h4>Keine Quellen gefunden.</h4>
+                                    <p>Lege die erste Quelle für diesen Stammbaum an, um Ereignisse zu belegen!</p>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if is_paginated %}
+        <nav class="mt-4" aria-label="Seiten-Navigation">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">Seite {{ page_obj.number }} von {{ paginator.num_pages }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
+</div>
+{% endblock %}
