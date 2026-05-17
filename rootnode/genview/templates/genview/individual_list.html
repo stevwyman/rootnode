@@ -3,63 +3,70 @@
 {% block title %}Personen{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Alle Personen</h1>
-
-
-{# -------------------------------------------------------------- #}
-{#  Suchformular (GET‑Methode)                                   #}
-{# -------------------------------------------------------------- #}
-<!--
-<form method="get" action="{% url 'genview:individual-search' tree_id=tree_id %}" class="row g-3 mb-4">
-    <div class="col-md-9">
-        {{ search_form.q }}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-4">👤 Alle Personen</h1>
+        <a href="{% url 'genview:individual-add' tree_id=tree_id %}" class="btn btn-primary">
+            + Neue Person anlegen
+        </a>
     </div>
-    <div class="col-md-3">
-        <button type="submit" class="btn btn-primary w-100">Suchen</button>
+
+    {# -------------------------------------------------------------- #}
+    {#  Suchformular (GET‑Methode)                                   #}
+    {# -------------------------------------------------------------- #}
+    <!--
+    <form method="get" action="{% url 'genview:individual-search' tree_id=tree_id %}" class="row g-3 mb-4">
+        <div class="col-md-9">
+            {{ search_form.q }}
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Suchen</button>
+        </div>
+    </form>
+    -->
+
+
+    {# -------------------------------------------------------------- #}
+    {#  Suchformular (AJAX‑Methode)                                   #}
+    {# -------------------------------------------------------------- #}
+    <form id="search-form" class="row g-3 mb-4">
+        <div class="col-md-9">
+            <input type="text" name="q" id="search-input"
+                class="form-control" placeholder="Name, GEDCOM‑ID …"
+                value="{{ request.GET.q|default_if_none:'' }}">
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Suchen</button>
+        </div>
+    </form>
+
+    {% if search_query %}
+        <p class="text-muted">Ergebnisse für <strong>{{ search_query }}</strong> ({{ page_obj.paginator.count }} Treffer)</p>
+    {% endif %}
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0" id="people-table">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Geschlecht</th>
+                            <th>Alter</th>
+                            <th>Geburtsdatum</th>
+                            <th>Sterbedatum</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    {% include "genview/_individual_table.html" with object_list=people %}
+                </table>
+            </div>
+        </div>
     </div>
-</form>
--->
-
-
-{# -------------------------------------------------------------- #}
-{#  Suchformular (AJAX‑Methode)                                   #}
-{# -------------------------------------------------------------- #}
-<form id="search-form" class="row g-3 mb-4">
-    <div class="col-md-9">
-        <input type="text" name="q" id="search-input"
-               class="form-control" placeholder="Name, GEDCOM‑ID …"
-               value="{{ request.GET.q|default_if_none:'' }}">
+    <div id="pagination-container">
+        {% include "genview/_individual_pager.html" %}
     </div>
-    <div class="col-md-3">
-        <button type="submit" class="btn btn-primary w-100">Suchen</button>
-    </div>
-</form>
-
-{% if search_query %}
-    <p class="text-muted">Ergebnisse für <strong>{{ search_query }}</strong> ({{ page_obj.paginator.count }} Treffer)</p>
-{% endif %}
-
-<a href="{% url 'genview:individual-add' tree_id=tree_id %}" class="btn btn-success mb-3">Neue Person</a>
-
-<div class="table-responsive">
-    <table class="table table-striped table-hover align-middle mb-0" id="people-table">
-        <thead class="table-primary">
-            <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Geschlecht</th>
-                <th>Alter</th>
-                <th>Geburtsdatum</th>
-                <th>Sterbedatum</th>
-                <th>Aktionen</th>
-            </tr>
-        </thead>
-        {% include "genview/_individual_table.html" with object_list=people %}
-    </table>
-</div>
-
-<div id="pagination-container">
-    {% include "genview/_individual_pager.html" %}
 </div>
 
 <script>

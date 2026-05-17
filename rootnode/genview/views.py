@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
 from django.db.models import Q, F
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
-from django.views.generic import ListView, DetailView, CreateView, DeleteView
+from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
@@ -40,6 +40,7 @@ from .forms import (
     EventForm,
     SourceForm,
     PlaceForm,
+    UserRegistrationForm,
 )
 from .mixins import TreeAccessMixin, TreeEditAccessMixin
 
@@ -935,11 +936,16 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
-        return Source.objects.filter(gedcom_tree_id=tree_id)
+        return Place.objects.filter(gedcom_tree_id=tree_id)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["tree_id"] = self.kwargs.get("tree_id")
+        return context
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Quelle gelöscht.")
+        messages.success(self.request, "Der Ort wurde erfolgreich gelöscht.")
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
@@ -1147,7 +1153,7 @@ class SourceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+        return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
 # --- 4. Update View ---
 class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
@@ -1162,7 +1168,7 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Quelle aktualisiert.")
-        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+        return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
 # --- 5. Delete View ---
 class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
@@ -1176,5 +1182,36 @@ class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Quelle gelöscht.")
-        return reverse_lazy("genview:source_list", kwargs={"tree_id": tree_id})
+        return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
     
+
+class RegisterView(CreateView):
+    """Registrierung + automatisches Anlegen einer Tree‑Membership."""
+    template_name = 'registration/register.html'
+    form_class = UserRegistrationForm
+    success_url = reverse_lazy('choose_tree')   # nach der Registrierung Baum wählen
+
+    def form_valid(self, form):
+        response = super().form_valid(form)          # speichert User + Membership
+        # Automatisch anmelden – das macht die UX leichter
+        login(self.request, self.object)
+        return response
+
+
+class ChooseTreeView(TemplateView):
+    """Seite, auf der ein bereits eingeloggter Nutzer einen Baum auswählt / wechselt."""
+    template_name = 'registration/choose_tree.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['trees'] = Tree.objects.all()
+        # Aktuell gewählter Baum (falls schon gesetzt)
+        ctx['current_tree_id'] = self.request.session.get('tree_id')
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        """Formular: Baum‑ID wird in die Session geschrieben."""
+        tree_id = request.POST.get('tree_id')
+        if tree_id:
+            request.session['tree_id'] = int(tree_id)
+        return self.get(request, *args, **kwargs)

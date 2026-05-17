@@ -198,7 +198,7 @@
                             {% endif %}
 
                             {% if event.place %}
-                                in <a href="#" class="text-decoration-none">📍 {{ event.place.name }}</a>
+                                in <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.id %}" class="text-decoration-none">📍 {{ event.place.name }}</a>
                             {% endif %}
 
                             {% if event.sources.all %}

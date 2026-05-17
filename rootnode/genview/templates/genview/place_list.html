@@ -6,7 +6,7 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>🌍 Orte ({{ places.count }})</h2>
+        <h1>🌍 Orte ({{ places.count }})</h1>
         <a href="{% url 'genview:place-create' tree_id=tree_id %}" class="btn btn-primary">
             + Neuen Ort hinzufügen
         </a>
@@ -27,7 +27,7 @@
                     <tbody>
                         {% for place in places %}
                             <tr>
-                                <td class="fw-bold">
+                                <td class="">
                                     <a href="{% url 'genview:place-detail' tree_id=tree_id pk=place.pk %}" class="text-decoration-none">
                                         {{ place.name }}
                                     </a>

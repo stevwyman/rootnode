@@ -1,0 +1,15 @@
+{% extends "genview/base.html" %}
+{% block title %}Quele löschen{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Quelle wirklich löschen?</h1>
+
+<p><strong>{{ object.title }}</strong></p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Ja, Quelle entfernen</button>
+    
+    <a href="{% url 'genview:source-list' tree_id=tree_id %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
+</form>
+{% endblock %}

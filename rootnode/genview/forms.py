@@ -1,7 +1,8 @@
 # genview/forms.py
 from django import forms
 from django.forms import ModelForm, CheckboxSelectMultiple, DateInput
-from .models import Individual, Family, ChildFamilyLink, Event, MediaObject, Source, Place
+from django.contrib.auth.models import User
+from .models import Individual, Family, ChildFamilyLink, Event, MediaObject, Source, Place, Tree, TreeMembership
 
 
 # ----------------------------------------------------------------------
@@ -470,3 +471,39 @@ class SourceForm(forms.ModelForm):
             "publication_facts": forms.TextInput(attrs={"class": "form-control"}),
             "text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
+
+
+class UserRegistrationForm(forms.ModelForm):
+    """Einfaches Registrierungsformular (Username, E‑Mail, Passwort, Baum‑Auswahl)."""
+    password1 = forms.CharField(label='Passwort', widget=forms.PasswordInput)
+    password2 = forms.CharField(label='Passwort (Wiederholung)', widget=forms.PasswordInput)
+    tree = forms.ModelChoiceField(
+        queryset=Tree.objects.all(),
+        label='Welchen Stammbaum möchtest du sehen?',
+        required=True,
+        empty_label="Bitte auswählen"
+    )
+
+    class Meta:
+        model = User
+        fields = ('username', 'email')
+
+    def clean_password2(self):
+        p1 = self.cleaned_data.get('password1')
+        p2 = self.cleaned_data.get('password2')
+        if p1 and p2 and p1 != p2:
+            raise forms.ValidationError("Die beiden Passwörter stimmen nicht überein.")
+        return p2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password1'])
+        if commit:
+            user.save()
+            # Nach dem Anlegen des Users gleich die Membership erzeugen
+            TreeMembership.objects.create(
+                user=user,
+                tree=self.cleaned_data['tree'],
+                role='VIEWER'          # Standard‑Rolle, später per Admin änderbar
+            )
+        return user

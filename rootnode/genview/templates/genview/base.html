@@ -1,92 +1,115 @@
 {% load django_bootstrap5 static %}
 <!doctype html>
 <html lang="de">
-<head>
-    <meta charset="utf-8">
-    <title>{% block title %}GEDCOM‑Stammbaum{% endblock %}</title>
+    <head>
+        <meta charset="utf-8">
+        <title>{% block title %}GEDCOM‑Stammbaum{% endblock %}</title>
 
-    <!-- Bootstrap‑CSS über das django_bootstrap5‑Tag -->
-    {% bootstrap_css %}
+        <!-- Bootstrap‑CSS über das django_bootstrap5‑Tag -->
+        {% bootstrap_css %}
 
-    <link rel="stylesheet"
-          href="{% static 'my.css' %}">
+        <link rel="stylesheet"
+            href="{% static 'my.css' %}">
 
-    {% block extra_head %}{% endblock %}
-</head>
-<body class="bg-light">
+        {% block extra_head %}{% endblock %}
+    </head>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="{% url 'genview:tree-list' %}">Stammbaum</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav" aria-controls="navbarNav"
-                aria-expanded="false" aria-label="Navigation umschalten">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:individual-list' tree_id %}">Personen</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:family-list' tree_id %}">Familien</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:event-list' tree_id %}">Ereignisse</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:place-list' tree_id %}">Orte</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:media-list' tree_id %}">Medien</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'genview:source-list' tree_id %}">Quellen</a></li>
-            </ul>
-        </div>
-    </div>
-</nav>
-{% if messages %}
-        <div class="container mt-3">
-            {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Schließen"></button>
+    <body class="bg-light">
+
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+                <div class="container-fluid">
+                    <a class="navbar-brand" href="{% url 'genview:tree-list' %}">Stammbaum</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#navbarNav" aria-controls="navbarNav"
+                            aria-expanded="false" aria-label="Navigation umschalten">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav ms-auto">
+                            {% if tree_id %}
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:individual-list' tree_id %}">Personen</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:family-list' tree_id %}">Familien</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:event-list' tree_id %}">Ereignisse</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:place-list' tree_id %}">Orte</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:media-list' tree_id %}">Medien</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:source-list' tree_id %}">Quellen</a></li>
+                            {% endif %}
+                            {% if user.is_authenticated %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Signed in as {{ user.username }}</a>
+                                <ul class="dropdown-menu">
+                                    <li class="nav-item">
+                                        <a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li class="nav-item">
+                                <form action="{% url 'logout' %}" method="post" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="nav-link btn btn-link">Abmelden</button>
+                                </form>
+                            </li>
+      
+                            {% else %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'login' %}">Log In</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'register' %}">Register</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </div>
-            {% endfor %}
+            </nav>
+            {% bootstrap_messages %}
         </div>
-    {% endif %}
 
-<div class="container">
-    {% block content %}{% endblock %}
-</div>
+        <div class="container">
+            <main>
+                {% block content %}
+        
+                {% endblock %}
+            </main>
+        </div>
 
-{% bootstrap_javascript %}
-</body>
-
-    <div class="container">
-        <footer
-            class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top"
-        >
-            <p class="col-md-4 mb-0 text-body-secondary">
-            &copy; 2025 Company, Inc
-            </p>
-            <a
-            href="/"
-            class="col-md-4 d-flex align-items-center justify-content-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none"
-            aria-label="Bootstrap"
+        <div class="container">
+            <footer
+                class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top"
             >
-            <svg class="bi me-2" width="40" height="32" aria-hidden="true">
-                <use xlink:href="#bootstrap"></use>
-            </svg>
-            </a>
-            <ul class="nav col-md-4 justify-content-end">
-            <li class="nav-item">
-                <a href="#" class="nav-link px-2 text-body-secondary">Home</a>
-            </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link px-2 text-body-secondary">Features</a>
-            </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link px-2 text-body-secondary">Pricing</a>
-            </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link px-2 text-body-secondary">FAQs</a>
-            </li>
-            <li class="nav-item">
-                <a href="#" class="nav-link px-2 text-body-secondary">About</a>
-            </li>
-            </ul>
-        </footer>
-    </div>
+                <p class="col-md-4 mb-0 text-body-secondary">
+                &copy; 2025 Company, Inc
+                </p>
+                <a
+                href="/"
+                class="col-md-4 d-flex align-items-center justify-content-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none"
+                aria-label="Bootstrap"
+                >
+                <svg class="bi me-2" width="40" height="32" aria-hidden="true">
+                    <use xlink:href="#bootstrap"></use>
+                </svg>
+                </a>
+                <ul class="nav col-md-4 justify-content-end">
+                <li class="nav-item">
+                    <a href="#" class="nav-link px-2 text-body-secondary">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link px-2 text-body-secondary">Features</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link px-2 text-body-secondary">Pricing</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link px-2 text-body-secondary">FAQs</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link px-2 text-body-secondary">About</a>
+                </li>
+                </ul>
+            </footer>
+        </div>
 
+        {% bootstrap_javascript %}
+    </body>
 </html>

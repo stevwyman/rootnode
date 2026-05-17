@@ -18,16 +18,34 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.auth import views as auth_views
 from genview import views as genview_views
 
 from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
 
 urlpatterns = [
+    path('login/', auth_views.LoginView.as_view(
+        template_name='registration/login.html',
+        next_page='genview:tree-list'
+        ), 
+        name='login'),
+
+    # Logout
+    path('logout/', auth_views.LogoutView.as_view(
+            template_name='registration/logout.html',
+            next_page='login'
+        ),
+        name='logout'),
+
+    # Registrierung
+    path('register/', genview_views.RegisterView.as_view(), name='register'),
+
+
     path('admin/', admin.site.urls),
-    path('accounts/', include('django.contrib.auth.urls')),
+    #path('accounts/', include('django.contrib.auth.urls')),
     # ------------------ Home / Startseite ------------------
     #path('', genview_views.home, name='home'),   
-    path('', genview_views.TreeListView.as_view(), name='tree_list'),
+    path('', genview_views.TreeListView.as_view(), name='tree-list'),
     # ------------------ App‑bezogene URLs -----------------
     path('genview/', include('genview.urls'))
 ] + debug_toolbar_urls()
