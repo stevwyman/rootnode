@@ -11,6 +11,39 @@
         </a>
     </div>
 
+    <!-- filter and search -->
+    <div class="card mb-4 shadow-sm border-0 bg-light">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-center">
+                
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="dir" value="{{ current_dir }}">
+
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text">🔍</span>
+                        <input type="text" name="q" class="form-control" placeholder="Vor- oder Nachname..." value="{{ current_search }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <select name="sex" class="form-select">
+                        <option value="">Alle Geschlechter</option>
+                        <option value="M" {% if current_filter_sex == 'M' %}selected{% endif %}>Männlich (M)</option>
+                        <option value="F" {% if current_filter_sex == 'F' %}selected{% endif %}>Weiblich (F)</option>
+                        <option value="U" {% if current_filter_sex == 'U' %}selected{% endif %}>Unbekannt (U)</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
+                    <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
+                </div>
+                
+            </form>
+        </div>
+    </div>
+
     {# -------------------------------------------------------------- #}
     {#  Suchformular (GET‑Methode)                                   #}
     {# -------------------------------------------------------------- #}
@@ -52,7 +85,12 @@
                         <tr>
                             <th>#</th>
                             <th>Name</th>
-                            <th>Geschlecht</th>
+                            <th><a href="?sort=sex&dir={% if current_sort == 'sex' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark d-block">
+                    Geschlecht
+                    {% if current_sort == 'sex' %}
+                        {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                    {% endif %}
+                </a></th>
                             <th>Alter</th>
                             <th>Geburtsdatum</th>
                             <th>Sterbedatum</th>

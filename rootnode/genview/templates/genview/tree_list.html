@@ -1,37 +1,78 @@
 {% extends "genview/base.html" %}
-{% load static %}
+
+{% block title %}Meine Stammbäume{% endblock %}
 
 {% block content %}
-
-    <div class="container">
-        <div class="row p-2">
-            <h1>My Family Trees</h1>
-        </div>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🌳 Meine Stammbäume</h2>
+        <button class="btn btn-primary" disabled>+ Neuen Stammbaum importieren</button>
     </div>
-  
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
         {% for tree in trees %}
-        <div class="card" style="width: 18rem;">
-            <img src="" class="card-img-top" alt="...">
-            <div class="card">
-                <h5 class="card-title">{{ tree.name }}</h5>
-                <div class="card-text">
-                    Imported on: {{ tree.created_at|date:"F j, Y" }}
+            <div class="col">
+                <div class="card h-100 shadow border-success border-opacity-25 hover-shadow transition">
+                    
+                    <div class="card-header bg-success text-white py-3">
+                        <h4 class="card-title mb-0 fw-bold text-center">
+                            {{ tree.name|default:"Unbenannter Stammbaum" }}
+                        </h4>
+                    </div>
+
+                    <div class="card-body">
+                        <p class="text-muted text-center small mb-4">
+                            ID: {{ tree.pk }} | Erstellt: {{ tree.created_at|date:"d.m.Y"|default:"Unbekannt" }}
+                        </p>
+                        
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <h3 class="mb-0 fw-bold text-primary">{{ tree.individuals.count|default:"0" }}</h3>
+                                <small class="text-muted">Personen</small>
+                            </div>
+                            <div class="col-4 border-start border-end">
+                                <h3 class="mb-0 fw-bold text-danger">{{ tree.families.count|default:"0" }}</h3>
+                                <small class="text-muted">Familien</small>
+                            </div>
+                            <div class="col-4">
+                                <h3 class="mb-0 fw-bold text-success">{{ tree.places.count|default:"0" }}</h3>
+                                <small class="text-muted">Orte</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer bg-light border-top-0 p-3">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'genview:individual-list' tree_id=tree.pk %}" class="btn btn-outline-primary">
+                                👥 Personen anzeigen
+                            </a>
+                            
+                            <a href="{% url 'genview:family-list' tree_id=tree.pk %}" class="btn btn-outline-danger">
+                                👪 Familien anzeigen
+                            </a>
+                        </div>
+                    </div>
+                    
                 </div>
-                {% if tree.description %}
-                    <p>{{ tree.description }}</p>
-                {% endif %}
-                
-                <a href="{% url 'genview:individual-list' tree_id=tree.id %}" class="btn btn-primary">
-                    Open Tree &rarr;
-                </a>
             </div>
-        </div>
-        
         {% empty %}
-            <div style="grid-column: 1 / -1; background: white; padding: 30px; border-radius: 8px; text-align: center;">
-                <h3>No trees found</h3>
-                <p>You do not have access to any family trees yet. An administrator needs to import a GEDCOM file and assign you access.</p>
+            <div class="col-12">
+                <div class="alert alert-info text-center py-5 shadow-sm">
+                    <h4>Noch keine Stammbäume vorhanden</h4>
+                    <p class="text-muted">Lade eine GEDCOM-Datei hoch oder erstelle deinen ersten Stammbaum.</p>
+                </div>
             </div>
         {% endfor %}
+    </div>
+</div>
 
+<style>
+    .hover-shadow:hover {
+        box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important;
+        transform: translateY(-4px);
+    }
+    .transition {
+        transition: all .3s ease-in-out;
+    }
+</style>
 {% endblock %}

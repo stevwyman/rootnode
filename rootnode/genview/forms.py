@@ -343,7 +343,7 @@ class MediaObjectForm(forms.ModelForm):
         }
 
     # Füge tree_id als optionalen Parameter hinzu, um Daten-Leaks zu verhindern!
-    def __init__(self, *args, person=None, family=None, source=None, tree_id=None, **kwargs):
+    def __init__(self, *args, person=None, family=None, source=None, event=None, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # 1. SICHERHEIT: Finde heraus, in welchem Baum wir uns befinden
@@ -354,6 +354,8 @@ class MediaObjectForm(forms.ModelForm):
             current_tree_id = family.gedcom_tree_id
         elif source:
             current_tree_id = source.gedcom_tree_id
+        elif event:
+            current_tree_id = event.gedcom_tree_id
         elif self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
@@ -369,6 +371,10 @@ class MediaObjectForm(forms.ModelForm):
                 self.fields["sources"].queryset = Source.objects.filter(
                     gedcom_tree_id=current_tree_id
                 )
+            if "events" in self.fields:
+                self.fields["events"].queryset = Event.objects.filter(
+                    gedcom_tree_id=current_tree_id
+                )
         else:
             # Fallback: Falls kein Baum gefunden wird, zeige sicherheitshalber nichts an
             self.fields["individuals"].queryset = Individual.objects.none()
@@ -382,6 +388,8 @@ class MediaObjectForm(forms.ModelForm):
             self.fields["families"].initial = [family]
         if source and "sources" in self.fields:
             self.fields["sources"].initial = [source]
+        if event and "events" in self.fields:
+            self.fields["events"].initial = [event]
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen
@@ -419,7 +427,7 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         # Include your other event fields here too
-        fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'sources'] 
+        fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'description', 'sources', 'individual', 'family'] 
         widgets = {
             'event_type': forms.Select(attrs={'class': 'form-select'}),
             'date_raw': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
@@ -434,13 +442,48 @@ class EventForm(forms.ModelForm):
             'sources': forms.CheckboxSelectMultiple(),
         }
 
-    def __init__(self, *args, tree_id=None, person=None, family=None, **kwargs):
+    # TODO: check if person, family and tree_id are necessary
+    def __init__(self, *args, **kwargs):
+
+        # 1. WICHTIG: Zuerst mit .pop() unsere Variablen herausziehen und LÖSCHEN.
+        # So verhindern wir, dass Django's BaseModelForm davon erfährt!
+        target_type = kwargs.pop('target_type', 'individual')
+        tree_id = kwargs.pop('tree_id', None)
+        
+        # 2. ERST JETZT rufen wir super() auf. Die kwargs sind jetzt "sauber".
         super().__init__(*args, **kwargs)
 
-        if person:
-            self.instance.individual = person
-        if family:
-            self.instance.family = family
+        # 3. Dropdowns filtern
+        if tree_id:
+            if 'individual' in self.fields:
+                self.fields['individual'].queryset = Individual.objects.filter(gedcom_tree_id=tree_id).order_by('surname', 'given_name')
+            if 'family' in self.fields:
+                self.fields['family'].queryset = Family.objects.filter(gedcom_tree_id=tree_id)
+
+        # 4. Formular anpassen und irrelevante Felder komplett entfernen
+        if target_type == 'individual':
+            if 'family' in self.fields:
+                del self.fields['family']
+            
+            # Sicherheits-Check: Nur ändern, wenn das Feld auch im Formular geladen wurde
+            if 'individual' in self.fields:
+                self.fields['individual'].required = True
+                
+                # Smart Workflow: Feld verstecken, wenn per URL übergeben
+                if self.initial.get('individual'):
+                    self.fields['individual'].widget = forms.HiddenInput()
+                
+        elif target_type == 'family':
+            if 'individual' in self.fields:
+                del self.fields['individual']
+            
+            # Sicherheits-Check: Nur ändern, wenn das Feld auch im Formular geladen wurde
+            if 'family' in self.fields:
+                self.fields['family'].required = True
+                
+                # Smart Workflow: Feld verstecken, wenn per URL übergeben
+                if self.initial.get('family'):
+                    self.fields['family'].widget = forms.HiddenInput()
         
         # SECURITY FIX: Only show sources belonging to THIS tree
         current_tree_id = tree_id
@@ -457,6 +500,14 @@ class EventForm(forms.ModelForm):
                 self.fields['sources'].queryset = Source.objects.none()
             if 'place' in self.fields:
                 self.fields['place'].queryset = Place.objects.none() # NEW
+
+        # 4. Wenn die ID schon übergeben wurde, verstecken wir das Feld, 
+        # damit der Nutzer es nicht mehr ändern muss/kann!
+        if target_type == 'individual' and self.initial.get('individual'):
+            self.fields['individual'].widget = forms.HiddenInput()
+            
+        elif target_type == 'family' and self.initial.get('family'):
+            self.fields['family'].widget = forms.HiddenInput()
 
 
 class SourceForm(forms.ModelForm):

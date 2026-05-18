@@ -7,6 +7,60 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>📅 Alle Ereignisse</h1>
         <!-- we create events either from individual or from families, but not in the air -->
+        <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" id="addEventDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                + Neues Ereignis
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="addEventDropdown">
+                <li>
+                    <a class="dropdown-item" href="{% url 'genview:event-create-person' tree_id=tree_id %}">
+                        👤 Für eine Person (z.B. Geburt, Tod)
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{% url 'genview:event-create-family' tree_id=tree_id %}">
+                        👪 Für eine Familie (z.B. Heirat, Scheidung)
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- filter and search -->
+    <div class="card mb-4 shadow-sm border-0 bg-light">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-center">
+                
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="dir" value="{{ current_dir }}">
+
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text">🔍</span>
+                        <input type="text" name="q" class="form-control" placeholder="Vor- oder Nachname..." value="{{ current_search }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <select name="event_type" class="form-select">
+                        <option value="">Alle Ereignistypen</option>
+                        
+                        {% for code, label in event_types %}
+                            <option value="{{ code }}" {% if current_filter_event_type == code|stringformat:"s" %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                        
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
+                    <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
+                </div>
+                
+            </form>
+        </div>
     </div>
 
     <div class="card shadow-sm">
@@ -15,10 +69,31 @@
                 <table class="table table-hover table-striped mb-0 align-middle">
                     <thead class="table-primary">
                         <tr>
-                            <th>Datum</th>
+                            <th>
+                                <a href="?sort=parsed_date&dir={% if current_sort == 'parsed_date' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&event_type={{ current_filter_event_type }}" class="text-decoration-none text-dark d-block">
+                                    Datum
+                                    {% if current_sort == 'parsed_date' %}
+                                        {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
                             <th>Ereignis</th>
-                            <th>Betroffene Person / Familie</th>
-                            <th>Ort</th>
+                            <th>
+                                <a href="?sort=person_sort&dir={% if current_sort == 'person_sort' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&event_type={{ current_filter_event_type }}" class="text-decoration-none text-dark d-block">
+                                    Person / Familie
+                                    {% if current_sort == 'person_sort' %}
+                                        {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=place&dir={% if current_sort == 'place' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&event_type={{ current_filter_event_type }}" class="text-decoration-none text-dark d-block">
+                                    Ort
+                                    {% if current_sort == 'place' %}
+                                        {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                    {% endif %}
+                                </a>
+                            </th>
                             <th class="text-end">Aktionen</th>
                         </tr>
                     </thead>
@@ -66,7 +141,7 @@
                                 </td>
                                 
                                 <td class="text-end">
-                                    <a href="{% url 'genview:even-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{% url 'genview:event-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
                                         ✎
                                     </a>
                                 </td>
@@ -89,7 +164,7 @@
             <ul class="pagination justify-content-center">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&event_type={{ current_filter_event_type }}">Zurück</a>
                     </li>
                 {% else %}
                     <li class="page-item disabled"><span class="page-link">Zurück</span></li>
@@ -101,7 +176,7 @@
 
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&event_type={{ current_filter_event_type }}">Weiter</a>
                     </li>
                 {% else %}
                     <li class="page-item disabled"><span class="page-link">Weiter</span></li>

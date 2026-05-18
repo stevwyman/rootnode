@@ -151,7 +151,7 @@ urlpatterns = [
     path(
         "tree/<int:tree_id>/event/<int:pk>/edit/",
         views.EventUpdateView.as_view(),
-        name="even-edit",
+        name="event-edit",
     ),
     path(
         "tree/<int:tree_id>/event/<int:pk>/delete/",
@@ -159,9 +159,19 @@ urlpatterns = [
         name="event-delete",
     ),
     path(
-        'tree/<int:tree_id>/people/<int:person_pk>/events/add/', 
-        views.EventCreateView.as_view(), 
+        'tree/<int:tree_id>/event/add/person/', 
+        views.EventCreateView.as_view(), {'target_type': 'individual'}, 
         name='event-create-person'
+    ),
+    path(
+        'tree/<int:tree_id>/event/add/family/', 
+        views.EventCreateView.as_view(), {'target_type': 'family'}, 
+        name='event-create-family'
+    ),
+    path(
+        'tree/<int:tree_id>/event/<int:event_pk>/media/add/', 
+         views.MediaObjectCreateView.as_view(), 
+         name='media-create-event'
     ),
 
     path('tree/<int:tree_id>/sources/', views.SourceListView.as_view(), name='source-list'),

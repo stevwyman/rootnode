@@ -7,8 +7,9 @@
     <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-dtree@2.4.1/dist/dTree.min.js"></script>
+
+    <!-- /* Basic styling for the interactive tree */ -->
     <style>
-        /* Basic styling for the interactive tree */
         #graph {
             width: 100%;
             height: 500px;
@@ -41,6 +42,17 @@
             stroke-dasharray: 5, 5; /* Dashed line for partners */
         }
     </style>
+
+    <!-- nice effect for thumbnails on event -> media -->
+    <style>
+        .transition-hover {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .transition-hover:hover {
+            transform: scale(1.1);
+            box-shadow: 0 .25rem .5rem rgba(0,0,0,.15)!important;
+        }
+    </style>
 {% endblock%}
 
 {% block content %}
@@ -51,7 +63,7 @@
     </h1>
 </div>
 
-
+<!-- row with portrait, details and parents card -->
 <div class="row">
     <!-- Image -->
     <div class="col-3 text-center">
@@ -157,7 +169,7 @@
     </div>
 </div>
 
-<!-- row with details for events, media and tree -->
+<!-- row with events, media, tree and family navigation (spouce and children) -->
 <div class="row mt-3">
     <!-- left column for detail tabs -->
     <div class="col-8">
@@ -181,8 +193,8 @@
                 {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
                 <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
                     <h3 class="mb-0">Lebensereignisse</h3>
-                    <a href="{% url 'genview:event-create-person' tree_id=tree_id person_pk=person.pk %}" class="btn btn-sm btn-primary">
-                        + Ereignis hinzufügen
+                    <a href="{% url 'genview:event-create-person' tree_id=tree_id %}?individual={{ person.pk }}" class="btn btn-sm btn-primary">
+                        + Ereignis für {{ person.given_name }} hinzufügen
                     </a>
                 </div>
                 <ul class="list-group">
@@ -227,9 +239,25 @@
                                     {% endif %})
                                 </span>
                             {% endif %}
-                                <a href="{% url 'genview:even-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'genview:event-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
                                     ✎
                                 </a>
+
+{% if event.media_objects.all %}
+    <div class="mt-2">
+        {% for media in event.media_objects.all %}
+            {% if media.file %}
+                <a href="{{ media.get_absolute_url }}" title="{{ media.title|default:'Medium ansehen' }}">
+                    <img src="{{ media.file.url }}" 
+                         alt="{{ media.title }}" 
+                         class="img-thumbnail me-1 shadow-sm transition-hover" 
+                         style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">
+                </a>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% endif %}
+                                
                         </li>
                     {% empty %}
                         <li class="list-group-item text-muted">No events recorded for this person.</li>
@@ -344,129 +372,126 @@
     </div>
     <!-- right columns for family navigation-->
     <div class="col-4">
-        {# ---------- Ehepartner (falls vorhanden) ---------- #}
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                Ehepartner / Partner*in
-            </div>
-            <div class="card-body">
-                {% if spouse %}
-                    <!-- Link zur Familien‑Detail‑Seite -->
-                    <a href="{% url 'genview:family-detail' tree_id family.pk %}"
-                    class="text-decoration-none">
-                        {{ family }}   {# das nutzt Family.__str__ → "Family Husb / Wife (F123)" #}
-                    </a>
-                    <br>
-                    <a href="{% url 'genview:individual-detail' tree_id spouse.pk %}"
-                    class="text-decoration-none">{{ spouse.full_name }}</a>
-                    <small class="text-muted">({{ spouse.gedcom_id }})</small>
-                    <ul class="list-unstyled">
-                        <li>
-                            <div>
-                                {% if family.marriage_event %}
-                                <div>
-                                    ⚭ 
-                                    {% if family.marriage_date_parsed %}
-                                        {{ family.marriage_date_parsed|date:"d. M. Y" }}
-                                    {% elif family.marriage_date_raw %}
-                                        {{ family.marriage_date_raw }}
-                                    {% else %}
-                                        <span class="text-muted">nicht angegeben</span>
-                                    {% endif %}
 
-                                    {% if family.marriage_place %}
-                                        in {{ family.marriage_place }}
-                                    {% else %}
-                                        <span class="text-muted">nicht angegeben</span>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                            </div>
-                        </li>
-                        <li>
-                            <div>
-                                *
-                                {% if spouse.birth_date %}
-                                    {{ spouse.birth_date|date:"d. M. Y" }}
-                                {% elif spouse.birth_date_raw %}
-                                    {{ spouse.birth_date_raw }}
-                                {% else %}
-                                    <span class="text-muted">nicht angegeben</span>
-                                {% endif %}
-
-                                {% if spouse.birth_place %}
-                                    in {{ spouse.birth_place }}
-                                {% else %}
-                                    <span class="text-muted">nicht angegeben</span>
-                                {% endif %}
-                            </div>
-                        </li>
-                        <li>
-                            <div>
-                                †
-                                {% if spouse.death_date %}
-                                    {{ spouse.death_date|date:"d. M. Y" }}
-                                {% elif spouse.death_date_raw %}
-                                    {{ spouse.death_date_raw }}
-                                {% else %}
-                                    <span class="text-muted">nicht angegeben</span>
-                                {% endif %}
-                            </div>
-                        </li>
-                    </ul>
-                {% else %}
-                    <p class="text-muted mb-0">Keine Ehepartner‑Information verfügbar.</p>
-                {% endif %}
-            </div>
-        </div>
-        {# ---------- Kinder (falls vorhanden) ---------- #}
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                Kinder
+                💍 Partner & Kinder
             </div>
             <div class="card-body">
-                {% if children_links %}
-                    <ul class="list-group">
-                        {% for link in children_links %}
-                            {% with child=link.child %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <a href="{% url 'genview:individual-detail' tree_id child.pk %}"
-                                    class="text-decoration-none">{{ child.full_name }}</a>
-                                    <small class="text-muted">({{ link.get_relationship_type_display }})</small>
-                                    <ul class="list-unstyled">
-                                        <li>
-                                            <div>
-                                                <strong>*</strong>
-                                                {% if child.birth_date %}
-                                                    {{ child.birth_date|date:"d. M. Y" }}
-                                                {% elif child.birth_date_raw %}
-                                                    {{ child.birth_date_raw }}
-                                                {% else %}
-                                                    <span class="text-muted">‑</span>
+                {% if not person.families_as_husband.all and not person.families_as_wife.all %}
+                <div class="alert alert-secondary text-center">
+                    Für diese Person sind keine Partner oder Kinder im Stammbaum hinterlegt.
+                </div>
+                {% else %}
+                <ul class="list-group">
+                    {% for family in person.families_as_husband.all %}
+                    <li class="list-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="card h-100 shadow-sm border-primary border-opacity-25">
+                                <div class="card-header bg-light">
+                                    <h5 class="card-title mb-0 fw-bold">
+                                        {% if family.wife %}
+                                            <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none">
+                                                {{ family.wife.full_name }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted fst-italic">Unbekannte Partnerin</span>
+                                        {% endif %}
+                                    </h5>
+                                    {% if family.marriage_date_raw or family.marriage_place %}
+                                        <small class="text-muted d-block mt-1">
+                                            ⚭ {{ family.marriage_date_raw }} {% if family.marriage_place %} in {{ family.marriage_place }}{% endif %}
+                                        </small>
+                                    {% endif %}
+                                </div>
+                        
+                                <div class="card-body p-0">
+                                    <ul class="list-group list-group-flush">
+                                        {% for link in family.children.all %}
+                                            {% with child=link.child %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="me-2">
+                                                        {% if child.sex == 'M' %}👦{% elif child.sex == 'F' %}👧{% else %}👶{% endif %}
+                                                    </span>
+                                                    <a href="{{ child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                                        {{ child.full_name }}
+                                                    </a>
+                                                </div>
+                                                {% if child.birth_date_raw %}
+                                                    <span class="badge bg-secondary rounded-pill">* {{ child.birth_date_raw }}</span>
                                                 {% endif %}
-                                            </div>
-                                        </li>
-                                        <li>
-                                            <div>
-                                                <strong>†</strong>
-                                                {% if child.death_date %}
-                                                    {{ child.death_date|date:"d. M. Y" }}
-                                                {% elif child.death_date_raw %}
-                                                    {{ child.death_date_raw }}
-                                                {% else %}
-                                                    <span class="text-muted">‑</span>
-                                                {% endif %}
-                                            </div>
-                                        </li>
+                                            </li>
+                                            {% endwith %}
+                                        {% empty %}
+                                            <li class="list-group-item text-muted fst-italic text-center py-3">Keine Kinder erfasst</li>
+                                        {% endfor %}
                                     </ul>
                                 </div>
-                            </li>
-                            {% endwith %}
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted mb-0">Keine Kinder registriert.</p>
+
+                                <div class="card-footer bg-white border-top-0 text-end">
+                                    <a href="{{ family.get_absolute_url }}" class="btn btn-sm btn-outline-primary">Zur Familie &rarr;</a>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <li class="list-item d-flex justify-content-between align-items-center">
+                        &nbsp;
+                    </li>
+                    {% endfor %}
+
+                    {% for family in person.families_as_wife.all %}
+                    <li class="list-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="card h-100 shadow-sm border-danger border-opacity-25">
+                                <div class="card-header bg-light">
+                                    <h5 class="card-title mb-0 fw-bold">
+                                        {% if family.husband %}
+                                            <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none">
+                                                {{ family.husband.full_name }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted fst-italic">Unbekannter Partner</span>
+                                        {% endif %}
+                                    </h5>
+                                    {% if family.marriage_date_raw or family.marriage_place %}
+                                        <small class="text-muted d-block mt-1">
+                                            ⚭ {{ family.marriage_date_raw }} {% if family.marriage_place %} in {{ family.marriage_place }}{% endif %}
+                                        </small>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="card-body p-0">
+                                    <ul class="list-group list-group-flush">
+                                        {% for link in family.children.all %}
+                                            {% with child=link.child %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="me-2">
+                                                        {% if child.sex == 'M' %}👦{% elif child.sex == 'F' %}👧{% else %}👶{% endif %}
+                                                    </span>
+                                                    <a href="{{ child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                                        {{ child.full_name }}
+                                                    </a>
+                                                </div>
+                                                {% if child.birth_date_raw %}
+                                                    <span class="badge bg-secondary rounded-pill">* {{ child.birth_date_raw }}</span>
+                                                {% endif %}
+                                            </li>
+                                            {% endwith %}
+                                        {% empty %}
+                                            <li class="list-group-item text-muted fst-italic text-center py-3">Keine Kinder erfasst</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                <div class="card-footer bg-white border-top-0 text-end">
+                                    <a href="{{ family.get_absolute_url }}" class="btn btn-sm btn-outline-primary">Zur Familie &rarr;</a>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
                 {% endif %}
             </div>
         </div>
@@ -489,8 +514,8 @@
         <div id="graph"></div>
     </div>
 </div>
-    
 
+    <!-- js for interactive tree  -->
     <script>
         const treeData = {{ tree_json|safe }};
 
@@ -536,5 +561,4 @@
             }
         });
     </script>
-
 {% endblock %}

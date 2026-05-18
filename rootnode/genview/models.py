@@ -6,6 +6,7 @@ from typing import Optional
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from mptt.models import MPTTModel, TreeForeignKey
@@ -241,6 +242,15 @@ class Individual(GedcomIdMixin):
         """Der ungeparste GEDCOM‑Datums‑String vom DEAT‑Event."""
         ev = self.death_event
         return ev.raw_date if ev else None
+    
+    @property
+    def spousal_families(self):
+        """
+        Kombiniert die vorab geladenen (prefetched) Familien, 
+        ohne eine neue, blockierende Datenbankabfrage auszulösen.
+        """
+        print(self.families_as_husband.all())
+        return list(self.families_as_husband.all()) + list(self.families_as_wife.all())
 
 
 # ----------------------------------------------------------------------
@@ -343,7 +353,7 @@ class Family(MPTTModel, GedcomIdMixin):
     def marriage_date_parsed(self) -> Optional[date]:
         ev = self.marriage_event
         return ev.parsed_date if ev else None
-
+    
 
 # ----------------------------------------------------------------------
 # 5️⃣ THROUGH‑MODEL: Kind‑zu‑Familie (CHIL / FAMC)
@@ -541,6 +551,13 @@ class MediaObject(GedcomIdMixin):
         Source,
         blank=True,
         related_name="media_objects",
+    )
+
+    events = models.ManyToManyField(
+        'Event', 
+        blank=True, 
+        related_name='media_objects',
+        help_text="Ereignisse, mit denen dieses Medium verknüpft ist"
     )
 
     is_portrait = models.BooleanField(

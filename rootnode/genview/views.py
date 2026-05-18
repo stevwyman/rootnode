@@ -7,6 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
 from django.db.models import Q, F
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView
@@ -42,7 +43,7 @@ from .forms import (
     PlaceForm,
     UserRegistrationForm,
 )
-from .mixins import TreeAccessMixin, TreeEditAccessMixin
+from .mixins import TreeAccessMixin, TreeEditAccessMixin, SortableListViewMixin, FilterableListViewMixin
 
 
 def home(request):
@@ -64,11 +65,15 @@ class TreeListView(LoginRequiredMixin, ListView):
     context_object_name = "trees"
 
     def get_queryset(self):
-        # Only show trees where the user has a membership
+        # 1. Berechtigte Stammbaum-IDs ermitteln
         allowed_tree_ids = TreeMembership.objects.filter(
             user=self.request.user
         ).values_list("gedcom_tree_id", flat=True)
-        return Tree.objects.filter(id__in=allowed_tree_ids)
+
+        # 2. Einfach nur filtern, KEIN annotate mehr!
+        return self.model.objects.filter(
+            id__in=allowed_tree_ids
+        ).order_by('-id')
 
 
 # ----------------------------------------------------------------------
@@ -76,24 +81,43 @@ class TreeListView(LoginRequiredMixin, ListView):
 # ----------------------------------------------------------------------
 
 
-class IndividualListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class IndividualListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Individual
     template_name = "genview/individual_list.html"
     context_object_name = "people"
     paginate_by = 25  # Helpful if you have thousands of records
 
+    # --- Die Konfiguration für das Sortier-Mixin ---
+    sortable_fields = ['given_name', 'surname', 'birth_date_raw', 'sex']
+    default_sort_field = 'surname'
+    default_sort_dir = 'asc'
+
+    # --- NEU: Filter-Konfiguration ---
+    search_fields = ['given_name', 'surname']  # In diesen Feldern wird gesucht
+    exact_filter_fields = ['sex']              # Diese Felder müssen exakt übereinstimmen
+
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
-
         birth_qs = Event.objects.filter(event_type=Event.EventType.BIRTH)
 
-        return (
-            Individual.objects.filter(gedcom_tree_id=tree_id)
-            .prefetch_related(
-                Prefetch("events", queryset=birth_qs, to_attr="birth_events")
-            )
-            .order_by("surname", "given_name")
+        # 1. Basis-QuerySet
+        qs = Individual.objects.filter(
+            gedcom_tree_id=tree_id
+        ).prefetch_related(
+            Prefetch("events", queryset=birth_qs, to_attr="birth_events")
         )
+
+        # 2. Filter anwenden (aus FilterableListViewMixin)
+        filters = self.get_queryset_filters()
+        if filters:
+            qs = qs.filter(filters)
+
+        # 3. Sortierung anwenden (aus SortableListViewMixin)
+        ordering = self.get_ordering()
+        if ordering:
+            qs = qs.order_by(ordering)
+
+        return qs
 
 
 class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
@@ -102,62 +126,15 @@ class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
     context_object_name = "person"
 
     def get_queryset(self):
-        """
-        Wir holen gleich:
-        * Person‑Events (bereits über das Standard‑Related‑Name `events`).
-        * Ehepartner‑Familien (husband‑ bzw. wife‑Relation) – dafür brauchen wir
-          das zugehörige Gegenstück (wife bzw. husband).
-        * Kinder‑Links (Family.children) – selektiert über das Through‑Model.
-        * Eltern‑Familien (person.parental_families) – ebenfalls über Prefetch.
-        """
         tree_id = self.kwargs.get("tree_id")
-        return (
-            Individual.objects.filter(gedcom_tree_id=tree_id)
-            .prefetch_related(
-                # 1️⃣ Events (einfaches Related‐Name)
-                Prefetch("events", queryset=Event.objects.all()),
-                # 2️⃣ Familien, in denen die Person Husband ist → wir brauchen die Wife
-                Prefetch(
-                    "families_as_husband",
-                    queryset=Family.objects.select_related("wife")
-                    .prefetch_related(
-                        Prefetch("wife__events", to_attr="prefetched_events")
-                    )
-                    .prefetch_related(
-                        Prefetch(
-                            "children",
-                            queryset=ChildFamilyLink.objects.select_related("child"),
-                        )
-                    ),
-                ),
-                # 3️⃣ Familien, in denen die Person Wife ist → wir brauchen den Husband
-                Prefetch(
-                    "families_as_wife",
-                    queryset=Family.objects.select_related("husband")
-                    .prefetch_related(
-                        Prefetch("husband__events", to_attr="prefetched_events")
-                    )
-                    .prefetch_related(
-                        Prefetch(
-                            "children",
-                            queryset=ChildFamilyLink.objects.select_related("child"),
-                        )
-                    ),
-                ),
-                # -----------------------------------------------------------------
-                # Events für die Kinder selbst (falls du später deren weitere Daten
-                # brauchst). Hier holen wir die Events der Child‑Individuals.
-                # -----------------------------------------------------------------
-                Prefetch(
-                    "families_as_husband__children__child",
-                    queryset=Individual.objects.prefetch_related("events"),
-                ),
-                Prefetch(
-                    "families_as_wife__children__child",
-                    queryset=Individual.objects.prefetch_related("events"),
-                ),
-            )
-            .order_by("-id")
+        
+        # Die saubere, robuste String-Notation für den Prefetch:
+        return Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "events__media_objects",
+            "families_as_husband__wife",            # Holt die Ehefrauen, wenn die Person Ehemann ist
+            "families_as_husband__children__child",  # Holt die Kinder-Links + die Kinder-Personen dazu
+            "families_as_wife__husband",            # Holt die Ehemänner, wenn die Person Ehefrau ist
+            "families_as_wife__children__child"     # Holt die Kinder-Links + die Kinder-Personen dazu
         )
 
     # -----------------------------------------------------------------
@@ -697,9 +674,16 @@ class MediaObjectDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
     context_object_name = "media"
 
     def get_queryset(self):
-        # SECURITY FIX: Ensure the media belongs to the requested tree
         tree_id = self.kwargs.get("tree_id")
-        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
+        return MediaObject.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "individuals",
+            "families__husband",
+            "families__wife",
+            "sources",
+            "events__individual",       # Lädt Events von Personen vorab
+            "events__family__husband",  # Lädt Events von Familien vorab
+            "events__family__wife"
+        )
     
 
 class MediaObjectListView(LoginRequiredMixin, TreeAccessMixin, ListView):
@@ -725,6 +709,7 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         self.person = None
         self.family = None
         self.source = None
+        self.event = None  # <-- NEU
 
         tree_id = kwargs.get("tree_id")
 
@@ -734,20 +719,21 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
             self.family = get_object_or_404(Family, pk=kwargs.get("family_pk"), gedcom_tree_id=tree_id)
         if "source_pk" in kwargs:
             self.source = get_object_or_404(Source, pk=kwargs.get("source_pk"), gedcom_tree_id=tree_id)
+        if "event_pk" in kwargs:  # <-- NEU
+            self.event = get_object_or_404(Event, pk=kwargs.get("event_pk"), gedcom_tree_id=tree_id)
 
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
 
-        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
-        kwargs["person"] = getattr(self, "person", None) # TODO: decide later which way to implement
-
+        # Objekte übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
+        kwargs["person"] = getattr(self, "person", None)
         kwargs["family"] = self.family
-
         kwargs["source"] = self.source
+        kwargs["event"] = self.event  # <-- NEU
 
-        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        # Baum-ID für die Sicherheits-Filter im Formular übergeben!
         kwargs["tree_id"] = self.kwargs.get("tree_id")
 
         return kwargs
@@ -760,19 +746,20 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
         tree_id = self.kwargs.get("tree_id")
         form.instance.gedcom_tree_id = tree_id
 
-        self.object = form.save()
-
-        # Falls eine Person verknüpft ist, fügen wir sie direkt dem ManyToMany-Feld hinzu
-        # (Das muss nach dem super().form_valid passieren, da das Objekt erst eine ID braucht)
+        # super().form_valid speichert das Objekt in die DB und setzt self.object
         response = super().form_valid(form)
+
+        # Falls ein Objekt verknüpft ist, fügen wir es direkt dem ManyToMany-Feld hinzu
+        # (Das muss nach dem super().form_valid passieren, da das Objekt erst eine ID braucht)
         if self.person:
             self.object.individuals.add(self.person)
         if self.family:
             self.object.families.add(self.family)
         if self.source:
             self.object.sources.add(self.source)
+        if self.event:  # <-- NEU
+            self.object.events.add(self.event)
 
-        # return response
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
@@ -795,10 +782,15 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
                 "genview:source-detail", 
                 kwargs={"tree_id": tree_id, "pk": self.source.pk}
             )
+        if self.event:  # <-- NEU
+            return reverse_lazy(
+                "genview:event-edit",  # Use the URL name for your event edit view
+                kwargs={"tree_id": tree_id, "pk": self.event.pk}
+            )
 
         # Fallback: Zur Medien-Übersicht des Baums
         return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})
-
+    
 
 class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = MediaObject
@@ -954,28 +946,61 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 # --------------------------------------------------------------
 
 # --- 1. List View ---
-class EventListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class EventListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Event
     template_name = "genview/event_list.html"
     context_object_name = "events"
     paginate_by = 50  # Shows 50 events per page for faster loading
 
+    # --- Sorting---
+    sortable_fields = ['person_sort', 'parsed_date', 'place']
+    default_sort_field = 'parsed_date'
+    default_sort_dir = 'asc'
+
+    # --- Filter ---
+    search_fields = [
+        'individual__given_name', 'individual__surname',
+        'family__husband__given_name', 'family__husband__surname',
+        'family__wife__given_name', 'family__wife__surname'
+    ]
+    exact_filter_fields = ['event_type']  # Z.B. ein Dropdown für Geburt, Tod, etc.
+
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         
-        return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
-            'individual', 
-            'family__husband', 
-            'family__wife', 
-            'place'
-        ).order_by(
-            # Sort chronologically, but put events with missing dates at the end
-            F('parsed_date').asc(nulls_last=True)
+        # 1. Wir laden alle Relationen vorab (für Performance) und annotieren die virtuelle Spalte
+        qs = Event.objects.filter(gedcom_tree_id=tree_id).select_related(
+            'individual', 'family__husband', 'family__wife'
+        ).annotate(
+            # Wir erschaffen eine künstliche Spalte "person_sort" für die Datenbank.
+            # Coalesce nimmt den Nachnamen der Person. Wenn der NULL ist, nimmt es den des Mannes, dann den der Frau.
+            person_sort=Coalesce(
+                'individual__surname',
+                'family__husband__surname',
+                'family__wife__surname'
+            )
         )
 
+        # 2. Filter aus dem Mixin anwenden (durchsucht die search_fields)
+        filters = self.get_queryset_filters()
+        if filters:
+            qs = qs.filter(filters)
+
+        # 3. Sortierung aus dem Mixin anwenden (nutzt nun unser annotiertes 'person_sort')
+        ordering = self.get_ordering()
+        if ordering:
+            qs = qs.order_by(ordering)
+
+        return qs
+    
     def get_context_data(self, **kwargs):
+        # 1. Den normalen Kontext (inklusive Paginierung, Sortierung, Filtern) laden
         context = super().get_context_data(**kwargs)
-        context["tree_id"] = self.kwargs.get("tree_id")
+        
+        # 2. Die Auswahlmöglichkeiten für den Event-Typ aus dem Modell an das Template übergeben.
+        # .choices liefert eine Liste von Tupeln zurück: [('BIRT', 'Geburt'), ('DEAT', 'Tod'), ...]
+        context['event_types'] = Event.EventType.choices 
+        
         return context
 
 
@@ -984,66 +1009,58 @@ class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     form_class = EventForm
     template_name = "genview/event_form.html"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.person = None
-        self.family = None
-
-        tree_id = kwargs.get("tree_id")
-        person_pk = kwargs.get("person_pk")
-        family_pk = kwargs.get("family_pk")
-
-        if person_pk:
-            self.person = get_object_or_404(Individual, pk=person_pk, gedcom_tree_id=tree_id)
-        if family_pk:
-            self.family = get_object_or_404(Family, pk=family_pk, gedcom_tree_id=tree_id)
-
-        return super().dispatch(request, *args, **kwargs)
+    def get_initial(self):
+        initial = super().get_initial()
+        
+        # Holt die IDs direkt aus der URL (?individual=3 oder ?family=5)
+        if 'individual' in self.request.GET:
+            initial['individual'] = self.request.GET.get('individual')
+        if 'family' in self.request.GET:
+            initial['family'] = self.request.GET.get('family')
+            
+        return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-
-        # Person übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
-        kwargs["person"] = getattr(self, "person", None)
-
-        kwargs["family"] = getattr(self, "family", None)
-
-        # NEU: Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        kwargs['target_type'] = self.kwargs.get('target_type', 'individual')
         kwargs["tree_id"] = self.kwargs.get("tree_id")
 
         return kwargs
 
     def form_valid(self, form):
-        
         form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
-        
         messages.success(self.request, "Ereignis erfolgreich hinzugefügt.")
-        
-        # super().form_valid(form) speichert das Objekt in der Datenbank 
-        # und leitet automatisch zur success_url weiter!
+
         return super().form_valid(form)
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Bild erfolgreich hochgeladen.")
-
-        if self.person:
+        
+        # 1. Prüfen: Gehört das gerade gespeicherte Event zu einer Person?
+        if self.object.individual:
+            messages.success(self.request, "Ereignis für Person erfolgreich gespeichert.")
             return reverse_lazy(
-                "genview:individual-detail",  
-                kwargs={"tree_id": tree_id, "pk": self.person.pk},
+                "genview:individual-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.object.individual.pk}
             )
-        if self.family:
+            
+        # 2. Prüfen: Gehört das Event zu einer Familie?
+        elif self.object.family:
+            messages.success(self.request, "Familien-Ereignis erfolgreich gespeichert.")
             return reverse_lazy(
                 "genview:family-detail", 
-                kwargs={"tree_id": tree_id, "pk": self.family.pk})
-
-        # Fallback: Zur Medien-Übersicht des Baums
-        return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})
+                kwargs={"tree_id": tree_id, "pk": self.object.family.pk}
+            )
+            
+        # 3. Fallback (sollte eigentlich nicht eintreten, aber sicher ist sicher)
+        messages.success(self.request, "Ereignis erfolgreich gespeichert.")
+        return reverse_lazy("genview:event-list", kwargs={"tree_id": tree_id})
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Wir geben die Person und die Tree-ID ans Template weiter
-        context["person"] = getattr(self, "person", None)
+        context["target_type"] = self.kwargs.get('target_type')
         context["tree_id"] = self.kwargs.get("tree_id")
+
         return context
 
 

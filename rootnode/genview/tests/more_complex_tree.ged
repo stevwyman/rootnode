@@ -1,0 +1,137 @@
+0 HEAD
+1 SOUR GENVIEW_TEST
+2 NAME Genview Test Data
+1 DATE 18 MAY 2026
+1 FILE test_tree.ged
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME Arthur /Pendragon/
+1 SEX M
+1 BIRT
+2 DATE 10 JAN 1850
+2 PLAC London, England
+1 DEAT
+2 DATE 15 MAY 1920
+2 PLAC London, England
+1 FAMS @F1@
+0 @I2@ INDI
+1 NAME Guinevere /Smith/
+1 SEX F
+1 BIRT
+2 DATE 22 MAR 1855
+2 PLAC Bristol, England
+1 DEAT
+2 DATE 12 NOV 1925
+2 PLAC London, England
+1 FAMS @F1@
+0 @I3@ INDI
+1 NAME Charles /Pendragon/
+1 SEX M
+1 BIRT
+2 DATE 05 JUN 1880
+2 PLAC London, England
+1 DEAT
+2 DATE 20 AUG 1955
+2 PLAC Manchester, England
+1 FAMC @F1@
+1 FAMS @F2@
+1 FAMS @F3@
+0 @I4@ INDI
+1 NAME Eleanor /Pendragon/
+1 SEX F
+1 BIRT
+2 DATE 14 FEB 1883
+2 PLAC London, England
+1 FAMC @F1@
+0 @I5@ INDI
+1 NAME Victoria /Adams/
+1 SEX F
+1 BIRT
+2 DATE 30 SEP 1885
+2 PLAC Manchester, England
+1 DEAT
+2 DATE 10 JAN 1915
+2 PLAC Manchester, England
+1 FAMS @F2@
+0 @I6@ INDI
+1 NAME Margaret /Brown/
+1 SEX F
+1 BIRT
+2 DATE 12 DEC 1890
+2 PLAC Liverpool, England
+1 FAMS @F3@
+0 @I7@ INDI
+1 NAME William /Pendragon/
+1 SEX M
+1 BIRT
+2 DATE 15 APR 1908
+2 PLAC Manchester, England
+1 FAMC @F2@
+0 @I8@ INDI
+1 NAME Alice /Pendragon/
+1 SEX F
+1 BIRT
+2 DATE 22 JUL 1910
+2 PLAC Manchester, England
+1 FAMC @F2@
+1 FAMS @F4@
+0 @I9@ INDI
+1 NAME Edward /Pendragon/
+1 SEX M
+1 BIRT
+2 DATE 08 OCT 1918
+2 PLAC Manchester, England
+1 FAMC @F3@
+0 @I10@ INDI
+1 NAME Beatrice /Pendragon/
+1 SEX F
+1 BIRT
+2 DATE 19 NOV 1920
+2 PLAC Manchester, England
+1 FAMC @F3@
+0 @I11@ INDI
+1 NAME Henry /Tudor/
+1 SEX M
+1 BIRT
+2 DATE 03 MAR 1905
+2 PLAC York, England
+1 FAMS @F4@
+0 @I12@ INDI
+1 NAME Mary /Tudor/
+1 SEX F
+1 BIRT
+2 DATE 14 MAY 1935
+2 PLAC York, England
+1 FAMC @F4@
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I3@
+1 CHIL @I4@
+1 MARR
+2 DATE 01 MAY 1878
+2 PLAC London, England
+0 @F2@ FAM
+1 HUSB @I3@
+1 WIFE @I5@
+1 CHIL @I7@
+1 CHIL @I8@
+1 MARR
+2 DATE 10 JUN 1906
+2 PLAC Manchester, England
+0 @F3@ FAM
+1 HUSB @I3@
+1 WIFE @I6@
+1 CHIL @I9@
+1 CHIL @I10@
+1 MARR
+2 DATE 15 SEP 1916
+2 PLAC Manchester, England
+0 @F4@ FAM
+1 HUSB @I11@
+1 WIFE @I8@
+1 CHIL @I12@
+1 MARR
+2 DATE 20 AUG 1932
+2 PLAC York, England
+0 TRLR
