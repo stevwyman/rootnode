@@ -859,17 +859,40 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
 # --------------------------------------------------------------
 
 # --- 1. List View ---
-class PlaceListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class PlaceListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Place
     template_name = "genview/place_list.html"
     context_object_name = "places"
+    paginate_by = 50
+
+    # --- Sorting---
+    sortable_fields = ['name']
+    default_sort_field = 'name'
+    default_sort_dir = 'asc'
+
+    # --- Filter ---
+    search_fields = [
+        'name'
+    ]
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         # Fetch places for this tree, count the linked events, and sort alphabetically
-        return Place.objects.filter(gedcom_tree_id=tree_id).annotate(
-            event_count=Count('events')
-        ).order_by('name')
+        qs = Place.objects.filter(gedcom_tree_id=tree_id).annotate(
+            event_count=Count('events'))
+        
+        # 2. Filter aus dem Mixin anwenden (durchsucht die search_fields)
+        filters = self.get_queryset_filters()
+        if filters:
+            qs = qs.filter(filters)
+
+        # 3. Sortierung aus dem Mixin anwenden (nutzt nun unser annotiertes 'person_sort')
+        ordering = self.get_ordering()
+        if ordering:
+            qs = qs.order_by(ordering)
+
+        return qs
+    
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -885,11 +908,13 @@ class PlaceDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
-        # Wir laden den Ort und direkt alle verknüpften Ereignisse + Personen mit!
+        
+        sorted_events_qs = Event.objects.order_by(
+            F("parsed_date").asc(nulls_last=True)
+        )
+
         return Place.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
-            'events__individual', 
-            'events__family__husband', 
-            'events__family__wife'
+            Prefetch("events", queryset=sorted_events_qs)
         )
 
 # --- 3. Create View ---
