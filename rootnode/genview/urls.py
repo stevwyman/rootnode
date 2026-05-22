@@ -7,6 +7,7 @@ urlpatterns = [
     # 1. The Dashboard: Lists all trees the user has access to
     path("", views.TreeListView.as_view(), name="tree-list"),
     # 2. Tree-Specific Views:
+    path('tree/<int:tree_id>/search/', views.GlobalSearchView.as_view(), name='global-search'),
     # ----------------------------------------------
     # --- persons / individuals
     # ----------------------------------------------
@@ -148,6 +149,7 @@ urlpatterns = [
     # ---- event management 
     # ----------------------------------------------
     path('tree/<int:tree_id>/events/', views.EventListView.as_view(), name='event-list'),
+    path('tree/<int:tree_id>/event/<int:pk>/', views.EventDetailView.as_view(), name='event-detail'),
     path(
         "tree/<int:tree_id>/event/<int:pk>/edit/",
         views.EventUpdateView.as_view(),

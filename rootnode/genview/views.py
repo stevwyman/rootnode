@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
@@ -75,6 +76,69 @@ class TreeListView(LoginRequiredMixin, ListView):
             id__in=allowed_tree_ids
         ).order_by('-id')
 
+
+class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+    template_name = "genview/global_search.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        q = self.request.GET.get('q', '').strip()
+        tree_id = self.kwargs.get("tree_id")
+        
+        results = []
+
+        if q:
+            # 1. PERSONEN durchsuchen
+            individuals = Individual.objects.filter(gedcom_tree_id=tree_id).filter(
+                Q(given_name__icontains=q) | Q(surname__icontains=q) | Q(gedcom_id__icontains=q)
+            )[:20] # Limit auf 20, damit die Datenbank nicht explodiert
+            
+            for ind in individuals:
+                ind.search_type = "Person"
+                ind.search_icon = "👤"
+                ind.search_title = ind.full_name()
+                ind.search_desc = f"Geboren: {ind.birth_date_raw or '?'}"
+                ind.search_url = ind.get_absolute_url()
+
+            # 2. FAMILIEN durchsuchen (Sucht im Namen des Mannes oder der Frau)
+            families = Family.objects.filter(gedcom_tree_id=tree_id).filter(
+                Q(husband__surname__icontains=q) | 
+                Q(wife__surname__icontains=q) |
+                Q(gedcom_id__icontains=q)
+            ).select_related('husband', 'wife')[:10]
+            
+            for fam in families:
+                fam.search_type = "Familie"
+                fam.search_icon = "👪"
+                fam.search_title = str(fam)
+                fam.search_desc = f"Heirat: {fam.marriage_date_raw or '?'}"
+                fam.search_url = fam.get_absolute_url()
+
+            # 3. ORTE durchsuchen
+            places = Place.objects.filter(gedcom_tree_id=tree_id, name__icontains=q)[:10]
+            for place in places:
+                place.search_type = "Ort"
+                place.search_icon = "📍"
+                place.search_title = place.name
+                place.search_desc = "Ort im Stammbaum"
+                # Falls du noch keine Detail-URL für Orte hast, kannst du hier ein '#' setzen
+                place.search_url = "#" 
+
+            # 4. QUELLEN durchsuchen
+            sources = Source.objects.filter(gedcom_tree_id=tree_id, title__icontains=q)[:10]
+            for src in sources:
+                src.search_type = "Quelle"
+                src.search_icon = "📚"
+                src.search_title = src.title
+                src.search_desc = src.author or "Kein Autor angegeben"
+                src.search_url = "#" # Oder src.get_absolute_url()
+
+            # 5. Alles zu einer einzigen flachen Liste zusammenketten!
+            results = list(chain(individuals, families, places, sources))
+
+        context['results'] = results
+        context['q'] = q
+        return context
 
 # ----------------------------------------------------------------------
 # 2️⃣ Individuals
@@ -356,13 +420,135 @@ class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        
+        # Prüfen, ob wir explizit einen männlichen Part anlegen (Vater)
+        if 'father_of' in self.request.GET or self.request.GET.get('role') == 'husband':
+            initial['sex'] = Individual.Sex.MALE
+            
+        # Prüfen, ob wir explizit einen weiblichen Part anlegen (Mutter)
+        elif 'mother_of' in self.request.GET or self.request.GET.get('role') == 'wife':
+            initial['sex'] = Individual.Sex.FEMALE
+            
+        return initial
+
     def form_valid(self, form):
+        tree_id = self.kwargs.get("tree_id")
+        
+        # 1. Den Stammbaum für die neue Person zuweisen
+        form.instance.gedcom_tree_id = tree_id
+        
+        # 2. Die neue Person in der Datenbank speichern (erzeugt self.object)
         response = super().form_valid(form)
-        messages.success(self.request, "Person erfolgreich angelegt.")  # optional
+        new_person = self.object
+
+        # 3. URL-Parameter auslesen
+        parent_family_id = self.request.GET.get('parent_family')
+        single_parent_id = self.request.GET.get('single_parent')
+        partner_of_id = self.request.GET.get('partner_of')
+
+        # --- FALL 1: Neues Kind zu einer bestehenden Familie (Partner & Partnerin) ---
+        if parent_family_id:
+            parent_family = get_object_or_404(Family, pk=parent_family_id, gedcom_tree_id=tree_id)
+            ChildFamilyLink.objects.create(
+                child=new_person, 
+                family=parent_family
+            )
+
+        # --- FALL 2: Neues Kind ohne bekannten Partner (Alleinerziehend) ---
+        elif single_parent_id:
+            parent = get_object_or_404(Individual, pk=single_parent_id, gedcom_tree_id=tree_id)
+            new_family = Family(gedcom_tree_id=tree_id)
+            
+            # Ehemann oder Ehefrau basierend auf dem Geschlecht zuweisen
+            if parent.sex == Individual.Sex.MALE:
+                new_family.husband = parent
+            elif parent.sex == Individual.Sex.FEMALE:
+                new_family.wife = parent
+            else:
+                # Fallback bei unbekanntem Geschlecht
+                new_family.husband = parent
+                
+            new_family.save()
+            
+            ChildFamilyLink.objects.create(
+                child=new_person, 
+                family=new_family
+            )
+
+        # --- FALL 3: Neuen Partner anlegen ---
+        elif partner_of_id:
+            original_person = get_object_or_404(Individual, pk=partner_of_id, gedcom_tree_id=tree_id)
+            new_family = Family(gedcom_tree_id=tree_id)
+            
+            # Schlaue Zuweisung anhand der Geschlechter
+            if original_person.sex == Individual.Sex.MALE:
+                new_family.husband = original_person
+                new_family.wife = new_person
+            elif original_person.sex == Individual.Sex.FEMALE:
+                new_family.wife = original_person
+                new_family.husband = new_person
+            else:
+                # Wenn das Geschlecht der Ausgangsperson unbekannt ist,
+                # richten wir uns nach dem Geschlecht des neu erstellten Partners.
+                if new_person.sex == Individual.Sex.MALE:
+                    new_family.husband = new_person
+                    new_family.wife = original_person
+                else:
+                    # Letzter Ausweg: Standardzuweisung
+                    new_family.husband = original_person
+                    new_family.wife = new_person
+                    
+            new_family.save()
+        
+        # Neue URL-Parameter auslesen
+        father_of_id = self.request.GET.get('father_of')
+        mother_of_id = self.request.GET.get('mother_of')
+        fill_family_id = self.request.GET.get('fill_family')
+        fill_role = self.request.GET.get('role')
+
+        # --- FALL 4: Komplett neue Eltern-Familie für ein Kind erstellen ---
+        if father_of_id or mother_of_id:
+            child_id = father_of_id or mother_of_id
+            child = get_object_or_404(Individual, pk=child_id, gedcom_tree_id=tree_id)
+            
+            new_family = Family(gedcom_tree_id=tree_id)
+            
+            if father_of_id:
+                new_family.husband = new_person
+                # (Optional: Das Geschlecht direkt auf Männlich erzwingen)
+            elif mother_of_id:
+                new_family.wife = new_person
+                
+            new_family.save()
+            
+            # Das bestehende Kind mit dieser neuen Familie verknüpfen
+            ChildFamilyLink.objects.create(child=child, family=new_family)
+
+        # --- FALL 5: Einen fehlenden Elternteil in einer EXISTIERENDEN Familie auffüllen ---
+        elif fill_family_id and fill_role:
+            existing_family = get_object_or_404(Family, pk=fill_family_id, gedcom_tree_id=tree_id)
+            
+            if fill_role == 'husband' and not existing_family.husband:
+                existing_family.husband = new_person
+                existing_family.save()
+            elif fill_role == 'wife' and not existing_family.wife:
+                existing_family.wife = new_person
+                existing_family.save()
+
+        messages.success(self.request, f"Person {new_person.full_name()} erfolgreich angelegt.")
         return response
 
     def get_success_url(self):
-        return reverse_lazy("genview:individual-detail", kwargs={"pk": self.object.pk})
+        # WICHTIG: Die URL benötigt laut get_absolute_url die tree_id
+        return reverse_lazy(
+            "genview:individual-detail", 
+            kwargs={
+                "tree_id": self.kwargs.get("tree_id"), 
+                "pk": self.object.pk
+            }
+        )
 
 
 class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
@@ -385,7 +571,12 @@ class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Individual
     template_name = "genview/individual_confirm_delete.html"
-    success_url = reverse_lazy("genview:individual-list")
+
+    def get_success_url(self):
+        # Nach dem Löschen leiten wir den Nutzer zurück zur Personen-Liste
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, f"Person erfolgreich gelöscht.")
+        return reverse_lazy("genview:individual-list", kwargs={"tree_id": tree_id})
 
 
 class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
@@ -605,7 +796,12 @@ class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Family
     template_name = "genview/family_confirm_delete.html"
-    success_url = reverse_lazy("genview:family-list")
+
+    def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, "Familie und zugehörige Verknüpfungen erfolgreich gelöscht.")
+        # Nutzer nach dem Löschen zur Familien-Übersicht (oder Stammbaum) zurückschicken
+        return reverse_lazy("genview:family-list", kwargs={"tree_id": tree_id})
 
 
 # ----------------------------------------------------------------------
@@ -1029,6 +1225,18 @@ class EventListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, 
         return context
 
 
+class EventDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+    model = Event
+    template_name = "genview/event_detail.html"
+
+    def get_queryset(self):
+        # Nur Events aus dem aktuellen Stammbaum erlauben
+        tree_id = self.kwargs.get("tree_id")
+        return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
+            'individual', 'family', 'place'
+        )
+    
+
 class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Event
     form_class = EventForm
@@ -1127,32 +1335,29 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Event
     template_name = "genview/event_confirm_delete.html"
 
-    def get_queryset(self):
-        # SICHERHEITS-FIX: Verhindert, dass Bilder anderer Bäume gelöscht werden
-        tree_id = self.kwargs.get("tree_id")
-        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Reiche die person_pk aus der URL an das Template weiter (falls vorhanden)
-        context["person_pk"] = self.kwargs.get("person_pk")
-        return context
-
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        person_pk = self.kwargs.get("person_pk")
-
-        messages.success(self.request, "Bild wurde entfernt.")
-
-        if person_pk:
+        
+        # 1. Prüfen: Gehörte das gelöschte Event zu einer Person?
+        if self.object.individual:
+            messages.success(self.request, "Ereignis erfolgreich gelöscht.")
             return reverse_lazy(
-                "genview:individual-detail",
-                kwargs={"tree_id": tree_id, "pk": person_pk},
+                "genview:individual-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.object.individual.pk}
             )
-
-        # Fallback, falls kein person_pk in der URL übergeben wurde
-        return reverse_lazy("genview:tree-list")
-
+            
+        # 2. Prüfen: Gehörte das Event zu einer Familie?
+        elif self.object.family:
+            messages.success(self.request, "Familien-Ereignis erfolgreich gelöscht.")
+            return reverse_lazy(
+                "genview:family-detail", 
+                kwargs={"tree_id": tree_id, "pk": self.object.family.pk}
+            )
+            
+        # 3. Fallback
+        messages.success(self.request, "Ereignis erfolgreich gelöscht.")
+        # Passe diesen Fallback an deine existierende Übersichtsseite an
+        return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
 
 # --------------------------------------------------------------
 # 2️⃣ Sources

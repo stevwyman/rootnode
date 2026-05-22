@@ -78,10 +78,11 @@
                                 </td>
                                 
                                 <td class="text-end">
-                                    <a href="{% url 'genview:place-detail' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-outline-secondary">
-                                        Details
-                                    </a>
-                                    </td>
+                                    <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" 
+                                        class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
+                                    <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" 
+                                        class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                                </td>
                             </tr>
                         {% empty %}
                             <tr>

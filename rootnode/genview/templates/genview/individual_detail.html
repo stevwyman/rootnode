@@ -59,7 +59,7 @@
 
 <div class="row">
     <h1 class="mb-3">
-        {{ person.full_name }}
+        {{ person.full_name }} - {{ person.age }}
     </h1>
 </div>
 
@@ -135,36 +135,118 @@
     <!-- parents -->
     <div class="col-4">
             {# ---------- Eltern (falls vorhanden) ---------- #}
-        <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                Eltern
+        <h4 class="mt-4 mb-3">👪 Eltern</h4>
+
+        {% if object.parental_families.all %}
+            {% for fam in object.parental_families.all %}
+                <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+                    
+                    <div class="card-header bg-light py-2">
+                        <span class="text-muted small fw-medium">Familie {{ fam.family.gedcom_id }}</span>
+                    </div>
+                    
+                    <ul class="list-group list-group-flush">
+                        
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
+                            <div>
+                                <span class="me-3 fs-5">👨</span>
+                                {% if fam.family.husband %}
+                                    <a href="{{ fam.family.husband.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                        {{ fam.family.husband.full_name }}
+                                    </a>
+                                    {% if fam.family.husband.birth_date_raw %}
+                                        <small class="text-muted ms-2">* {{ fam.family.husband.birth_date_raw }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Vater unbekannt</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if not fam.family.husband %}
+                                <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ fam.family.pk }}&role=husband" class="btn btn-sm btn-outline-primary">
+                                    + Vater hinzufügen
+                                </a>
+                            {% endif %}
+                        </li>
+                        
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
+                            <div>
+                                <span class="me-3 fs-5">👩</span>
+                                {% if fam.family.wife %}
+                                    <a href="{{ fam.family.wife.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                        {{ fam.family.wife.full_name }}
+                                    </a>
+                                    {% if fam.family.wife.birth_date_raw %}
+                                        <small class="text-muted ms-2">* {{ fam.family.wife.birth_date_raw }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Mutter unbekannt</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if not fam.family.wife %}
+                                <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ fam.family.pk }}&role=wife" class="btn btn-sm btn-outline-danger">
+                                    + Mutter hinzufügen
+                                </a>
+                            {% endif %}
+                        </li>
+                        
+                    </ul>
+                </div>
+            {% endfor %}
+            
+        {% else %}
+
+            <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+                <div class="card-body p-4 text-center">
+                    <p class="text-muted fst-italic mb-3">Keine Eltern-Informationen gefunden.</p>
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'genview:individual-add' tree_id=tree_id %}?father_of={{ object.pk }}" class="btn btn-outline-primary shadow-sm">
+                            👨 Vater anlegen
+                        </a>
+                        <a href="{% url 'genview:individual-add' tree_id=tree_id %}?mother_of={{ object.pk }}" class="btn btn-outline-danger shadow-sm">
+                            👩 Mutter anlegen
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                {% if parent_families %}
-                    {% for fam in parent_families %}
-                        <div class="mb-2">
-                            <strong>Familie {{ fam.family.gedcom_id }}</strong><br>
-                            {% if fam.family.husband %}
-                                Vater:
-                                <a href="{% url 'genview:individual-detail' tree_id fam.family.husband.pk %}"
-                                class="text-decoration-none">{{ fam.family.husband.full_name }}</a>
-                            {% else %}
-                                <span class="text-muted">Vater unbekannt</span>
-                            {% endif %}
-                            <br>
-                            {% if fam.family.wife %}
-                                Mutter:
-                                <a href="{% url 'genview:individual-detail' tree_id fam.family.wife.pk %}"
-                                class="text-decoration-none">{{ fam.family.wife.full_name }}</a>
-                            {% else %}
-                                <span class="text-muted">Mutter unbekannt</span>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
+            
+        {% endif %}
+        <h4 class="mt-5 mb-3">👦👧 Geschwister</h4>
+
+        <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+            
+            <div class="card-header bg-light py-3">
+                <h5 class="mb-0 fw-bold">Geschwister (inkl. Halbgeschwister)</h5>
+            </div>
+
+            <div class="card-body p-0">
+                {% if object.siblings %}
+                    <ul class="list-group list-group-flush">
+                        {% for sibling in object.siblings %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                                <div>
+                                    <span class="me-2">
+                                        {% if sibling.sex == 'M' %}👦{% elif sibling.sex == 'F' %}👧{% else %}👶{% endif %}
+                                    </span>
+                                    <a href="{{ sibling.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                        {{ sibling.full_name }}
+                                    </a>
+                                </div>
+                                
+                                {% if sibling.birth_date_raw %}
+                                    <small class="text-muted">* {{ sibling.birth_date_raw }}</small>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
                 {% else %}
-                    <p class="text-muted mb-0">Keine Eltern‑Informationen gefunden.</p>
+                    <div class="p-4 text-center text-muted fst-italic">
+                        Keine Geschwister im Stammbaum verknüpft.
+                    </div>
                 {% endif %}
             </div>
+
         </div>
     </div>
 </div>
@@ -373,128 +455,87 @@
     <!-- right columns for family navigation-->
     <div class="col-4">
 
-        <div class="card mb-4">
-            <div class="card-header bg-success text-white">
-                💍 Partner & Kinder
-            </div>
-            <div class="card-body">
-                {% if not person.families_as_husband.all and not person.families_as_wife.all %}
-                <div class="alert alert-secondary text-center">
-                    Für diese Person sind keine Partner oder Kinder im Stammbaum hinterlegt.
-                </div>
+        <h4 class="mt-5 mb-3">💍 Familien & Kinder</h4>
+
+{% for family in object.spousal_families %}
+    <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+        
+        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+            <h5 class="mb-0 fw-bold">
+                {% if family.husband == object and family.wife %}
+                    Partnerin: <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
+                {% elif family.wife == object and family.husband %}
+                    Partner: <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
                 {% else %}
-                <ul class="list-group">
-                    {% for family in person.families_as_husband.all %}
-                    <li class="list-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="card h-100 shadow-sm border-primary border-opacity-25">
-                                <div class="card-header bg-light">
-                                    <h5 class="card-title mb-0 fw-bold">
-                                        {% if family.wife %}
-                                            <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none">
-                                                {{ family.wife.full_name }}
-                                            </a>
-                                        {% else %}
-                                            <span class="text-muted fst-italic">Unbekannte Partnerin</span>
-                                        {% endif %}
-                                    </h5>
-                                    {% if family.marriage_date_raw or family.marriage_place %}
-                                        <small class="text-muted d-block mt-1">
-                                            ⚭ {{ family.marriage_date_raw }} {% if family.marriage_place %} in {{ family.marriage_place }}{% endif %}
-                                        </small>
-                                    {% endif %}
-                                </div>
-                        
-                                <div class="card-body p-0">
-                                    <ul class="list-group list-group-flush">
-                                        {% for link in family.children.all %}
-                                            {% with child=link.child %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="me-2">
-                                                        {% if child.sex == 'M' %}👦{% elif child.sex == 'F' %}👧{% else %}👶{% endif %}
-                                                    </span>
-                                                    <a href="{{ child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                                        {{ child.full_name }}
-                                                    </a>
-                                                </div>
-                                                {% if child.birth_date_raw %}
-                                                    <span class="badge bg-secondary rounded-pill">* {{ child.birth_date_raw }}</span>
-                                                {% endif %}
-                                            </li>
-                                            {% endwith %}
-                                        {% empty %}
-                                            <li class="list-group-item text-muted fst-italic text-center py-3">Keine Kinder erfasst</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
+                    <span class="text-muted fst-italic">Unbekannter Partner</span>
+                {% endif %}
+            </h5>
+            
+            {% if family.marriage_date_parsed or family.marriage_date_raw %}
+                <span class="badge bg-secondary text-light">
+                    ⚭ {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
+                </span>
+            {% endif %}
+        </div>
 
-                                <div class="card-footer bg-white border-top-0 text-end">
-                                    <a href="{{ family.get_absolute_url }}" class="btn btn-sm btn-outline-primary">Zur Familie &rarr;</a>
-                                </div>
+        <div class="card-body p-0">
+            {% if family.children.all %}
+                <ul class="list-group list-group-flush">
+                    {% for link in family.children.all %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                            <div>
+                                <span class="me-2">
+                                    {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
+                                </span>
+                                <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                    {{ link.child.full_name }}
+                                </a>
                             </div>
-                        </div>
-                    </li>
-                    <li class="list-item d-flex justify-content-between align-items-center">
-                        &nbsp;
-                    </li>
-                    {% endfor %}
-
-                    {% for family in person.families_as_wife.all %}
-                    <li class="list-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="card h-100 shadow-sm border-danger border-opacity-25">
-                                <div class="card-header bg-light">
-                                    <h5 class="card-title mb-0 fw-bold">
-                                        {% if family.husband %}
-                                            <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none">
-                                                {{ family.husband.full_name }}
-                                            </a>
-                                        {% else %}
-                                            <span class="text-muted fst-italic">Unbekannter Partner</span>
-                                        {% endif %}
-                                    </h5>
-                                    {% if family.marriage_date_raw or family.marriage_place %}
-                                        <small class="text-muted d-block mt-1">
-                                            ⚭ {{ family.marriage_date_raw }} {% if family.marriage_place %} in {{ family.marriage_place }}{% endif %}
-                                        </small>
-                                    {% endif %}
-                                </div>
-                                
-                                <div class="card-body p-0">
-                                    <ul class="list-group list-group-flush">
-                                        {% for link in family.children.all %}
-                                            {% with child=link.child %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="me-2">
-                                                        {% if child.sex == 'M' %}👦{% elif child.sex == 'F' %}👧{% else %}👶{% endif %}
-                                                    </span>
-                                                    <a href="{{ child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                                        {{ child.full_name }}
-                                                    </a>
-                                                </div>
-                                                {% if child.birth_date_raw %}
-                                                    <span class="badge bg-secondary rounded-pill">* {{ child.birth_date_raw }}</span>
-                                                {% endif %}
-                                            </li>
-                                            {% endwith %}
-                                        {% empty %}
-                                            <li class="list-group-item text-muted fst-italic text-center py-3">Keine Kinder erfasst</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                <div class="card-footer bg-white border-top-0 text-end">
-                                    <a href="{{ family.get_absolute_url }}" class="btn btn-sm btn-outline-primary">Zur Familie &rarr;</a>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
+                            
+                            {% if link.child.birth_date_raw %}
+                                <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
+                            {% endif %}
+                        </li>
                     {% endfor %}
                 </ul>
-                {% endif %}
-            </div>
+            {% else %}
+                <div class="p-4 text-center text-muted fst-italic">
+                    Noch keine Kinder für diese Partnerschaft erfasst.
+                </div>
+            {% endif %}
         </div>
+
+        <div class="card-footer bg-white text-center py-3">
+            <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-100">
+                👶 Kind hinzufügen
+                {% if family.husband == object and family.wife %}
+                    (mit {{ family.wife.given_name }})
+                {% elif family.wife == object and family.husband %}
+                    (mit {{ family.husband.given_name }})
+                {% endif %}
+            </a>
+        </div>
+    </div>
+
+{% empty %}
+    <div class="alert alert-info text-center shadow-sm">
+        Diese Person hat aktuell keine verknüpften Partner oder Kinder im Stammbaum.
+    </div>
+{% endfor %}
+
+<div class="d-flex justify-content-center gap-3 mt-4">
+    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?partner_of={{ object.pk }}" class="btn btn-outline-danger shadow-sm">
+        ❤️ Neuen Partner anlegen
+    </a>
+    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?single_parent={{ object.pk }}" class="btn btn-outline-secondary shadow-sm">
+        👶 Kind (Alleinerziehend) hinzufügen
+    </a>
+</div>
+
+<style>
+    .hover-bg-light { transition: background-color 0.2s; }
+    .hover-bg-light:hover { background-color: #f8f9fa; }
+</style>
     </div>
 </div>
 

@@ -28,7 +28,11 @@
                     {% for fam in families %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
-                            <td>{{ fam.gedcom_id }}</td>
+                            <td>
+                                <a href="{% url 'genview:family-detail' tree_id fam.pk %}">
+                                        {{ fam.gedcom_id }}
+                                </a>
+                            </td>
                             <td>
                                 {% if fam.husband %}
                                     {{ fam.husband.full_name }} ({{ fam.husband.get_sex_display }})
@@ -43,11 +47,11 @@
                                 {% endif %}
                             </td>
                             <td>{{ fam.children_count }}</td>
-                            <td>
-                                <a href="{% url 'genview:family-detail' tree_id fam.pk %}"
-                                class="btn btn-sm btn-outline-primary">
-                                    Details
-                                </a>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <a href="{% url 'genview:family-edit' tree_id=tree_id pk=fam.pk %}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
+                                    <a href="{% url 'genview:family-delete' tree_id=tree_id pk=fam.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                                </div>
                             </td>
                         </tr>
                     {% empty %}

@@ -1,0 +1,50 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            
+            <div class="card shadow border-danger border-opacity-50">
+                <div class="card-header bg-danger text-white py-3 text-center">
+                    <h4 class="mb-0">⚠️ Person löschen</h4>
+                </div>
+                
+                <div class="card-body p-4 text-center">
+                    <h5 class="mb-4">
+                        Möchtest du <strong>{{ object.full_name }}</strong> wirklich unwiderruflich löschen?
+                    </h5>
+
+                    <div class="bg-light p-3 rounded mb-4 text-start border">
+                        <ul class="list-unstyled mb-0 text-muted">
+                            <li class="mb-1"><strong>GEDCOM ID:</strong> {{ object.gedcom_id|default:"-" }}</li>
+                            {% if object.birth_date_raw %}
+                                <li class="mb-1"><strong>Geboren:</strong> {{ object.birth_date_raw }}</li>
+                            {% endif %}
+                            {% if object.spousal_families or object.parental_families.all %}
+                                <li class="mt-2 text-danger small">
+                                    <i class="bi bi-exclamation-triangle"></i> 
+                                    Achtung: Diese Person ist mit Familien im Stammbaum verknüpft. 
+                                    Das Löschen entfernt auch diese Verknüpfungen!
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{% url 'genview:individual-detail' tree_id=object.gedcom_tree_id pk=object.pk %}" class="btn btn-outline-secondary px-4">
+                                Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-danger px-4 shadow-sm">
+                                Ja, endgültig löschen
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

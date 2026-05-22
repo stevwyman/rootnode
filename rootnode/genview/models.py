@@ -251,6 +251,33 @@ class Individual(GedcomIdMixin):
         """
         print(self.families_as_husband.all())
         return list(self.families_as_husband.all()) + list(self.families_as_wife.all())
+    
+    @property
+    def siblings(self):
+        """
+        Liefert alle Geschwister UND Halbgeschwister.
+        Logik: Findet alle Eltern dieser Person -> Findet alle Familien dieser Eltern -> Holt die Kinder.
+        """
+        # 1. Alle Familien holen, in denen diese Person ein Kind ist
+        my_families = Family.objects.filter(children__child=self)
+        
+        # 2. Die IDs der Väter und Mütter sammeln (None-Werte herausfiltern!)
+        father_ids = [f for f in my_families.values_list('husband_id', flat=True) if f is not None]
+        mother_ids = [m for m in my_families.values_list('wife_id', flat=True) if m is not None]
+        
+        # Wenn die Person gar keine bekannten Eltern hat, kann es auch keine ermittelbaren Geschwister geben
+        if not father_ids and not mother_ids:
+            return Individual.objects.none()
+
+        # 3. Alle Familien finden, bei denen MINDESTENS EINER dieser Elternteile beteiligt ist
+        sibling_families = Family.objects.filter(
+            Q(husband_id__in=father_ids) | Q(wife_id__in=mother_ids)
+        )
+        
+        # 4. Alle Kinder aus diesen Familien holen, sich selbst ausschließen und Duplikate (Vollgeschwister) filtern
+        return Individual.objects.filter(
+            parental_families__family__in=sibling_families
+        ).exclude(pk=self.pk).distinct()
 
 
 # ----------------------------------------------------------------------

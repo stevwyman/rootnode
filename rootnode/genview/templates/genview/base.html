@@ -11,6 +11,8 @@
         <link rel="stylesheet"
             href="{% static 'my.css' %}">
 
+        <link rel="stylesheet" href="{% static 'bootstrap.min.css' %}">
+
         {% block extra_head %}{% endblock %}
     </head>
 
@@ -28,35 +30,51 @@
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav ms-auto">
                             {% if tree_id %}
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:individual-list' tree_id %}">Personen</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:family-list' tree_id %}">Familien</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:event-list' tree_id %}">Ereignisse</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:place-list' tree_id %}">Orte</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:media-list' tree_id %}">Medien</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{% url 'genview:source-list' tree_id %}">Quellen</a></li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Data</a>
+                                <ul class="dropdown-menu dropdown-menu-end shadow">
+                                    <li><a class="dropdown-item" href="{% url 'genview:individual-list' tree_id %}">Personen</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:family-list' tree_id %}">Familien</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:event-list' tree_id %}">Ereignisse</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:place-list' tree_id %}">Orte</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:media-list' tree_id %}">Medien</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:source-list' tree_id %}">Quellen</a></li>
+                                </ul>
+                            </li>
                             {% endif %}
                             {% if user.is_authenticated %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Signed in as {{ user.username }}</a>
-                                <ul class="dropdown-menu">
-                                    <li class="nav-item">
-                                        <a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a>
+                                <ul class="dropdown-menu dropdown-menu-end shadow">
+                                    <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
+                                    <li><a class="dropdown-item" href="#">⚙️ Einstellungen</a></li>
+                                    
+                                    <li><hr class="dropdown-divider"></li>
+                                    
+                                    <li>
+                                        <form method="post" action="{% url 'logout' %}" class="m-0 p-0 d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                🚪 Logout
+                                            </button>
+                                        </form>
                                     </li>
                                 </ul>
                             </li>
-                            <li class="nav-item">
-                                <form action="{% url 'logout' %}" method="post" style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="nav-link btn btn-link">Abmelden</button>
-                                </form>
-                            </li>
-      
                             {% else %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'login' %}">Log In</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'register' %}">Register</a>
+                            </li>
+                            {% endif %}
+                            {% if tree_id %}
+                            <li>
+                                <form class="d-flex" action="{% url 'genview:global-search' tree_id=tree_id %}" method="get">
+                                    <input class="form-control me-2" type="search" name="q" placeholder="Stammbaum durchsuchen..." aria-label="Search">
+                                    <button class="btn btn-outline-light" type="submit">🔍</button>
+                                </form>
                             </li>
                             {% endif %}
                         </ul>

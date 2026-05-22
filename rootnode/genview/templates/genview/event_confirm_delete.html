@@ -1,0 +1,60 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            
+            <div class="card shadow border-danger border-opacity-50">
+                <div class="card-header bg-danger text-white py-3 text-center">
+                    <h4 class="mb-0">⚠️ Ereignis löschen</h4>
+                </div>
+                
+                <div class="card-body p-4 text-center">
+                    <h5 class="mb-4">
+                        Möchtest du dieses Ereignis wirklich unwiderruflich löschen?
+                    </h5>
+
+                    <div class="bg-light p-3 rounded mb-4 text-start border">
+                        <ul class="list-unstyled mb-0 text-muted">
+                            <li class="mb-1">
+                                <strong>Typ:</strong> {{ object.get_event_type_display }}
+                            </li>
+                            
+                            <li class="mb-1">
+                                <strong>Zugeordnet zu:</strong> 
+                                {% if object.individual %}
+                                    👤 {{ object.individual.full_name }}
+                                {% elif object.family %}
+                                    👪 Familie {{ object.family.gedcom_id }}
+                                {% endif %}
+                            </li>
+
+                            {% if object.raw_date %}
+                                <li class="mb-1"><strong>Datum:</strong> {{ object.raw_date }}</li>
+                            {% endif %}
+                            
+                            {% if object.place %}
+                                <li class="mb-1"><strong>Ort:</strong> {{ object.place.name }}</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <button type="button" class="btn btn-outline-secondary px-4" onclick="history.back()">
+                                Abbrechen
+                            </button>
+                            
+                            <button type="submit" class="btn btn-danger px-4 shadow-sm">
+                                Ja, endgültig löschen
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

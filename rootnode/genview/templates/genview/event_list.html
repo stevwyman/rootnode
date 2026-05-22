@@ -108,10 +108,12 @@
                                     {% endif %}
                                 </td>
                                 
-                                <td>
-                                    <span class="badge bg-secondary">
-                                        {{ event.get_event_type_display }}
-                                    </span>
+                                <td>                      
+                                    <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}">
+                                        <span class="badge bg-secondary">
+                                            {{ event.get_event_type_display }}
+                                        </span>
+                                    </a> 
                                 </td>
                                 
                                 <td>
@@ -141,8 +143,13 @@
                                 </td>
                                 
                                 <td class="text-end">
-                                    <a href="{% url 'genview:event-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{% url 'genview:event-edit' tree_id=tree_id pk=event.pk %}" 
+                                        class="btn btn-sm btn-outline-primary" title="Bearbeiten">
                                         ✎
+                                    </a>
+                                    <a href="{% url 'genview:event-delete' tree_id=tree_id pk=event.pk %}" 
+                                        class="btn btn-sm btn-outline-danger" title="Löschen">
+                                        🗑
                                     </a>
                                 </td>
                             </tr>

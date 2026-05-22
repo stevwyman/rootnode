@@ -72,6 +72,19 @@ class IndividualForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # 1. Ist es eine komplett neue Person? 
+        # (Bei existierenden Personen zum Bearbeiten ist der primary key (pk) bereits gesetzt)
+        is_new_person = self.instance.pk is None
+        
+        # 2. Welches Geschlecht steht im Startwert?
+        forced_sex = self.initial.get('sex')
+
+        # Smart Workflow: Nur sperren, wenn es eine NEUE Person ist 
+        # UND das Geschlecht explizit auf Männlich ('M') oder Weiblich ('F') forciert wurde.
+        if is_new_person and forced_sex in ['M', 'F']:
+            self.fields['sex'].disabled = True
+            self.fields['sex'].help_text = "Das Geschlecht wurde durch die gewählte Rolle automatisch festgelegt."
+
         # Wenn ein bereits existierendes Individual bearbeitet wird,
         # laden wir die zugehörigen BIRT‑/DEAT‑Events (falls vorhanden).
         if self.instance.pk:

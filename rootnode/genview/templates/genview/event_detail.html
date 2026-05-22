@@ -1,0 +1,124 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-4">
+    
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                {% if object.individual %}
+                    <a href="{{ object.individual.get_absolute_url }}">👤 {{ object.individual.full_name }}</a>
+                {% elif object.family %}
+                    <a href="{{ object.family.get_absolute_url }}">👪 Familie {{ object.family.gedcom_id }}</a>
+                {% endif %}
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Ereignis-Details</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-secondary border-opacity-25 w-100 mb-4">
+                
+                <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0 fw-bold">
+                        ⚡ {{ object.get_event_type_display }}-Ereignis
+                    </h3>
+                    {% if object.parsed_date %}
+                        <span class="badge bg-primary px-3 py-2 fs-6">📅 {{ object.parsed_date|date:"d.m.Y" }}</span>
+                    {% endif %}
+                </div>
+
+                <ul class="list-group list-group-flush">
+                    
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small">Bezieht sich auf</div>
+                        <div class="fw-medium fs-5 mt-1">
+                            {% if object.individual %}
+                                <a href="{{ object.individual.get_absolute_url }}" class="text-decoration-none">
+                                    👤 {{ object.individual.full_name }} ({{ object.individual.gedcom_id }})
+                                </a>
+                            {% elif object.family %}
+                                <a href="{{ object.family.get_absolute_url }}" class="text-decoration-none">
+                                    👪 {{ object.family }}
+                                </a>
+                            {% endif %}
+                        </div>
+                    </li>
+
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small">GEDCOM Datum (Original)</div>
+                        <div class="fw-medium mt-1">
+                            {{ object.raw_date|default:"<Kein Datum hinterlegt>" }}
+                        </div>
+                    </li>
+
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small">Ort</div>
+                        <div class="fw-medium mt-1">
+                            {% if object.place %}
+                                <a href="#" class="text-decoration-none">📍 {{ object.place.name }}</a>
+                                {% if object.place.latitude and object.place.longitude %}
+                                    <small class="text-muted ms-2">({{ object.place.latitude }}, {{ object.place.longitude }})</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted fst-italic">Kein Ort verknüpft</span>
+                            {% endif %}
+                        </div>
+                    </li>
+
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small">Beschreibung / Notiz</div>
+                        <div class="mt-1">
+                            {% if object.description %}
+                                {{ object.description|linebreaks }}
+                            {% else %}
+                                <span class="text-muted fst-italic">Keine Beschreibung vorhanden.</span>
+                            {% endif %}
+                        </div>
+                    </li>
+
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small mb-2">Quellenbelege</div>
+                        {% if object.sources.all %}
+                            <div class="list-group list-group-flush border rounded">
+                                {% for src in object.sources.all %}
+                                    <div class="list-group-item bg-light text-dark small py-2">
+                                        📚 <strong>{{ src.title }}</strong> {% if src.author %}(von {{ src.author }}){% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="text-muted fst-italic small">Keine Quellen mit diesem Ereignis verknüpft.</span>
+                        {% endif %}
+                    </li>
+
+                </ul>
+
+                <div class="card-footer bg-white p-3 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                        ↩️ Zurück
+                    </button>
+
+                    <div class="d-flex gap-2">
+                        <a href="#" class="btn btn-primary shadow-sm">
+                            ✏️ Bearbeiten
+                        </a>
+                        <a href="{% url 'genview:event-delete' tree_id=tree_id pk=object.pk %}" class="btn btn-danger shadow-sm">
+                            🗑️ Löschen
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card bg-light border-secondary border-opacity-25 w-100 p-3 text-muted small">
+                <h6 class="fw-bold text-dark mb-3">System-Informationen</h6>
+                <div class="mb-2"><strong>Erstellt am:</strong> {{ object.created_at|date:"d.m.Y H:i" }}</div>
+                <div><strong>Zuletzt geändert:</strong> {{ object.updated_at|date:"d.m.Y H:i" }}</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
