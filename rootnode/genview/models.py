@@ -11,7 +11,6 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from mptt.models import MPTTModel, TreeForeignKey
 
-import os
 
 
 def tree_media_directory_path(instance, filename):
@@ -33,6 +32,7 @@ class Tree(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_public = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -72,16 +72,38 @@ class GedcomIdMixin(models.Model):
 
     gedcom_id = models.CharField(
         max_length=20,
+        unique=True,
         blank=True,
         null=True,
         help_text="GEDCOM Referenz, z.B. @I1@, @F2@ …",
+        verbose_name="GEDCOM ID"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Standard-Präfix, falls ein Modell es mal vergisst
+    gedcom_prefix = "X"
+
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        # 1. Prüfen, ob das Objekt brandneu ist
+        is_new = self.pk is None
+        
+        # 2. Normalen Django-Speichervorgang ausführen (erzeugt den Primary Key / pk)
+        super().save(*args, **kwargs)
+
+        # 3. Automatische ID generieren, wenn neu und Feld leer
+        if is_new and not self.gedcom_id:
+            # Wir nutzen das Präfix des jeweiligen Kind-Modells 
+            # und hängen das "M" für manuell an, um Import-Konflikte zu vermeiden
+            prefix = self.gedcom_prefix
+            self.gedcom_id = f"@{prefix}-M{self.pk}@"
+            
+            # 4. Nur die gedcom_id nochmals in der DB aktualisieren
+            self.save(update_fields=['gedcom_id'])
 
 
 # ----------------------------------------------------------------------
@@ -89,6 +111,7 @@ class GedcomIdMixin(models.Model):
 # ----------------------------------------------------------------------
 class Source(GedcomIdMixin):
     """Quelle (SOUR) oder Repository (REPO)."""
+    gedcom_prefix = "S"  # Ergibt z.B. S-M102
 
     title = models.CharField(max_length=255, help_text="Titel / Kurzbeschreibung")
     author = models.CharField(max_length=255, blank=True)
@@ -112,6 +135,7 @@ class Source(GedcomIdMixin):
 # ----------------------------------------------------------------------
 class Individual(GedcomIdMixin):
     """GEDCOM‑Person (INDI)."""
+    gedcom_prefix = "I"  # Ergibt z.B. I-M102
 
     class Sex(models.TextChoices):
         MALE = "M", "Male"
@@ -244,6 +268,28 @@ class Individual(GedcomIdMixin):
         return ev.raw_date if ev else None
     
     @property
+    def father(self):
+        """Returns the husband of the family where this person is a child."""
+        # 1. Hole den ersten ChildFamilyLink für dieses Kind
+        link = self.parental_families.first() 
+        
+        # 2. Wenn ein Link existiert, eine Familie verknüpft ist UND es einen Ehemann gibt
+        if link and link.family and link.family.husband:
+            return link.family.husband
+        return None
+
+    @property
+    def mother(self):
+        """Returns the wife of the family where this person is a child."""
+        # 1. Hole den ersten ChildFamilyLink für dieses Kind
+        link = self.parental_families.first()
+        
+        # 2. Wenn ein Link existiert, eine Familie verknüpft ist UND es eine Ehefrau gibt
+        if link and link.family and link.family.wife:
+            return link.family.wife
+        return None
+    
+    @property
     def spousal_families(self):
         """
         Kombiniert die vorab geladenen (prefetched) Familien, 
@@ -278,6 +324,38 @@ class Individual(GedcomIdMixin):
         return Individual.objects.filter(
             parental_families__family__in=sibling_families
         ).exclude(pk=self.pk).distinct()
+    
+    @property
+    def is_confidential(self):
+        """
+        Prüft, ob die Person unter die Datenschutzrichtlinien fällt:
+        - Geburt innerhalb der letzten 120 Jahre
+        - Tod innerhalb der letzten 60 Jahre
+        - Heirat innerhalb der letzten 80 Jahre
+        """
+        current_year = date.today().year
+
+        # 1. Geburt prüfen (letzte 120 Jahre)
+        if self.birth_date:
+            if (current_year - self.birth_date.year) <= 115:
+                return True
+
+        # 2. Tod prüfen (letzte 60 Jahre)
+        if self.death_date:
+            if (current_year - self.death_date.year) <= 35:
+                return True
+
+        # 3. Heiratsdaten prüfen (letzte 80 Jahre)
+        # Sucht in allen Familien, in denen die Person ein Partner (Spouse) ist
+        for spousal_link in self.spousal_families:
+            # Greife auf das Familien-Objekt zu und prüfe das Heiratsdatum
+            if spousal_link.marriage_date_parsed:
+                if (current_year - spousal_link.marriage_date_parsed.year) <= 85:
+                    return True
+
+        # Wenn keines der Daten greift (oder keine Daten vorhanden sind), 
+        # ist die Person historisch und somit nicht mehr vertraulich.
+        return False
 
 
 # ----------------------------------------------------------------------
@@ -285,6 +363,7 @@ class Individual(GedcomIdMixin):
 # ----------------------------------------------------------------------
 class Family(MPTTModel, GedcomIdMixin):
     """Familie (FAM). Durch MPTT kann eine Familie Unter‑Familien besitzen."""
+    gedcom_prefix = "F"  # Ergibt z.B. F-M102
 
     class Meta:
         verbose_name_plural = "Families"
@@ -432,6 +511,7 @@ class ChildFamilyLink(models.Model):
 # 6️⃣ Places GEDCOM:PLAC
 # ----------------------------------------------------------------------
 class Place(GedcomIdMixin):
+    gedcom_prefix = "P"  # Ergibt z.B. P-M102
     # Security: Tie the place to a specific tree
     gedcom_tree = models.ForeignKey('Tree', on_delete=models.CASCADE, related_name='places')
     
@@ -449,6 +529,18 @@ class Place(GedcomIdMixin):
 
     def __str__(self):
         return self.name
+    
+    @property
+    def short_name(self):
+        """
+        Gibt nur den vordersten Teil des Ortsnamens zurück.
+        Aus "Herford, NRW, Deutschland" wird "Herford".
+        Perfekt für Tabellen, Ahnentafeln und kleine Badges!
+        """
+        if self.name:
+            # Teilt den String am ersten Komma und entfernt überflüssige Leerzeichen
+            return self.name.split(',')[0].strip()
+        return "Unbekannter Ort"
     
 
 # ----------------------------------------------------------------------
@@ -552,6 +644,12 @@ class Event(models.Model):
 # 8️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
 # ----------------------------------------------------------------------
 class MediaObject(GedcomIdMixin):
+    gedcom_prefix = "M"  # Ergibt z.B. M-M102
+
+    class Category(models.TextChoices):
+        PHOTO = 'PHOTO', 'Foto / Portrait'
+        DOCUMENT = 'DOCUMENT', 'Dokument / Urkunde'
+
     """Multimedia‑Objekt (OBJE)."""
 
     title = models.CharField(max_length=255, blank=True)
@@ -559,6 +657,13 @@ class MediaObject(GedcomIdMixin):
     # file = models.FileField(upload_to="gedcom_media/")
     file = models.FileField(
         upload_to=tree_media_directory_path, verbose_name="Datei/Bild"
+    )
+
+    category = models.CharField(
+        max_length=10,
+        choices=Category.choices,
+        default=Category.PHOTO,
+        verbose_name="Kategorie"
     )
 
     description = models.TextField(blank=True)

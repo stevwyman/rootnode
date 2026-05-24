@@ -6,7 +6,7 @@ from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
@@ -145,14 +145,14 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
 # ----------------------------------------------------------------------
 
 
-class IndividualListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
+class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Individual
     template_name = "genview/individual_list.html"
     context_object_name = "people"
     paginate_by = 25  # Helpful if you have thousands of records
 
     # --- Die Konfiguration für das Sortier-Mixin ---
-    sortable_fields = ['given_name', 'surname', 'birth_date_raw', 'sex']
+    sortable_fields = ['given_name', 'surname', 'annotated_birth_date', 'sex']
     default_sort_field = 'surname'
     default_sort_dir = 'asc'
 
@@ -162,29 +162,49 @@ class IndividualListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMi
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
+        
+        # NEU: 1. Die Subquery für das Geburtsdatum bauen
+        # Wir suchen das Geburts-Event, dessen 'individual'-Feld auf die aktuelle Person (OuterRef) zeigt.
+        birth_date_sq = Event.objects.filter(
+            individual_id=OuterRef('pk'),
+            event_type=Event.EventType.BIRTH
+        ).values('parsed_date')[:1]  # Wichtig: [:1] stellt sicher, dass wir exakt EINEN Wert zurückbekommen
+
         birth_qs = Event.objects.filter(event_type=Event.EventType.BIRTH)
 
-        # 1. Basis-QuerySet
+        # 2. Basis-QuerySet mit der virtuellen Spalte annotieren
         qs = Individual.objects.filter(
             gedcom_tree_id=tree_id
+        ).annotate(
+            # Erstellt eine virtuelle Datenbankspalte namens 'annotated_birth_date'
+            annotated_birth_date=Subquery(birth_date_sq)
         ).prefetch_related(
             Prefetch("events", queryset=birth_qs, to_attr="birth_events")
         )
 
-        # 2. Filter anwenden (aus FilterableListViewMixin)
+        # 3. Filter anwenden (aus FilterableListViewMixin)
         filters = self.get_queryset_filters()
         if filters:
             qs = qs.filter(filters)
 
-        # 3. Sortierung anwenden (aus SortableListViewMixin)
+        # 4. Sortierung anwenden (aus SortableListViewMixin)
         ordering = self.get_ordering()
         if ordering:
-            qs = qs.order_by(ordering)
+            # Prüfen, ob absteigend (Minus-Zeichen) oder aufsteigend sortiert werden soll
+            if ordering.startswith('-'):
+                # Feldname ohne Minus extrahieren
+                field_name = ordering[1:]
+                # Absteigend sortieren, leere Werte ans Ende!
+                qs = qs.order_by(F(field_name).desc(nulls_last=True))
+            else:
+                # Aufsteigend sortieren, leere Werte ans Ende!
+                qs = qs.order_by(F(ordering).asc(nulls_last=True))
+            
 
         return qs
 
 
-class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class IndividualDetailView(TreeAccessMixin, DetailView):
     model = Individual
     template_name = "genview/individual_detail.html"
     context_object_name = "person"
@@ -411,6 +431,35 @@ class IndividualDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
 
         # Convert the Python dictionary to a JSON string for the template
         ctx["tree_json"] = json.dumps(tree_data)
+
+        # pedigree / table view of ancestors
+        person = self.object
+
+        # 1. Eltern laden
+        father = person.father
+        mother = person.mother
+
+        # 2. Ein flaches Dictionary für die 3-Generationen-Tabelle packen
+        ctx['pedigree'] = {
+            'father': father,
+            'mother': mother,
+            # Großeltern väterlicherseits (ff = father's father, fm = father's mother)
+            'ff': father.father if father else None,
+            'fm': father.mother if father else None,
+            # Großeltern mütterlicherseits (mf = mother's father, mm = mother's mother)
+            'mf': mother.father if mother else None,
+            'mm': mother.mother if mother else None,
+        }
+
+    
+        # Wenn der Datenschutz greift UND die Person vertraulich ist:
+        if ctx.get('apply_privacy') and self.object.is_confidential:
+            ctx['photos'] = []
+            ctx['documents'] = []
+        else:
+            all_media = self.object.media_objects.all()
+            ctx['photos'] = all_media.filter(category='PHOTO')
+            ctx['documents'] = all_media.filter(category='DOCUMENT')
 
         return ctx
 
@@ -961,7 +1010,6 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Bild erfolgreich hochgeladen.")
-        logger.debug("Bild erfolgreich hochgeladen.")
 
         if self.person:
             return reverse_lazy(
@@ -1210,7 +1258,15 @@ class EventListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, 
         # 3. Sortierung aus dem Mixin anwenden (nutzt nun unser annotiertes 'person_sort')
         ordering = self.get_ordering()
         if ordering:
-            qs = qs.order_by(ordering)
+            # Prüfen, ob absteigend (Minus-Zeichen) oder aufsteigend sortiert werden soll
+            if ordering.startswith('-'):
+                # Feldname ohne Minus extrahieren
+                field_name = ordering[1:]
+                # Absteigend sortieren, leere Werte ans Ende!
+                qs = qs.order_by(F(field_name).desc(nulls_last=True))
+            else:
+                # Aufsteigend sortieren, leere Werte ans Ende!
+                qs = qs.order_by(F(ordering).asc(nulls_last=True))
 
         return qs
     

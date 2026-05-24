@@ -22,6 +22,15 @@
     </div>
 
     <div class="mb-3">
+    {{ form.category.label_tag }}
+    {{ form.category }}
+    {{ form.category.errors }}
+    <small class="form-text text-muted">
+        Bitte wähle aus, ob es sich um ein Foto oder ein Dokument handelt.
+    </small>
+</div>
+
+    <div class="mb-3">
         {{ form.description.label_tag }} {{ form.description }}
         {{ form.description.errors }}
     </div>

@@ -1,61 +1,39 @@
 {% extends "genview/base.html" %}
 
-{% block title %}Ereignis hinzufügen{% endblock %}
+{% block title %}
+    {% if object %}Ereignis bearbeiten{% else %}Ereignis hinzufügen{% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <div class="card shadow-sm">
+            
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
-                        Neues Ereignis für {{ person.given_name }} {{ person.surname }}
+                        {% if object %}
+                            ✏️ Ereignis bearbeiten
+                        {% else %}
+                            ✨ Neues Ereignis
+                        {% endif %}
+                        
+                        {% if person %} 
+                            für {{ person.full_name }}
+                        {% elif family %} 
+                            für Familie {{ family.gedcom_id }}
+                        {% endif %}
                     </h4>
                 </div>
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" action="?{{ request.GET.urlencode }}">
                         {% csrf_token %}
                         
                         {{ form.as_p }}
-
-                        {% if object %}
-    <div class="card mt-4 mb-4 shadow-sm border-info border-opacity-25">
-        <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-info text-darken">📎 Angehängte Dokumente / Medien</h5>
-            
-            <a href="{% url 'genview:media-create-event' tree_id=tree_id event_pk=object.pk %}" class="btn btn-sm btn-info text-white">
-                + Dokument hochladen
-            </a>
-        </div>
-        
-        <div class="card-body">
-            {% if object.media_objects.all %}
-                <ul class="list-group">
-                    {% for media in object.media_objects.all %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>{{ media.title|default:"Ohne Titel" }}</strong>
-                                {% if media.description %}<br><small class="text-muted">{{ media.description }}</small>{% endif %}
-                            </div>
-                            
-                            <div class="text-end">
-                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-primary me-2">Details</a>
-                                
-                                {% if media.file %}
-                                    <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">Datei ansehen</a>
-                                {% endif %}
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="text-muted fst-italic mb-0 small">Noch keine Medien zu diesem Ereignis hinzugefügt (z.B. Urkunden, Fotos).</p>
-            {% endif %}
-        </div>
-    </div>
-{% endif %}
                         
-                        <div class="d-flex justify-content-between mt-4">
+                        <hr class="my-4">
+                        
+                        <div class="d-flex justify-content-between">
                             {% if person %}
                                 <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
                             {% elif family %}
@@ -64,11 +42,57 @@
                                 <a href="{% url 'genview:event-list' tree_id=tree_id %}" class="btn btn-outline-secondary">Abbrechen</a>
                             {% endif %}
 
-                            <button type="submit" class="btn btn-success">Ereignis speichern</button>
+                            <button type="submit" class="btn btn-success">
+                                {% if object %}Änderungen speichern{% else %}Ereignis anlegen{% endif %}
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
+
+            {% if object %}
+                <div class="card shadow-sm border-info border-opacity-25">
+                    <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center py-3">
+                        <h5 class="mb-0 text-info text-darken">📎 Angehängte Dokumente / Medien</h5>
+                        
+                        <a href="{% url 'genview:media-create-event' tree_id=tree_id event_pk=object.pk %}" class="btn btn-sm btn-info text-white shadow-sm">
+                            + Dokument hochladen
+                        </a>
+                    </div>
+                    
+                    <div class="card-body p-0">
+                        {% if object.media_objects.all %}
+                            <ul class="list-group list-group-flush">
+                                {% for media in object.media_objects.all %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center p-3">
+                                        <div>
+                                            <strong class="text-dark">{{ media.title|default:"Ohne Titel" }}</strong>
+                                            {% if media.description %}
+                                                <div class="text-muted small mt-1">{{ media.description }}</div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="text-end text-nowrap ms-3">
+                                            <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-primary me-1">Details</a>
+                                            
+                                            {% if media.file %}
+                                                <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">Ansehen ↗</a>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <div class="p-4 text-center">
+                                <p class="text-muted fst-italic mb-0 small">
+                                    Noch keine Medien zu diesem Ereignis hinzugefügt (z.B. Urkunden, Fotos).
+                                </p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
         </div>
     </div>
 </div>

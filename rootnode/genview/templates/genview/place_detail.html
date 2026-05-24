@@ -33,11 +33,12 @@
                         <p class="text-muted fst-italic mb-0">Keine exakten Koordinaten (Breiten-/Längengrad) für diesen Ort hinterlegt.</p>
                     {% endif %}
                 </div>
-                
+                {% if can_edit %}
                 <div class="card-footer bg-white d-flex justify-content-between">
                     <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-primary">✎ Bearbeiten</a>
                     <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-outline-danger">🗑 Löschen</a>
                 </div>
+                {% endif %}
             </div>
         </div>
 

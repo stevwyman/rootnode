@@ -53,98 +53,451 @@
             box-shadow: 0 .25rem .5rem rgba(0,0,0,.15)!important;
         }
     </style>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 {% endblock%}
 
 {% block content %}
-
 <div class="row">
-    <h1 class="mb-3">
-        {{ person.full_name }} - {{ person.age }}
-    </h1>
-</div>
+    <div class="col-8">
+        <div class="card shadow-sm border-0 mb-4 bg-white overflow-hidden">
+            <div class="row g-0">
+                
+                <div class="col-sm-4 col-md-3 p-4 bg-light d-flex align-items-center justify-content-center border-end">
+                    
+                    {% with portrait=object.media_objects.first %}
+                        {% if portrait and portrait.is_image %}
+                            <img src="{{ portrait.file.url }}" alt="Portrait von {{ object.full_name }}" 
+                                class="img-fluid rounded-circle shadow-sm object-fit-cover" 
+                                style="width: 160px; height: 160px; border: 4px solid white;">
+                        {% else %}
+                            <div class="rounded-circle shadow-sm bg-secondary bg-opacity-25 d-flex justify-content-center align-items-center text-secondary" 
+                                style="width: 160px; height: 160px; border: 4px solid white;">
+                                <i class="fs-1">
+                                    {% if object.sex == 'M' %}👨
+                                    {% elif object.sex == 'F' %}👩
+                                    {% else %}👤{% endif %}
+                                </i>
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                    
+                </div>
 
-<!-- row with portrait, details and parents card -->
-<div class="row">
-    <!-- Image -->
-    <div class="col-3 text-center">
-        {% if portrait and portrait.is_image %}
-        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=portrait.pk %}">
-            <img src="{% url 'genview:media-file' tree_id=tree_id pk=portrait.pk %}" 
-                alt="{{ portrait.title }}"
-                class="img-fluid rounded mb-3"
-                style="max-height:300px; object-fit:cover;"
-            >
-        </a>
-        {% else %}
-            <svg class="bd-placeholder-img img-fluid rounded mb-3"
-                 width="200" height="200"
-                 xmlns="http://www.w3.org/2000/svg"
-                 role="img" aria-label="Kein Bild"
-                 preserveAspectRatio="xMidYMid slice"
-                 focusable="false"><title>Kein Bild</title>
-                 <rect width="100%" height="100%" fill="#868e96"></rect>
-                 <text x="50%" y="50%" fill="#dee2e6" dy=".3em" text-anchor="middle">Kein Bild</text>
-            </svg>
-        {% endif %}
+                <div class="col-sm-8 col-md-9">
+                    <div class="card-body p-4 h-100 d-flex flex-column justify-content-center">
+                        
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h2 class="card-title fw-bold text-dark mb-1">
+                                    {{ object.full_name }}
+                                </h2>
+                                <span class="badge bg-secondary text-light shadow-sm">
+                                    ID: {{ object.gedcom_id|default:"Unbekannt" }}
+                                </span>
+                            </div>
 
-        {# Button zum Ändern / Hinzufügen des Portraits #}
-        <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}"
-           class="btn btn-primary btn-sm mt-2">
-            <i class="bi bi-camera"></i> Bild hinzufügen / ändern
-        </a>
+                            {% if can_edit %}
+                            <div class="dropdown ms-3">
+                                <button class="btn btn-outline-primary btn-sm dropdown-toggle shadow-sm px-3" type="button" id="profileActions" data-bs-toggle="dropdown" aria-expanded="false">
+                                    ⚙️ Aktionen
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1" aria-labelledby="profileActions">
+                                    <li>
+                                        <a class="dropdown-item py-2" href="{% url 'genview:individual-edit' tree_id person.pk %}">
+                                            ✏️ Person bearbeiten
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item py-2" href="{% url 'genview:media-add-for-person' tree_id person.pk %}">
+                                            📷 Portrait hinzufügen / ändern
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item py-2 text-danger" href="{% url 'genview:individual-delete' tree_id=tree_id pk=object.pk %}">
+                                            🗑️ Person löschen
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row g-3 mt-1">
+                            
+                            <div class="col-md-5">
+                                <div class="text-muted small text-uppercase fw-semibold mb-1">Geboren</div>
+                                
+                                <div class="fs-6 mb-1">
+                                    {% if object.birth_date %}
+                                        🌟 {{ object.birth_date }} 
+                                    {% elif object.birth_date_raw %}
+                                        🌟 {{ object.birth_date_raw }} 
+                                    {% else %}
+                                        <span class="fst-italic text-muted">Datum unbekannt</span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if object.birth_event and object.birth_event.place %}
+                                    <div class="small text-muted">
+                                        📍 {{ object.birth_event.place.name }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-5">
+                                <div class="text-muted small text-uppercase fw-semibold mb-1">Gestorben</div>
+                                
+                                <div class="fs-6 mb-1">
+                                    {% if object.death_date %}
+                                        ✝️ {{ object.death_date }}
+                                    {% elif object.death_date_raw %}
+                                        ✝️ {{ object.death_date_raw }}
+                                    {% elif object.is_deceased %}
+                                        ✝️ <span class="fst-italic text-muted">Datum unbekannt</span>
+                                    {% else %}
+                                        <span class="fst-italic text-muted">-</span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if object.death_event and object.death_event.place %}
+                                    <div class="small text-muted">
+                                        📍 {{ object.death_event.place.name }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-2">
+                                <div class="text-muted small text-uppercase fw-semibold mb-1">Alter</div>
+                                <div class="fs-6 fw-medium">
+                                    {% if object.age is not None %}
+                                        {{ object.age }} J.
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        <div class="card shadow-sm border-0 mb-4 bg-white overflow-hidden">
+            <div class="row g-0">
+
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs custom-tabs border-bottom" id="individualTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab">
+                            ⏳ Lebens-Timeline
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="media-tab" data-bs-toggle="tab" data-bs-target="#media" type="button" role="tab">
+                            🖼️ Galerie
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="pedigree-tab" data-bs-toggle="tab" data-bs-target="#pedigree" type="button" role="tab">
+                            🌳 Ahnentafel
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="map-tab" data-bs-toggle="tab" data-bs-target="#map-pane" type="button" role="tab">
+                            🗺️ Lebensstationen
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- tab content -->
+                <div class="tab-content tab-content-box p-4 mb-5" id="individualTabsContent">
+                    
+                    <div class="tab-pane fade show active" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                        <h4 class="mb-3">Biografie & Ereignisse</h4>
+                        {% if can_edit %}
+                        <a href="{% url 'genview:event-create-person' tree_id=tree_id %}?individual={{ person.pk }}" class="btn btn-sm btn-outline-primary shadow-sm">
+                            ✨ Ereignis hinzufügen
+                        </a>
+                        {% endif %}
+
+                        <div class="list-group list-group-flush position-relative">
+                            <div class="timeline-line position-absolute h-100 border-start border-2 border-primary ms-3 z-0"></div>
+
+                            {% for event in timeline_events %}
+                                <div class="list-group-item bg-transparent border-0 ps-5 py-3 position-relative z-1">
+                                    <span class="position-absolute top-50 start-0 translate-middle-y ms-3 p-2 bg-primary rounded-circle border border-white border-2 shadow-sm"></span>
+                                    
+                                    <div class="card shadow-sm border-0 bg-light">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="card-title fw-bold mb-0 text-dark">
+                                                    ⚡ {{ event.get_event_type_display }}
+                                                </h6>
+                                                
+                                                {% if can_edit %}
+                                                <div class="btn-group">
+                                                    <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-secondary border-0" title="Details ansehen">🔍</a>
+                                                    <a href="{% url 'genview:event-delete' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-danger border-0" title="Löschen">🗑️</a>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="text-muted small mb-2">
+                                                <span class="badge bg-secondary me-2">
+                                                    {% if event.parsed_date %}
+                                                        {{ event.parsed_date|date:"d.m.Y" }}
+                                                    {% else %}
+                                                        {{ event.raw_date|default:"Kein Datum" }}
+                                                    {% endif %}
+                                                </span>
+                                                
+                                                {% if event.place %}
+                                                    <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.id %}" class="text-decoration-none text-secondary">
+                                                        📍 {{ event.place.name }}
+                                                    </a>
+                                                {% endif %}
+                                            </div>
+
+                                            {% if event.event_type == 'MARR' and event.family %}
+                                                <div class="fst-italic text-secondary small mb-2">
+                                                    💍 Mit 
+                                                    {% if event.family.husband.pk == person.pk %}
+                                                        {{ event.family.wife.full_name }}
+                                                    {% else %}
+                                                        {{ event.family.husband.full_name }}
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+
+                                            <div class="d-flex flex-wrap gap-3 mt-3">
+                                                {% if event.media_objects.all %}
+                                                    <div class="d-flex gap-2">
+                                                        {% for media in event.media_objects.all %}
+                                                            {% if media.file %}
+                                                                <a href="{{ media.file.url }}" target="_blank" title="{{ media.title|default:'Medium ansehen' }}">
+                                                                    <img src="{{ media.file.url }}" alt="{{ media.title }}" class="rounded shadow-sm" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #ddd;">
+                                                                </a>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                                
+                                                {% if event.sources.all %}
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                            📚 {{ event.sources.count }} Quelle(n)
+                                                        </button>
+                                                        <ul class="dropdown-menu shadow">
+                                                            {% for source in event.sources.all %}
+                                                                <li>
+                                                                    <a class="dropdown-item" href="#">
+                                                                        {{ source.title }}
+                                                                    </a>
+                                                                </li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="text-center text-muted p-5 bg-light rounded mt-3">
+                                    <i class="fs-1">🕰️</i>
+                                    <p class="mt-2">Noch keine Lebensereignisse für diese Person erfasst.</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="media" role="tabpanel" aria-labelledby="media-tab">
+                        <h4 class="mb-0 text-success">Medienarchiv</h4>
+                        {% if can_edit %}
+                        <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-outline-success shadow-sm">
+                            📎 Datei hochladen
+                        </a>
+                        {% endif %}
+                        
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 mt-4 border-bottom pb-2">🖼️ Fotos & Portraits</h6>
+                        
+                        {% if photos %}
+                            <div class="row row-cols-2 row-cols-md-3 g-4 mb-5">
+                                {% for media in photos %}
+                                    <div class="col">
+                                        <div class="card h-100 shadow-sm border-0 bg-light">
+                                            <a href="{% url 'genview:media-detail' tree_id media.pk %}">
+                                                <img src="{{ media.file.url }}" class="card-img-top rounded-top" alt="{{ media.title }}" style="height: 160px; object-fit: cover;">
+                                            </a>
+                                            <div class="card-body p-3 d-flex flex-column justify-content-between">
+                                                <h6 class="card-title fw-bold text-truncate mb-3" title="{{ media.title|default:'Unbenannt' }}">
+                                                    {{ media.title|default:"(ohne Titel)" }}
+                                                </h6>
+                                                {% if can_edit %}
+                                                <div class="d-flex justify-content-between gap-2">
+                                                    <a href="{% url 'genview:media-edit' tree_id media.pk %}" class="btn btn-sm btn-outline-primary w-50">✏️</a>
+                                                    <a href="{% url 'genview:media-delete' tree_id media.pk %}" class="btn btn-sm btn-outline-danger w-50">🗑️</a>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted fst-italic small mb-5 bg-light rounded">
+                                Noch keine Fotos oder Portraits für diese Person hinterlegt.
+                            </div>
+                        {% endif %}
+
+
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">📄 Dokumente, Urkunden & Belege</h6>
+                        
+                        {% if documents %}
+                            <div class="list-group list-group-flush shadow-sm border rounded">
+                                {% for media in documents %}
+                                    <div class="list-group-item bg-white p-3 d-flex justify-content-between align-items-center hover-bg-light">
+                                        <div class="d-flex align-items-center">
+                                            <span class="fs-2 me-3 text-secondary">
+                                                {% if '.pdf' in media.file.name|lower %}📕{% else %}📄{% endif %}
+                                            </span>
+                                            <div>
+                                                <h6 class="mb-1 fw-bold text-dark">{{ media.title|default:"Unbenanntes Dokument" }}</h6>
+                                                {% if media.description %}
+                                                    <small class="text-muted d-block">{{ media.description }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-flex gap-2">
+                                            <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">Ansehen ↗</a>
+                                            {% if can_edit %}
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">⚙️</button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow">
+                                                    <li><a class="dropdown-item" href="#">✏️ Bearbeiten</a></li>
+                                                    <li><a class="dropdown-item text-danger" href="#">🗑️ Löschen</a></li>
+                                                </ul>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted fst-italic small bg-light rounded">
+                                Noch keine Dokumente (z.B. Scans von Geburtsurkunden) verknüpft.
+                            </div>
+                        {% endif %}
+
+                    </div>
+
+                    <div class="tab-pane fade" id="pedigree" role="tabpanel" aria-labelledby="pedigree-tab">
+                        <h4 class="mb-4 text-secondary">Ahnentafel</h4>
+                        
+                        <div class="table-responsive ">
+                            <table class="table table-bordered text-center align-middle shadow-sm bg-white">
+                                <thead class="table-light text-muted small text-uppercase">
+                                    <tr>
+                                        <th class="w-33">Person</th>
+                                        <th class="w-33">Eltern</th>
+                                        <th class="w-33">Großeltern</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    
+                                    <tr>
+                                        <td rowspan="4" class="bg-light fw-bold fs-5">
+                                            {{ object.full_name }}
+                                        </td>
+                                        <td rowspan="2" class="bg-opacity-10 bg-primary">
+                                            <span class="d-block text-muted small mb-1">Vater</span>
+                                            {% if pedigree.father %}
+                                                <a href="{{ pedigree.father.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.father.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">Unbekannt</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="d-block text-muted small mb-1">Großvater (väterlich)</span>
+                                            {% if pedigree.ff %}
+                                                <a href="{{ pedigree.ff.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.ff.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    
+                                    <tr>
+                                        <td>
+                                            <span class="d-block text-muted small mb-1">Großmutter (väterlich)</span>
+                                            {% if pedigree.fm %}
+                                                <a href="{{ pedigree.fm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.fm.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    
+                                    <tr>
+                                        <td rowspan="2" class="bg-opacity-10 bg-danger">
+                                            <span class="d-block text-muted small mb-1">Mutter</span>
+                                            {% if pedigree.mother %}
+                                                <a href="{{ pedigree.mother.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.mother.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">Unbekannt</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="d-block text-muted small mb-1">Großvater (mütterlich)</span>
+                                            {% if pedigree.mf %}
+                                                <a href="{{ pedigree.mf.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mf.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    
+                                    <tr>
+                                        <td>
+                                            <span class="d-block text-muted small mb-1">Großmutter (mütterlich)</span>
+                                            {% if pedigree.mm %}
+                                                <a href="{{ pedigree.mm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mm.full_name }}</a>
+                                            {% else %}
+                                                <span class="fst-italic text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                    </div>
+
+                    <div class="tab-pane fade" id="map-pane" role="tabpanel" aria-labelledby="map-tab">
+                        <h5 class="mb-3">Lebensstationen auf der Karte</h5>
+                        
+                        <div id="lifecycle-map" class="rounded border shadow-sm" style="height: 450px; width: 100%;"></div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
     </div>
-    <!-- Stammdaten -->
-    <div class="col-5">
-        <h2 class="mb-3"><small class="text-muted">{{ person.gedcom_id }}</small></h2>
-
-        {# ---------- Grunddaten ---------- #}
-        <dl class="row">
-            <dt class="col-sm-3">Geschlecht</dt>
-            <dd class="col-sm-9">{{ person.get_sex_display }}</dd>
-
-            <dt class="col-sm-3">Geburtsdatum</dt>
-            <dd class="col-sm-9">
-                {% if person.birth_date %}
-                    {{ person.birth_date|date:"d.m.Y" }}
-                {% elif person.birth_date_raw %}
-                    {{ person.birth_date_raw }}   {# nicht parsbar, Roh‑String #}
-                {% else %}
-                    <span class="text-muted">nicht angegeben</span>
-                {% endif %}
-            </dd>
-
-            <dt class="col-sm-3">Sterbedatum</dt>
-            <dd class="col-sm-9">
-                {% if person.death_date %}
-                    {{ person.death_date|date:"d.m.Y" }}
-                {% elif person.death_date_raw %}
-                    {{ person.death_date_raw }}
-                {% else %}
-                    <span class="text-muted">nicht angegeben</span>
-                {% endif %}
-            </dd>
-
-            {% if person.notes %}
-                <dt class="col-sm-3">Notizen</dt>
-                <dd class="col-sm-9">{{ person.notes|linebreaks }}</dd>
-            {% endif %}
-
-            {{ person.birth_event.place }}
-        </dl>
-    </div>
-    <!-- parents -->
     <div class="col-4">
-            {# ---------- Eltern (falls vorhanden) ---------- #}
+        {# ---------- parents ---------- #}
         <h4 class="mt-4 mb-3">👪 Eltern</h4>
-
         {% if object.parental_families.all %}
             {% for fam in object.parental_families.all %}
                 <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
-                    
                     <div class="card-header bg-light py-2">
-                        <span class="text-muted small fw-medium">Familie {{ fam.family.gedcom_id }}</span>
+                        <span class="text-muted small fw-medium">{{ fam.family }}</span>
                     </div>
-                    
                     <ul class="list-group list-group-flush">
                         
                         <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
@@ -163,9 +516,11 @@
                             </div>
                             
                             {% if not fam.family.husband %}
+                                {% if can_edit %}
                                 <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ fam.family.pk }}&role=husband" class="btn btn-sm btn-outline-primary">
                                     + Vater hinzufügen
                                 </a>
+                                {% endif %}
                             {% endif %}
                         </li>
                         
@@ -185,21 +540,27 @@
                             </div>
                             
                             {% if not fam.family.wife %}
+                                {% if can_edit %}
                                 <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ fam.family.pk }}&role=wife" class="btn btn-sm btn-outline-danger">
                                     + Mutter hinzufügen
                                 </a>
+                                {% endif %}
                             {% endif %}
                         </li>
                         
                     </ul>
+                    <div class="card-footer bg-white py-3 d-flex gap-2">
+                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.family.pk %}" class="btn btn-sm btn-outline-secondary w-100">
+                            👪 Zur Familie
+                        </a>
+                    </div>
                 </div>
             {% endfor %}
-            
         {% else %}
-
             <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
                 <div class="card-body p-4 text-center">
                     <p class="text-muted fst-italic mb-3">Keine Eltern-Informationen gefunden.</p>
+                    {% if can_edit %}
                     <div class="d-flex justify-content-center gap-3">
                         <a href="{% url 'genview:individual-add' tree_id=tree_id %}?father_of={{ object.pk }}" class="btn btn-outline-primary shadow-sm">
                             👨 Vater anlegen
@@ -208,10 +569,12 @@
                             👩 Mutter anlegen
                         </a>
                     </div>
+                    {% endif %}
                 </div>
             </div>
-            
         {% endif %}
+
+        {# ---------- siblings ---------- #}
         <h4 class="mt-5 mb-3">👦👧 Geschwister</h4>
 
         <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
@@ -248,307 +611,103 @@
             </div>
 
         </div>
-    </div>
-</div>
 
-<!-- row with events, media, tree and family navigation (spouce and children) -->
-<div class="row mt-3">
-    <!-- left column for detail tabs -->
-    <div class="col-8">
-        <!-- internal navigation -->
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Timeline</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="pictures-tab" data-bs-toggle="tab" data-bs-target="#pictures" type="button" role="tab" aria-controls="pictures" aria-selected="false">Bilder</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="contact-tab" data-bs-toggle="tab" data-bs-target="#contact" type="button" role="tab" aria-controls="contact" aria-selected="false">Contact</button>
-            </li>
-        </ul>
-
-        <!-- Content -->
-        <div class="tab-content mt-3" id="myTabContent">
-            <!-- events tab content -->
-            <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
-                {# ---------- Ereignisse (BIRT, DEAT, …) ---------- #}
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                    <h3 class="mb-0">Lebensereignisse</h3>
-                    <a href="{% url 'genview:event-create-person' tree_id=tree_id %}?individual={{ person.pk }}" class="btn btn-sm btn-primary">
-                        + Ereignis für {{ person.given_name }} hinzufügen
-                    </a>
-                </div>
-                <ul class="list-group">
-                    {% for event in timeline_events %}
-                        <li class="list-group-item">
-                            <strong>{{ event.get_event_type_display }}:</strong> 
-
-                            {% if event.parsed_date %}
-                                {{ event.parsed_date|date:"j N Y" }}
-                                <span style="color: #999; font-size: 0.85em;">({{ event.raw_date }})</span>
-                            {% elif event.raw_date %}
-                                {{ event.raw_date }}
-                            {% endif %}
-
-                            {% if event.place %}
-                                in <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.id %}" class="text-decoration-none">📍 {{ event.place.name }}</a>
-                            {% endif %}
-
-                            {% if event.sources.all %}
-                                <div class="event-sources mt-2 p-2 bg-light rounded" style="font-size: 0.85em; border-left: 3px solid #6c757d;">
-                                    <strong class="text-muted">📚 Quellen:</strong>
-                                    <ul class="mb-0 ps-3">
-                                        {% for source in event.sources.all %}
-                                            <li>
-                                                <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="text-decoration-none text-secondary">
-                                                    {{ source.title }}
-                                                    {% if source.author %} ({{ source.author }}){% endif %}
-                                                </a>
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            {% endif %}
-
-                            {% if event.event_type == 'MARR' and event.family %}
-                                <span style="color: #555; font-style: italic;">
-                                    (Spouse: 
-                                    {% if event.family.husband.pk == person.pk %}
-                                        {{ event.family.wife.given_name }} {{ event.family.wife.surname }}
-                                    {% else %}
-                                        {{ event.family.husband.given_name }} {{ event.family.husband.surname }}
-                                    {% endif %})
-                                </span>
-                            {% endif %}
-                                <a href="{% url 'genview:event-edit' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-primary">
-                                    ✎
-                                </a>
-
-{% if event.media_objects.all %}
-    <div class="mt-2">
-        {% for media in event.media_objects.all %}
-            {% if media.file %}
-                <a href="{{ media.get_absolute_url }}" title="{{ media.title|default:'Medium ansehen' }}">
-                    <img src="{{ media.file.url }}" 
-                         alt="{{ media.title }}" 
-                         class="img-thumbnail me-1 shadow-sm transition-hover" 
-                         style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">
-                </a>
-            {% endif %}
-        {% endfor %}
-    </div>
-{% endif %}
-                                
-                        </li>
-                    {% empty %}
-                        <li class="list-group-item text-muted">No events recorded for this person.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <!-- pictures tab content -->
-            <div class="tab-pane fade" id="pictures" role="tabpanel" aria-labelledby="pictures-tab">
-                {# ----------- Bild‑Galerie für die Person ----------- #}
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                    <h3 class="mb-0">Weitere Bilder</h3>
-                    <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-primary">
-                        + Bilder hinzufügen
-                    </a>
-                </div>
-
-                {% if gallery_images %}
-                    <div class="row g-3">
-                        {% for media in gallery_images %}
-                            <div class="col-md-3">
-                                <div class="card h-100">
-                                    {% if media.is_image %}
-                                        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}">
-                                            <img src="{{ media.file.url }}" class="card-img-top img-fluid"
-                                                alt="{{ media.title|default:'Bild' }}" style="height:180px; object-fit:cover;">
-                                        </a>
-                                    {% else %}
-                                        <div class="card-body text-center">
-                                            <i class="bi bi-file-earmark-text" style="font-size:3rem;"></i>
-                                        </div>
-                                    {% endif %}
-
-                                    <div class="card-body p-2">
-                                        <h6 class="card-title text-truncate mb-1">{{ media.title|default:"(ohne Titel)" }}</h6>
-
-                                        <div class="d-flex justify-content-between">
-                                            <a href="{% url 'genview:media-edit' tree_id media.pk %}"
-                                            class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-                                            <a href="{% url 'genview:media-delete' tree_id media.pk person.pk %}"
-                                            class="btn btn-sm btn-outline-danger"
-                                            onclick="return confirm('Bild wirklich löschen?');">
-                                                <i class="bi bi-trash"></i>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted">Noch keine zusätzlichen Bilder vorhanden.</p>
-                {% endif %}
-            </div>
-            <!-- static tree content -->
-            <div class="tab-pane fade" id="contact" role="tabpanel" aria-labelledby="contact-tab">
-                <table class="table-custom">
-                    <tbody>
-                        <tr>
-                            <th>Home Person</th>
-                            <th>Parents</th>
-                            <th>Grand Parents</th>
-                        </tr>
-                        <tr>
-                            <td rowspan="4" id="homePerson" class="person line-bottom">Home Person</td>
-                            <td rowspan="2" id="Father" class="person line-bottom">Father</td>
-                            <td id="Grandfather" class="person grand line-bottom">Grandfather</td>
-                        </tr>
-                        <tr>
-                            <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
-                                Date here</td>
-                        </tr>
-                        <tr>
-                            <td rowspan="2" class="bio line-left-down"><progress value="70" max="100">70 %</progress>
-                            Date here
-                            </td>
-                            <td class="person line-bottom grand line-left-up">Grandmother</td>
-                        </tr>
-                        <tr>
-                            <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                            Date here
-                            </td>
-                    </tr>
-                    <tr>
-                        <td rowspan="4" class="bio"><progress value="78" max="100">78 %</progress>
-                            1940 - 2018
-                        </td>
-                        <td rowspan="2" class="person line-bottom line-left-up">Mother</td>
-                        <td class="person grand line-bottom">Grandfther</td>
-                    </tr>
-                    <tr>
-                        <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
-                            Date Here
-                        </td>
-                    </tr>
-                        <tr>
-                            <td rowspan="2" class="bio"><progress value="70" max="100">70 %</progress>
-                                Date Here
-                            </td>
-                            <td class="person grand line-bottom line-left-up">Grandmother</td>
-                        </tr>
-                        <tr>
-                            <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                                Date here
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    <!-- right columns for family navigation-->
-    <div class="col-4">
-
+        {# ---------- spouce and children ---------- #}
         <h4 class="mt-5 mb-3">💍 Familien & Kinder</h4>
 
-{% for family in object.spousal_families %}
-    <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
-        
-        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
-            <h5 class="mb-0 fw-bold">
-                {% if family.husband == object and family.wife %}
-                    Partnerin: <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
-                {% elif family.wife == object and family.husband %}
-                    Partner: <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
-                {% else %}
-                    <span class="text-muted fst-italic">Unbekannter Partner</span>
-                {% endif %}
-            </h5>
-            
-            {% if family.marriage_date_parsed or family.marriage_date_raw %}
-                <span class="badge bg-secondary text-light">
-                    ⚭ {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
-                </span>
-            {% endif %}
-        </div>
-
-        <div class="card-body p-0">
-            {% if family.children.all %}
-                <ul class="list-group list-group-flush">
-                    {% for link in family.children.all %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                            <div>
-                                <span class="me-2">
-                                    {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
-                                </span>
-                                <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                    {{ link.child.full_name }}
-                                </a>
-                            </div>
-                            
-                            {% if link.child.birth_date_raw %}
-                                <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <div class="p-4 text-center text-muted fst-italic">
-                    Noch keine Kinder für diese Partnerschaft erfasst.
+        {% for family in object.spousal_families %}
+            <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+                
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0 fw-bold">
+                        {% if family.husband == object and family.wife %}
+                            Partnerin: <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
+                        {% elif family.wife == object and family.husband %}
+                            Partner: <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
+                        {% else %}
+                            <span class="text-muted fst-italic">Unbekannter Partner</span>
+                        {% endif %}
+                    </h5>
+                    
+                    {% if family.marriage_date_parsed or family.marriage_date_raw %}
+                        <span class="badge bg-secondary text-light">
+                            ⚭ {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
+                        </span>
+                    {% endif %}
                 </div>
-            {% endif %}
-        </div>
 
-        <div class="card-footer bg-white text-center py-3">
-            <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-100">
-                👶 Kind hinzufügen
-                {% if family.husband == object and family.wife %}
-                    (mit {{ family.wife.given_name }})
-                {% elif family.wife == object and family.husband %}
-                    (mit {{ family.husband.given_name }})
+                <div class="card-body p-0">
+                    {% if family.children.all %}
+                        <ul class="list-group list-group-flush">
+                            {% for link in family.children.all %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                                    <div>
+                                        <span class="me-2">
+                                            {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
+                                        </span>
+                                        <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                            {{ link.child.full_name }}
+                                        </a>
+                                    </div>
+                                    
+                                    {% if link.child.birth_date_raw %}
+                                        <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="p-4 text-center text-muted fst-italic">
+                            Noch keine Kinder für diese Partnerschaft erfasst.
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if can_edit %}
+                <div class="card-footer bg-white py-3 d-flex gap-2">
+    
+                    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-50">
+                        👶 Kind hinzufügen
+                        {% if family.husband == object and family.wife %}
+                            (mit {{ family.wife.given_name }})
+                        {% elif family.wife == object and family.husband %}
+                            (mit {{ family.husband.given_name }})
+                        {% endif %}
+                    </a>
+                    <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-sm btn-outline-secondary w-50">
+                        👪 Zur Familie
+                    </a>
+                    
+                </div>
                 {% endif %}
+            </div>
+
+        {% empty %}
+            <div class="alert alert-info text-center shadow-sm">
+                Diese Person hat aktuell keine verknüpften Partner oder Kinder im Stammbaum.
+            </div>
+        {% endfor %}
+
+        {% if can_edit %}
+        <div class="d-flex justify-content-center gap-3 mt-4">
+            <a href="{% url 'genview:individual-add' tree_id=tree_id %}?partner_of={{ object.pk }}" class="btn btn-outline-danger shadow-sm">
+                ❤️ Neuen Partner anlegen
+            </a>
+            <a href="{% url 'genview:individual-add' tree_id=tree_id %}?single_parent={{ object.pk }}" class="btn btn-outline-secondary shadow-sm">
+                👶 Kind (Alleinerziehend) hinzufügen
             </a>
         </div>
-    </div>
+        {% endif %}
 
-{% empty %}
-    <div class="alert alert-info text-center shadow-sm">
-        Diese Person hat aktuell keine verknüpften Partner oder Kinder im Stammbaum.
-    </div>
-{% endfor %}
-
-<div class="d-flex justify-content-center gap-3 mt-4">
-    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?partner_of={{ object.pk }}" class="btn btn-outline-danger shadow-sm">
-        ❤️ Neuen Partner anlegen
-    </a>
-    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?single_parent={{ object.pk }}" class="btn btn-outline-secondary shadow-sm">
-        👶 Kind (Alleinerziehend) hinzufügen
-    </a>
-</div>
-
-<style>
-    .hover-bg-light { transition: background-color 0.2s; }
-    .hover-bg-light:hover { background-color: #f8f9fa; }
-</style>
-    </div>
-</div>
-
-<!-- row with buttons -->
-<div class="row">
-    <div class="col">
-        <a href="{% url 'genview:individual-edit' tree_id person.pk %}" class="btn btn-primary">Bearbeiten</a>
-        <a href="{% url 'genview:individual-delete' tree_id person.pk %}" class="btn btn-danger">Löschen</a>
-        <a href="{% url 'genview:individual-list' tree_id %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+        <style>
+            .hover-bg-light { transition: background-color 0.2s; }
+            .hover-bg-light:hover { background-color: #f8f9fa; }
+        </style>
     </div>
 </div>
 
 <!-- row for interactive tree view -->
+ {% if user.is_authenticated %}
 <div class="row">
     <div class="col">
         <h3>Interactive Family Tree</h3>
@@ -556,50 +715,182 @@
     </div>
 </div>
 
-    <!-- js for interactive tree  -->
-    <script>
-        const treeData = {{ tree_json|safe }};
+<!-- js for interactive tree  -->
+<script>
+    const treeData = {{ tree_json|safe }};
 
-        dTree.init(treeData, {
-            target: "#graph",
-            debug: false,
-            height: 500,
-            width: 800,
-            // We can adjust the node size here to give the text more room to breathe
-            nodeWidth: 150, 
-            nodeHeight: 75,
-            callbacks: {
-                // This tells dTree to draw our custom HTML instead of basic text
-                nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
-                    
-                    // Check if we have dates to display
-                    let datesHtml = '';
-                    if (extra && extra.dates) {
-                        datesHtml = `<div style="font-size: 11px; color: #666; margin-top: 4px;">${extra.dates}</div>`;
-                    }
+    dTree.init(treeData, {
+        target: "#graph",
+        debug: false,
+        height: 500,
+        width: 800,
+        // We can adjust the node size here to give the text more room to breathe
+        nodeWidth: 150, 
+        nodeHeight: 75,
+        callbacks: {
+            // This tells dTree to draw our custom HTML instead of basic text
+            nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
+                
+                // Check if we have dates to display
+                let datesHtml = '';
+                if (extra && extra.dates) {
+                    datesHtml = `<div style="font-size: 11px; color: #666; margin-top: 4px;">${extra.dates}</div>`;
+                }
 
-                    // NEW: Check for marriage info
-                    let marriageHtml = '';
-                    if (extra && extra.marriage_info) {
-                        // Added an italic style and distinct color to separate it from birth/death dates
-                        marriageHtml = `<div style="font-size: 11px; color: #d97706; margin-top: 2px; font-style: italic;">
-                                            ${extra.marriage_info}
-                                        </div>`;
-                    }
+                // NEW: Check for marriage info
+                let marriageHtml = '';
+                if (extra && extra.marriage_info) {
+                    // Added an italic style and distinct color to separate it from birth/death dates
+                    marriageHtml = `<div style="font-size: 11px; color: #d97706; margin-top: 2px; font-style: italic;">
+                                        ${extra.marriage_info}
+                                    </div>`;
+                }
 
-                    // Return standard HTML. dTree automatically converts this into an SVG foreignObject!
-                    return `<div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 5px; box-sizing: border-box; cursor: pointer;">
-                                <div style="font-weight: bold; font-size: 14px; text-align: center; line-height: 1.2;">${name}</div>
-                                ${datesHtml}
-                                ${marriageHtml}
-                            </div>`;
-                },
-                nodeClick: function(name, extra) {
-                    if (extra && extra.id) {
-                        window.location.href = extra.url;
-                    }
+                // Return standard HTML. dTree automatically converts this into an SVG foreignObject!
+                return `<div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 5px; box-sizing: border-box; cursor: pointer;">
+                            <div style="font-weight: bold; font-size: 14px; text-align: center; line-height: 1.2;">${name}</div>
+                            ${datesHtml}
+                            ${marriageHtml}
+                        </div>`;
+            },
+            nodeClick: function(name, extra) {
+                if (extra && extra.id) {
+                    window.location.href = extra.url;
                 }
             }
+        }
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // 1. Welcher Tab steht in der URL?
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTabId = urlParams.get('tab');
+
+        // 2. Wenn ein Tab in der URL steht, öffne ihn!
+        if (activeTabId) {
+            const tabButton = document.querySelector(`#${activeTabId}-tab`);
+            if (tabButton) {
+                // Entferne zuerst die "active" Klassen vom Standard-Reiter (Profil)
+                document.querySelector('.nav-link.active').classList.remove('active');
+                document.querySelector('.tab-pane.show.active').classList.remove('show', 'active');
+                
+                // Setze den neuen Reiter auf aktiv
+                const tab = new bootstrap.Tab(tabButton);
+                tab.show();
+            }
+        }
+
+        // 3. UX-Magie: Wenn der Nutzer klickt, die URL live anpassen!
+        const allTabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        allTabButtons.forEach(function(button) {
+            button.addEventListener('shown.bs.tab', function(event) {
+                // Holt den Namen des geklickten Tabs (z.B. aus 'pedigree-tab' wird 'pedigree')
+                const newTabId = event.target.id.replace('-tab', '');
+                
+                // URL im Browser anpassen, OHNE die Seite neu zu laden
+                const newUrl = window.location.pathname + "?tab=" + newTabId;
+                window.history.replaceState({}, "", newUrl);
+            });
         });
-    </script>
+        
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var map = null;
+
+        // Leaflet hat ein bekanntes Problem: Wenn eine Karte in einem versteckten Bootstrap-Tab
+        // initialisiert wird, kennt sie ihre finale Größe nicht und wird grau oder fehlerhaft dargestellt.
+        // Die Lösung: Wir initialisieren die Karte erst EXAKT in dem Moment, in dem der Tab geöffnet wird!
+        var mapTabButton = document.getElementById('map-tab');
+        
+        if (mapTabButton) {
+            mapTabButton.addEventListener('shown.bs.tab', function () {
+                
+                // Falls die Karte schon existiert, bauen wir sie nicht neu (verhindert Fehler)
+                if (map !== null) {
+                    map.invalidateSize(); // Erzwingt das korrekte Neuberechnen der Kartengröße
+                    return;
+                }
+
+                // --- 1. Daten aus Django auslesen ---
+                var stations = [];
+
+                // Geburtsdaten einbetten (nur wenn Koordinaten existieren)
+                {% if object.birth_event and object.birth_event.place and object.birth_event.place.latitude and object.birth_event.place.longitude %}
+                    stations.push({
+                        lat: parseFloat("{{ object.birth_event.place.latitude }}"),
+                        lng: parseFloat("{{ object.birth_event.place.longitude }}"),
+                        title: "🌟 Geburt",
+                        desc: "<b>{{ object.birth_date|default:object.birth_date_raw }}</b><br>{{ object.birth_event.place.name }}"
+                    });
+                {% endif %}
+
+                // Sterbedaten einbetten (nur wenn Koordinaten existieren)
+                {% if object.death_event and object.death_event.place and object.death_event.place.latitude and object.death_event.place.longitude %}
+                    stations.push({
+                        lat: parseFloat("{{ object.death_event.place.latitude }}"),
+                        lng: parseFloat("{{ object.death_event.place.longitude }}"),
+                        title: "✝️ Sterbeort",
+                        desc: "<b>{{ object.death_date|default:object.death_date_raw }}</b><br>{{ object.death_event.place.name }}"
+                    });
+                {% endif %}
+
+                // Wenn gar keine Koordinaten da sind, zeigen wir eine Standard-Weltkarte an und brechen ab
+                if (stations.length === 0) {
+                    map = L.map('lifecycle-map').setView([20, 0], 2);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap'
+                    }).addTo(map);
+                    
+                    // Kleiner Hinweis-Text im Kartenfeld
+                    document.getElementById('lifecycle-map').innerHTML = `
+                        <div class="d-flex h-100 align-items-center justify-content-center text-muted bg-light">
+                            <span>📍 Für diese Person sind noch keine Ortskoordinaten hinterlegt.</span>
+                        </div>`;
+                    return;
+                }
+
+                // --- 2. Karte erstellen und zentrieren ---
+                // Wir starten beim ersten gefundenen Punkt
+                map = L.map('lifecycle-map').setView([stations[0].lat, stations[0].lng], 6);
+
+                // OpenStreetMap Kacheln laden
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap-Mitwirkende'
+                }).addTo(map);
+
+                // --- 3. Pins (Marker) setzen und Lebensweg zeichnen ---
+                var pathCoords = [];
+
+                stations.forEach(function(station) {
+                    // Koordinate für die Linie merken
+                    pathCoords.push([station.lat, station.lng]);
+
+                    // Marker setzen und ein schönes Info-Fenster (Popup) verknüpfen
+                    L.marker([station.lat, station.lng]).addTo(map)
+                        .bindPopup(`<h5>\${station.title}</h5><p>\${station.desc}</p>`);
+                });
+
+                // Wenn es mehr als eine Station gibt (z.B. Geburt UND Tod), zeichnen wir den Weg dazwischen
+                if (pathCoords.length > 1) {
+                    var polyline = L.polyline(pathCoords, {
+                        color: '#0d6efd',       // Schön passendes Bootstrap-Blau
+                        weight: 3,
+                        dashArray: '5, 10',     // Macht die Linie gestrichelt (wirkt historischer)
+                        opacity: 0.7
+                    }).addTo(map);
+
+                    // Karte automatisch so zoomen, dass ALLE Pins perfekt ins Bild passen!
+                    var bounds = L.latLngBounds(pathCoords);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            });
+        }
+    });
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+{% endif %}
 {% endblock %}

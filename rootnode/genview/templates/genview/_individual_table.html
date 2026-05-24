@@ -6,24 +6,27 @@ Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
     {% for person in object_list %}
     <tr>
         <td>{{ forloop.counter }}</td>
-        <td><a href="{{ person.get_absolute_url }}">{{ person.full_name }}</a></td>
+        <td>
+            {% if apply_privacy and person.is_confidential %}
+                <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+            {% else %}
+                <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
+            {% endif %}
+        </td>
+        <td>
+            {% if apply_privacy and person.is_confidential %}
+                <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+            {% else %}
+                <a href="{{ person.get_absolute_url }}">{{ person.given_name }}</a>
+            {% endif %}
+        </td>
         <td>{{ person.get_sex_display }}</td>
         <td>
             {% if person.age %}
                 {{ person.age }}
             {% endif %}
         </td>
-        <!-- <td>{{ person.birth_date|date:"Y-M-d" }}</td> -->
-        <!-- 
-        {# ---- Geburtsdatum ermitteln (Event BIRT) ---- #}
-        <td>
-            {% with birth=person.birth_events.0 %}
-                <span class="badge bg-primary">
-                    {{ birth|display_event_date }}
-                </span>
-            {% endwith %}
-        </td>
-        -->
+
         {# ---- Geburtsdatum ---- #}
         <td>
             {% if person.birth_date %}
@@ -48,12 +51,14 @@ Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
                 <span class="text-muted">‑</span>
             {% endif %}
         </td>
+        {% if can_edit %}
         <td>
             <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
                class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
             <a href="{% url 'genview:individual-delete' tree_id person.pk %}"
                class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
         </td>
+        {% endif %}
     </tr>
     {% empty %}
     <tr><td colspan="5" class="text-center">Keine Personen gefunden.</td></tr>

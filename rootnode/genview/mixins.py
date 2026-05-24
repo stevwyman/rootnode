@@ -1,42 +1,75 @@
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 
-from .models import TreeMembership
+from .models import TreeMembership, Tree
 
 
 class TreeAccessMixin(UserPassesTestMixin):
     """
-    Ensures the user has at least VIEWER access to the tree in the URL.
-    Also automatically injects the `tree_id` into the template context.
+    Prüft, ob der Nutzer Leserechte für den Baum hat.
+    Setzt 'can_edit' für das Frontend-Template.
     """
+    # Eine leere Variable, um die Mitgliedschaft für diesen Request zwischenzuspeichern
+    membership = None
 
     def test_func(self):
-        # 1. Grab the tree_id from the URL
         tree_id = self.kwargs.get("tree_id")
+        self.tree_obj = get_object_or_404(Tree, pk=tree_id)
 
-        # 2. Return True if a membership exists, False otherwise (triggers a 403 Forbidden)
-        return TreeMembership.objects.filter(
-            user=self.request.user, gedcom_tree_id=tree_id
-        ).exists()
+        # 1. SCHRITT: Ist der Benutzer überhaupt eingeloggt?
+        if self.request.user.is_authenticated:
+            # Wenn ja, prüfen wir, ob er eine explizite Rolle/Mitgliedschaft hat
+            try:
+                self.membership = TreeMembership.objects.get(
+                    user=self.request.user, 
+                    gedcom_tree_id=tree_id
+                )
+                return True # Eingeloggt + Mitglied -> Zugriff erlaubt!
+            except TreeMembership.DoesNotExist:
+                # Eingeloggt, aber kein Mitglied -> Wir prüfen im nächsten Schritt, ob der Baum öffentlich ist
+                pass 
 
+        # 2. SCHRITT: Wenn der User nicht eingeloggt ist ODER kein Mitglied ist:
+        # Zugriff wird NUR gewährt, wenn der Baum explizit als öffentlich markiert wurde!
+        return self.tree_obj.is_public
+    
     def get_context_data(self, **kwargs):
-        # Automatically add `tree_id` to the context for EVERY view that uses this mixin!
         context = super().get_context_data(**kwargs)
-        context["tree_id"] = self.kwargs.get("tree_id")
+        
+        context['tree_id'] = self.tree_obj.pk
+        context['can_edit'] = False
+        
+        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe)
+        context['apply_privacy'] = True 
+
+        # Wenn der Nutzer eine Mitgliedschaft hat, prüfen wir die Rolle
+        if getattr(self, 'membership', None):
+            if self.membership.role in ['VIEWER', 'EDITOR', 'ADMIN']:
+                # Voller Durchblick: Datenschutz aushebeln!
+                context['apply_privacy'] = False
+            
+            if self.membership.role in ['EDITOR', 'ADMIN']:
+                context['can_edit'] = True
+                
         return context
 
 
 class TreeEditAccessMixin(TreeAccessMixin):
     """
-    Ensures the user has EDITOR or ADMIN access to modify data.
-    Inherits from TreeAccessMixin to keep the context injection.
+    Sorgt dafür, dass man zum Erstellen/Bearbeiten/Löschen zwingend 
+    eingeloggt sein muss UND eine passende Rolle (EDITOR/ADMIN) benötigt.
     """
-
     def test_func(self):
-        tree_id = self.kwargs.get("tree_id")
-        return TreeMembership.objects.filter(
-            user=self.request.user, gedcom_tree_id=tree_id, role__in=["EDITOR", "ADMIN"]
-        ).exists()
+        # Ruft die test_func von oben auf
+        has_access = super().test_func()
+        
+        # Wenn der Baum zwar öffentlich ist (has_access=True), der User aber nicht 
+        # eingeloggt ist (keine membership), wird der Zugriff hier blockiert!
+        if has_access and self.membership and self.membership.role in ['EDITOR', 'ADMIN']:
+            return True
+            
+        return False # Blockiert anonyme User und reine VIEWER beim Editieren knallhart
 
 
 class SortableListViewMixin:

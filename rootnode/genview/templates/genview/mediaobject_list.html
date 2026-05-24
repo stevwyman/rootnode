@@ -5,11 +5,12 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Medien-Galerie</h1>
-        
+        <h1>📷 Medien-Galerie</h1>
+        {% if can_edit %}
         <a href="{% url 'genview:media-add' tree_id=tree_id %}" class="btn btn-primary">
             + Neues Medium hochladen
         </a>
+        {% endif %}
     </div>
 
     <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
@@ -55,12 +56,15 @@
                         {% if not item.is_image and item.file %}
                             <a href="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Öffnen</a>
                         {% else %}
-                            <div></div> {% endif %}
+                            <div></div> 
+                        {% endif %}
 
+                        {% if can_edit %}
                         <div class="btn-group">
                             <a href="{% url 'genview:media-edit' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-secondary">✎</a>
                             <a href="{% url 'genview:media-delete' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-danger">🗑</a>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

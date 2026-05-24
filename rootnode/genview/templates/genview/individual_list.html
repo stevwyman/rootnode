@@ -6,9 +6,11 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-4">👤 Alle Personen</h1>
+        {% if can_edit %}
         <a href="{% url 'genview:individual-add' tree_id=tree_id %}" class="btn btn-primary">
             + Neue Person anlegen
         </a>
+        {% endif %}
     </div>
 
     <!-- filter and search -->
@@ -62,6 +64,7 @@
     {# -------------------------------------------------------------- #}
     {#  Suchformular (AJAX‑Methode)                                   #}
     {# -------------------------------------------------------------- #}
+    <!-- 
     <form id="search-form" class="row g-3 mb-4">
         <div class="col-md-9">
             <input type="text" name="q" id="search-input"
@@ -72,10 +75,13 @@
             <button type="submit" class="btn btn-primary w-100">Suchen</button>
         </div>
     </form>
+    
 
     {% if search_query %}
         <p class="text-muted">Ergebnisse für <strong>{{ search_query }}</strong> ({{ page_obj.paginator.count }} Treffer)</p>
     {% endif %}
+    -->
+    
 
     <div class="card shadow-sm">
         <div class="card-body p-0">
@@ -84,74 +90,136 @@
                     <thead class="table-primary">
                         <tr>
                             <th>#</th>
-                            <th>Name</th>
-                            <th><a href="?sort=sex&dir={% if current_sort == 'sex' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark d-block">
-                    Geschlecht
-                    {% if current_sort == 'sex' %}
-                        {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
-                    {% endif %}
-                </a></th>
+                            <th>
+                                <a href="?sort=surname&dir={% if current_sort == 'surname' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
+                                Nachname
+                                {% if current_sort == 'surname' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=given_name&dir={% if current_sort == 'given_name' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
+                                Vorname
+                                {% if current_sort == 'given_name' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=sex&dir={% if current_sort == 'sex' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
+                                Geschlecht
+                                {% if current_sort == 'sex' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
                             <th>Alter</th>
-                            <th>Geburtsdatum</th>
+                            <th>
+                                <a href="?sort=annotated_birth_date&dir={% if current_sort == 'annotated_birth_date' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
+                                Geburtsdatum
+                                {% if current_sort == 'annotated_birth_date' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
                             <th>Sterbedatum</th>
+                            {% if can_edit %}
                             <th>Aktionen</th>
+                            {% endif %}
                         </tr>
                     </thead>
-                    {% include "genview/_individual_table.html" with object_list=people %}
+                    <tbody>
+                        {% for person in object_list %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                {% if apply_privacy and person.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                                {% else %}
+                                    <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if apply_privacy and person.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                                {% else %}
+                                    <a href="{{ person.get_absolute_url }}">{{ person.given_name }}</a>
+                                {% endif %}
+                            </td>
+                            <td>{{ person.get_sex_display }}</td>
+                            <td>
+                                {% if person.age %}
+                                    {{ person.age }}
+                                {% endif %}
+                            </td>
+
+                            {# ---- Geburtsdatum ---- #}
+                            <td>
+                                {% if person.birth_date %}
+                                    <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
+                                {% elif person.birth_date_raw %}
+                                    <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            {# ---- Sterbedatum (optional) ---- #}
+                            <td>
+                                {% if person.is_deceased %}
+                                    {% if person.death_date %}
+                                        <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
+                                    {% elif person.death_date_raw %}
+                                        <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
+                                    {% else %}
+                                        <span class="text-muted">‑</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">‑</span>
+                                {% endif %}
+                            </td>
+                            {% if can_edit %}
+                            <td>
+                                <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
+                                class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
+                                <a href="{% url 'genview:individual-delete' tree_id person.pk %}"
+                                class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center">Keine Personen gefunden.</td></tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
-    <div id="pagination-container">
-        {% include "genview/_individual_pager.html" %}
-    </div>
+    {% if is_paginated %}
+        <nav class="mt-4" aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&sex={{ current_filter_sex }}"">Zurück</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
+                {% endif %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&sex={{ current_filter_sex }}">Weiter</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('search-form');
-    const tableBody = document.querySelector('#people-table tbody');
-    const paginationDiv = document.getElementById('pagination-container');
-    const input = document.getElementById('search-input');
-
-    // ----------- Hilfsfunktion: AJAX‑Request ----------
-    function fetchPage(url) {
-        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
-            .then(r => r.json())
-            .then(data => {
-                tableBody.innerHTML = data.table;      // neue Zeilen
-                paginationDiv.innerHTML = data.pager;   // neue Pagination‑Leiste
-                bindPaginationLinks();                 // neu gebundene Links wieder aktivieren
-            })
-            .catch(err => console.error('Ajax error:', err));
-    }
-
-    // ----------- Formular-Submit (Suche) ----------
-    form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const query = encodeURIComponent(input.value.trim());
-        const url = "{% url 'genview:individual-search-ajax' tree_id=tree_id %}?q=" + query;
-        fetchPage(url);
-    });
-
-    // ----------- Pagination-Links (nach AJAX) ----------
-    function bindPaginationLinks() {
-        // Wir fangen die Klicks auf die neuen <a>-Links ab
-        const links = paginationDiv.querySelectorAll('a.page-link');
-        links.forEach(link => {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-                const href = this.getAttribute('href');
-                // Da href bereits den `?q=`‑Parameter enthält, können wir ihn direkt nutzen
-                const url = "{% url 'genview:individual-search-ajax' tree_id=tree_id %}" + href;
-                fetchPage(url);
-            });
-        });
-    }
-
-    // Beim ersten Laden die Links binden (falls bereits Pagination vorhanden ist)
-    bindPaginationLinks();
-});
-</script>
 {% endblock %}
 

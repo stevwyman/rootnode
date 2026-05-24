@@ -91,21 +91,67 @@
                         {% endif %}
                     </li>
 
+                    {# -------- NEU: Verknüpfte Medien/Bilder -------- #}
+                    <li class="list-group-item px-4 py-3">
+                        <div class="text-muted small mb-3">Verknüpfte Medien & Dokumente</div>
+                        
+                        {% if object.media_objects.all %}
+                            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+                                {% for media in object.media_objects.all %}
+                                    <div class="col">
+                                        <div class="card h-100 shadow-sm border-secondary border-opacity-25">
+                                            
+                                            {% if media.is_image %}
+                                                <div class="ratio ratio-4x3 bg-dark d-flex align-items-center justify-content-center overflow-hidden rounded-top">
+                                                    <img src="{{ media.file.url }}" class="card-img-top object-fit-cover" alt="{{ media.title }}">
+                                                </div>
+                                            {% else %}
+                                                <div class="ratio ratio-4x3 bg-light d-flex align-items-center justify-content-center border-bottom">
+                                                    <span class="fs-1 text-secondary">📄</span>
+                                                </div>
+                                            {% endif %}
+                                            
+                                            <div class="card-body p-2 d-flex flex-column justify-content-between">
+                                                <div>
+                                                    <h6 class="card-title fw-bold text-truncate mb-1" title="{{ media.title|default:'Unbenanntes Medium' }}">
+                                                        {{ media.title|default:"Unbenanntes Medium" }}
+                                                    </h6>
+                                                    {% if media.description %}
+                                                        <p class="card-text text-muted small text-truncate-2 mb-2">
+                                                            {{ media.description }}
+                                                        </p>
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary w-100 mt-2">
+                                                    Ansehen ↗
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="text-muted fst-italic small">Keine Medien mit diesem Ereignis verknüpft.</span>
+                        {% endif %}
+                    </li>
+
                 </ul>
 
                 <div class="card-footer bg-white p-3 d-flex justify-content-between">
                     <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
                         ↩️ Zurück
                     </button>
-
+                    {% if can_edit %}
                     <div class="d-flex gap-2">
-                        <a href="#" class="btn btn-primary shadow-sm">
+                        <a href="{% url 'genview:event-edit' tree_id=tree_id pk=object.pk %}" class="btn btn-primary shadow-sm">
                             ✏️ Bearbeiten
                         </a>
                         <a href="{% url 'genview:event-delete' tree_id=tree_id pk=object.pk %}" class="btn btn-danger shadow-sm">
                             🗑️ Löschen
                         </a>
                     </div>
+                    {% endif %}
                 </div>
 
             </div>
@@ -121,4 +167,14 @@
     </div>
 
 </div>
+
+<style>
+    /* Schneidet Text nach exakt 2 Zeilen ab und fügt "..." hinzu */
+    .text-truncate-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;  
+        overflow: hidden;
+    }
+</style>
 {% endblock %}

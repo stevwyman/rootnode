@@ -7,9 +7,11 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>🌍 Orte</h1>
+        {% if can_edit %}
         <a href="{% url 'genview:place-create' tree_id=tree_id %}" class="btn btn-primary">
             + Neuen Ort hinzufügen
         </a>
+        {% endif %}
     </div>
 
     <!-- filter and search -->
@@ -45,7 +47,9 @@
                             <th>Ortsname</th>
                             <th>Koordinaten</th>
                             <th class="text-center">Ereignisse</th>
+                            {% if can_edit %}
                             <th class="text-end">Aktionen</th>
+                            {% endif %}
                         </tr>
                     </thead>
 
@@ -76,13 +80,14 @@
                                         {{ place.event_count }}
                                     </span>
                                 </td>
-                                
+                                {% if can_edit %}
                                 <td class="text-end">
                                     <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" 
                                         class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
                                     <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" 
                                         class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
                                 </td>
+                                {% endif %}
                             </tr>
                         {% empty %}
                             <tr>

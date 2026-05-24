@@ -28,7 +28,7 @@ class IndividualForm(ModelForm):
     birth_date_parsed = forms.DateField(
         required=False,
         label="Geburts‑Datum (geparst)",
-        widget=DateInput(attrs={"class": "form-control", "type": "date"}),
+        widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
     death_date_raw = forms.CharField(
         required=False,
@@ -40,7 +40,7 @@ class IndividualForm(ModelForm):
     death_date_parsed = forms.DateField(
         required=False,
         label="Sterbe‑Datum (geparst)",
-        widget=DateInput(attrs={"class": "form-control", "type": "date"}),
+        widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
 
     class Meta:
@@ -113,6 +113,7 @@ class IndividualForm(ModelForm):
             event = Event.objects.create(
                 individual=person,
                 event_type=ev_type,
+                gedcom_tree=person.gedcom_tree,
             )
         return event
 
@@ -339,6 +340,7 @@ class MediaObjectForm(forms.ModelForm):
             "title",
             "file",
             "description",
+            "category",
             "individuals",
             "families",
             "sources",
@@ -349,6 +351,7 @@ class MediaObjectForm(forms.ModelForm):
             "title": forms.TextInput(attrs={"class": "form-control"}),
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
             "individuals": forms.CheckboxSelectMultiple(),
             "families": forms.CheckboxSelectMultiple(),
             "sources": forms.CheckboxSelectMultiple(),
