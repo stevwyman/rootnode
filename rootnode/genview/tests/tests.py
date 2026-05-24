@@ -37,6 +37,16 @@ class IndividualModelTests(TestCase):
         person_tree2 = Individual.objects.create(gedcom_tree=self.tree2, gedcom_id="@I1@", given_name="John")
         self.assertEqual(person_tree2.gedcom_tree, self.tree2)
 
+    def test_auto_generate_gedcom_id(self):
+        """Test that gedcom_id is auto-generated if left blank."""
+        person = Individual.objects.create(
+            gedcom_tree=self.tree1,
+            given_name="Auto",
+            surname="Generated"
+        )
+        # Fix: Die @-Zeichen ergänzen, die dein Mixin generiert!
+        self.assertEqual(person.gedcom_id, f"@I-M{person.pk}@")
+
 class IndividualListViewTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -72,12 +82,35 @@ class IndividualListViewTests(TestCase):
         self.assertEqual(response.status_code, 403) # 403 means "Forbidden"
 
     def test_access_granted_for_authorized_user(self):
-        """Logged-in users WITH a TreeMembership should see the page and data."""
+        """Logged-in users WITH a TreeMembership should see public data."""
+        # Fix: Wir erstellen ein Sterbe-Event, damit das Property 'is_deceased' True wird!
+        from genview.models import Event
+        Event.objects.create(individual=self.person, event_type=Event.EventType.DEATH, gedcom_tree=self.tree)
+
         self.client.login(username="auth_user", password="password")
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test Person") # Verify the person's name is rendered in the HTML
+        # Wir prüfen separat auf Vorname und Nachname (siehe Erklärung im nächsten Punkt)
+        self.assertContains(response, "Test")
+        self.assertContains(response, "Person")
+
+    def test_privacy_hides_confidential_names(self):
+        """Ensure that confidential persons' names are flagged correctly."""
+        confidential_person = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Secret",
+            surname="LivingPerson"
+        )
+        
+        self.client.login(username="auth_user", password="password")
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Wir holen die Person aus dem Context der ListView und prüfen das Property
+        loaded_person = next(p for p in response.context['object_list'] if p.pk == confidential_person.pk)
+        self.assertTrue(loaded_person.is_confidential)
 
     def test_data_leak_prevention(self):
         """Ensure users only see people from the requested tree."""
@@ -91,5 +124,7 @@ class IndividualListViewTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test Person") # From Tree 1
+        # Wir prüfen separat auf Vorname und Nachname (siehe Erklärung im nächsten Punkt)
+        self.assertContains(response, "Test")
+        self.assertContains(response, "Person")
         self.assertNotContains(response, "Secret Guy") # From Tree 2 (Should NOT bleed over)

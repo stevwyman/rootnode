@@ -72,7 +72,6 @@ class GedcomIdMixin(models.Model):
 
     gedcom_id = models.CharField(
         max_length=20,
-        unique=True,
         blank=True,
         null=True,
         help_text="GEDCOM Referenz, z.B. @I1@, @F2@ …",
@@ -87,6 +86,15 @@ class GedcomIdMixin(models.Model):
 
     class Meta:
         abstract = True
+        # Der moderne Weg, um in abstrakten Modellen Eindeutigkeit zu erzwingen
+        constraints = [
+            models.UniqueConstraint(
+                fields=['gedcom_tree', 'gedcom_id'],
+                # Die Platzhalter sorgen dafür, dass der Constraint z.B. 
+                # 'genview_individual_unique_gedcom_id' heißt
+                name='%(app_label)s_%(class)s_unique_gedcom_id'
+            )
+        ]
 
     def save(self, *args, **kwargs):
         # 1. Prüfen, ob das Objekt brandneu ist
@@ -122,7 +130,7 @@ class Source(GedcomIdMixin):
         Tree, on_delete=models.CASCADE, related_name="sources"
     )
 
-    class Meta:
+    class Meta(GedcomIdMixin.Meta):
         ordering = ["title"]
         indexes = [models.Index(fields=["title"])]
 
@@ -165,9 +173,8 @@ class Individual(GedcomIdMixin):
         related_name="individuals",
     )
 
-    class Meta:
+    class Meta(GedcomIdMixin.Meta):
         ordering = ["surname", "given_name"]
-        unique_together = ("gedcom_tree", "gedcom_id")
         indexes = [
             models.Index(fields=["surname", "given_name"]),
             models.Index(fields=["sex"]),
@@ -328,35 +335,41 @@ class Individual(GedcomIdMixin):
     @property
     def is_confidential(self):
         """
-        Prüft, ob die Person unter die Datenschutzrichtlinien fällt:
-        - Geburt innerhalb der letzten 120 Jahre
-        - Tod innerhalb der letzten 60 Jahre
-        - Heirat innerhalb der letzten 80 Jahre
+        Prüft, ob die Person unter die Datenschutzrichtlinien fällt.
+        Regeln:
+        - Kein Sterbedatum = Lebt vermutlich -> Vertraulich (außer Geburt ist > 115 Jahre her)
+        - Tod innerhalb der letzten 35 Jahre -> Vertraulich
+        - Geburt innerhalb der letzten 115 Jahre -> Vertraulich
+        - Heirat innerhalb der letzten 85 Jahre -> Vertraulich
         """
+        
         current_year = date.today().year
 
-        # 1. Geburt prüfen (letzte 120 Jahre)
-        if self.birth_date:
-            if (current_year - self.birth_date.year) <= 115:
-                return True
-
-        # 2. Tod prüfen (letzte 60 Jahre)
+        # 1. Wenn wir SICHER wissen, wann die Person gestorben ist:
         if self.death_date:
-            if (current_year - self.death_date.year) <= 35:
-                return True
+            # Nur vertraulich, wenn der Tod weniger als 35 Jahre her ist.
+            # (Wer vor 40 Jahren gestorben ist, ist öffentlich, egal wann er geboren wurde!)
+            return (current_year - self.death_date.year) <= 35
 
-        # 3. Heiratsdaten prüfen (letzte 80 Jahre)
-        # Sucht in allen Familien, in denen die Person ein Partner (Spouse) ist
+        # --- AB HIER: Die Person hat KEIN Sterbedatum (könnte also noch leben) ---
+
+        # 2. Wir prüfen die Geburt (falls vorhanden)
+        if self.birth_date:
+            # Vertraulich, wenn die Geburt weniger als 115 Jahre her ist
+            return (current_year - self.birth_date.year) <= 115
+
+        # 3. Wir prüfen die Heirat (falls weder Tod noch Geburt vorhanden sind)
         for spousal_link in self.spousal_families:
-            # Greife auf das Familien-Objekt zu und prüfe das Heiratsdatum
-            if spousal_link.marriage_date_parsed:
-                if (current_year - spousal_link.marriage_date_parsed.year) <= 85:
-                    return True
+            # getattr als kleine Absicherung, falls das Feld bei einer Familie fehlt
+            marriage_date = getattr(spousal_link, 'marriage_date_parsed', None)
+            if marriage_date:
+                # Vertraulich, wenn die Heirat weniger als 85 Jahre her ist
+                return (current_year - marriage_date.year) <= 85
 
-        # Wenn keines der Daten greift (oder keine Daten vorhanden sind), 
-        # ist die Person historisch und somit nicht mehr vertraulich.
-        return False
-
+        # 4. Der Fallback (Absoluter Datenschutz)
+        # Die Person hat KEINEN Tod, KEINE Geburt und KEINE Heirat.
+        # Im Zweifel gehen wir davon aus, dass die Person lebt oder frisch angelegt wurde.
+        return True
 
 # ----------------------------------------------------------------------
 # 4️⃣ FAMILY – MPTT‑Baumstruktur GEDCOM:FAM
@@ -365,10 +378,9 @@ class Family(MPTTModel, GedcomIdMixin):
     """Familie (FAM). Durch MPTT kann eine Familie Unter‑Familien besitzen."""
     gedcom_prefix = "F"  # Ergibt z.B. F-M102
 
-    class Meta:
+    class Meta(GedcomIdMixin.Meta):
         verbose_name_plural = "Families"
         ordering = ["gedcom_id"]
-        unique_together = ("gedcom_tree", "gedcom_id")
 
     # Ehepartner (optional – GEDCOM erlaubt leere Rollen)
     husband = models.ForeignKey(
@@ -522,7 +534,7 @@ class Place(GedcomIdMixin):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Breitengrad (Latitude)")
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Längengrad (Longitude)")
 
-    class Meta:
+    class Meta(GedcomIdMixin.Meta):
         # Prevent duplicate places in the same tree
         unique_together = ('gedcom_tree', 'name')
         ordering = ['name']
@@ -702,7 +714,7 @@ class MediaObject(GedcomIdMixin):
         Tree, on_delete=models.CASCADE, related_name="mediaobjects"
     )
 
-    class Meta:
+    class Meta(GedcomIdMixin.Meta):
         ordering = ["-is_portrait", "title"]  # Portrait‑Bilder zuerst
 
     def __str__(self) -> str:
