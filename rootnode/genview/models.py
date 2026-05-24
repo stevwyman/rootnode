@@ -472,6 +472,29 @@ class Family(MPTTModel, GedcomIdMixin):
         ev = self.marriage_event
         return ev.parsed_date if ev else None
     
+    @property
+    def is_confidential(self):
+        """
+        Eine Familie ist vertraulich, wenn mindestens ein Beteiligter 
+        (Ehemann, Ehefrau oder eines der verknüpften Kinder) vertraulich ist.
+        """
+        # 1. Ehemann prüfen
+        if self.husband and self.husband.is_confidential:
+            return True
+
+        # 2. Ehefrau prüfen
+        if self.wife and self.wife.is_confidential:
+            return True
+
+        # 3. Alle Kinder dieser Familie prüfen
+        # Da du das Through-Model 'ChildFamilyLink' mit related_name="children" nutzt:
+        for link in self.children.all():
+            if link.child and link.child.is_confidential:
+                return True
+
+        # Wenn weder Eltern noch Kinder vertraulich sind, ist die Familie öffentlich
+        return False
+    
 
 # ----------------------------------------------------------------------
 # 5️⃣ THROUGH‑MODEL: Kind‑zu‑Familie (CHIL / FAMC)
@@ -651,6 +674,19 @@ class Event(models.Model):
         self.full_clean()  # ruft ``clean`` auf
         super().save(*args, **kwargs)
 
+    @property
+    def is_confidential(self):
+        """Ein Ereignis ist vertraulich, wenn sein Besitzer (Person oder Familie) vertraulich ist."""
+        # Wenn es ein Personen-Event ist (z.B. BIRT, DEAT)
+        if hasattr(self, 'individual') and self.individual:
+            return self.individual.is_confidential
+            
+        # Wenn es ein Familien-Event ist (z.B. MARR, DIV)
+        if hasattr(self, 'family') and self.family:
+            return self.family.is_confidential  # <--- Nutzt jetzt die neue Familien-Logik!
+            
+        return True
+
 
 # ----------------------------------------------------------------------
 # 8️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
@@ -679,6 +715,8 @@ class MediaObject(GedcomIdMixin):
     )
 
     description = models.TextField(blank=True)
+
+    is_private = models.BooleanField(default=False)
 
     # Beziehungen zu den anderen Entitäten
     individuals = models.ManyToManyField(
@@ -728,3 +766,33 @@ class MediaObject(GedcomIdMixin):
         return self.file.name.lower().endswith(
             (".png", ".jpg", ".jpeg", ".gif", ".webp")
         )
+    
+    @property
+    def is_confidential(self):
+        """
+        Ein Medienobjekt (Foto, Urkunde) ist vertraulich, wenn es mit 
+        mindestens einer vertraulichen Person, Familie oder einem 
+        vertraulichen Ereignis verknüpft ist.
+        """
+        # 1. Hängt das Medium an vertraulichen Personen?
+        # (Nutze hier den related_name deiner Verknüpfung, z.B. 'individuals')
+        if hasattr(self, 'individuals'):
+            for person in self.individuals.all():
+                if person.is_confidential:
+                    return True
+                    
+        # 2. Hängt das Medium an vertraulichen Familien?
+        if hasattr(self, 'families'):
+            for family in self.families.all():
+                if family.is_confidential:
+                    return True
+                    
+        # 3. Hängt das Medium an vertraulichen Ereignissen?
+        if hasattr(self, 'events'):
+            for event in self.events.all():
+                if event.is_confidential:
+                    return True
+                    
+        # Wenn das Bild mit gar nichts Vertraulichem verknüpft ist (oder historische
+        # Personen zeigt), darf es öffentlich angezeigt werden.
+        return False

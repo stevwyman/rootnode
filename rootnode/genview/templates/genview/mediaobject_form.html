@@ -52,6 +52,10 @@
         {{ form.is_portrait }} {{ form.is_portrait.label_tag }}
     </div>
 
+    <div class="form-check mb-3">
+        {{ form.is_private }} {{ form.is_private.label_tag }}
+    </div>
+
     <button type="submit" class="btn btn-success">
         {% if view.object %}Änderungen speichern{% else %}Bild speichern{% endif %}
     </button>

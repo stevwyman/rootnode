@@ -42,59 +42,58 @@
 
                     <h4 class="mt-4 mb-3">🔗 Verknüpfte Objekte</h4>
 
-<div class="list-group shadow-sm">
-    
-    {% for person in media.individuals.all %}
-        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>👤 Person: <strong>{{ person.full_name }}</strong></span>
-            <span class="badge bg-primary rounded-pill">Details</span>
-        </a>
-    {% endfor %}
+                    <div class="list-group shadow-sm">
+                        
+                        {% for person in media.individuals.all %}
+                            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span>👤 Person: <strong>{{ person.full_name }}</strong></span>
+                                <span class="badge bg-primary rounded-pill">Details</span>
+                            </a>
+                        {% endfor %}
 
-    {% for family in media.families.all %}
-        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>👪 Familie: <strong>{{ family.husband.surname|default:"?" }} & {{ family.wife.surname|default:"?" }}</strong></span>
-            <span class="badge bg-danger rounded-pill">Details</span>
-        </a>
-    {% endfor %}
+                        {% for family in media.families.all %}
+                            <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span>👪 Familie: <strong>{{ family.husband.surname|default:"?" }} & {{ family.wife.surname|default:"?" }}</strong></span>
+                                <span class="badge bg-danger rounded-pill">Details</span>
+                            </a>
+                        {% endfor %}
 
-    {% for source in media.sources.all %}
-        <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>📚 Quelle: <strong>{{ source.title }}</strong></span>
-            <span class="badge bg-success rounded-pill">Details</span>
-        </a>
-    {% endfor %}
+                        {% for source in media.sources.all %}
+                            <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span>📚 Quelle: <strong>{{ source.title }}</strong></span>
+                                <span class="badge bg-success rounded-pill">Details</span>
+                            </a>
+                        {% endfor %}
 
-    {% for event in media.events.all %}
-        <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <div>
-                <span>📅 Ereignis: <strong>{{ event.get_event_type_display }}</strong></span>
-                {% if event.parsed_date or event.raw_date %}
-                    <small class="text-muted d-block ps-4">
-                        Datum: {{ event.parsed_date|date:"d.m.Y"|default:event.raw_date }}
-                    </small>
-                {% endif %}
-                <small class="text-muted d-block ps-4">
-                    Zugeordnet zu: 
-                    {% if event.individual %}
-                        👤 {{ event.individual.full_name }}
-                    {% elif event.family %}
-                        👪 Familie {{ event.family.husband.surname|default:"?" }} & {{ event.family.wife.surname|default:"?" }}
-                    {% endif %}
-                </small>
-            </div>
-            <span class="badge bg-info text-dark rounded-pill">Bearbeiten</span>
-        </a>
-    {% endfor %}
+                        {% for event in media.events.all %}
+                            <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span>📅 Ereignis: <strong>{{ event.get_event_type_display }}</strong></span>
+                                    {% if event.parsed_date or event.raw_date %}
+                                        <small class="text-muted d-block ps-4">
+                                            Datum: {{ event.parsed_date|date:"d.m.Y"|default:event.raw_date }}
+                                        </small>
+                                    {% endif %}
+                                    <small class="text-muted d-block ps-4">
+                                        Zugeordnet zu: 
+                                        {% if event.individual %}
+                                            👤 {{ event.individual.full_name }}
+                                        {% elif event.family %}
+                                            👪 Familie {{ event.family.husband.surname|default:"?" }} & {{ event.family.wife.surname|default:"?" }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <span class="badge bg-info text-dark rounded-pill">Bearbeiten</span>
+                            </a>
+                        {% endfor %}
 
-    {% if not media.individuals.all and not media.families.all and not media.sources.all and not media.events.all %}
-        <div class="list-group-item text-muted fst-italic py-3 text-center">
-            Dieses Medium ist aktuell mit keinem Objekt im Stammbaum verknüpft.
-        </div>
-    {% endif %}
+                        {% if not media.individuals.all and not media.families.all and not media.sources.all and not media.events.all %}
+                            <div class="list-group-item text-muted fst-italic py-3 text-center">
+                                Dieses Medium ist aktuell mit keinem Objekt im Stammbaum verknüpft.
+                            </div>
+                        {% endif %}
 
-</div>
-
+                    </div>
 
                 </div>
                 {% if can_edit %}

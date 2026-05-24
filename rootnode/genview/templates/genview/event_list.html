@@ -105,44 +105,60 @@
                         {% for event in events %}
                             <tr>
                                 <td class="text-nowrap">
-                                    {% if event.parsed_date %}
-                                        {{ event.parsed_date|date:"d.m.Y" }}
+                                    {% if apply_privacy and event.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
                                     {% else %}
-                                        <span class="text-muted fst-italic">{{ event.raw_date|default:"Unbekannt" }}</span>
+                                        {% if event.parsed_date %}
+                                            {{ event.parsed_date|date:"d.m.Y" }}
+                                        {% else %}
+                                            <span class="text-muted fst-italic">{{ event.raw_date|default:"Unbekannt" }}</span>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 
-                                <td>                      
-                                    <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}">
-                                        <span class="badge bg-secondary">
-                                            {{ event.get_event_type_display }}
-                                        </span>
-                                    </a> 
+                                <td>
+                                    {% if apply_privacy and event.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    {% else %}
+                                        <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}">
+                                            <span class="badge bg-secondary">
+                                                {{ event.get_event_type_display }}
+                                            </span>
+                                        </a> 
+                                    {% endif %}
                                 </td>
                                 
                                 <td>
-                                    {% if event.individual %}
-                                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
-                                            👤 {{ event.individual.given_name }} {{ event.individual.surname }}
-                                        </a>
-                                    {% elif event.family %}
-                                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
-                                            👪 Familie: 
-                                            {{ event.family.husband.surname|default:"?" }} & 
-                                            {{ event.family.wife.surname|default:"?" }}
-                                        </a>
+                                    {% if apply_privacy and event.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
                                     {% else %}
-                                        <span class="text-danger">Unverknüpftes Ereignis</span>
+                                        {% if event.individual %}
+                                            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
+                                                👤 {{ event.individual.given_name }} {{ event.individual.surname }}
+                                            </a>
+                                        {% elif event.family %}
+                                            <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
+                                                👪 Familie: 
+                                                {{ event.family.husband.surname|default:"?" }} & 
+                                                {{ event.family.wife.surname|default:"?" }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-danger">Unverknüpftes Ereignis</span>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
 
                                 <td>
-                                    {% if event.place %}
-                                        <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.pk %}" class="text-decoration-none text-muted">
-                                            📍 {{ event.place.name }}
-                                        </a>
+                                    {% if apply_privacy and event.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
                                     {% else %}
-                                        <span class="text-muted small">-</span>
+                                        {% if event.place %}
+                                            <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.pk %}" class="text-decoration-none text-muted">
+                                                📍 {{ event.place.name }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 {% if can_edit %}

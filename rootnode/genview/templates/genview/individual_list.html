@@ -156,26 +156,34 @@
 
                             {# ---- Geburtsdatum ---- #}
                             <td>
-                                {% if person.birth_date %}
-                                    <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
-                                {% elif person.birth_date_raw %}
-                                    <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
+                                {% if apply_privacy and person.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    <span class="text-muted">-</span>
+                                    {% if person.birth_date %}
+                                        <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
+                                    {% elif person.birth_date_raw %}
+                                        <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             {# ---- Sterbedatum (optional) ---- #}
                             <td>
-                                {% if person.is_deceased %}
-                                    {% if person.death_date %}
-                                        <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
-                                    {% elif person.death_date_raw %}
-                                        <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
+                                {% if apply_privacy and person.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {% if person.is_deceased %}
+                                        {% if person.death_date %}
+                                            <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
+                                        {% elif person.death_date_raw %}
+                                            <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
+                                        {% else %}
+                                            <span class="text-muted">‑</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="text-muted">‑</span>
                                     {% endif %}
-                                {% else %}
-                                    <span class="text-muted">‑</span>
                                 {% endif %}
                             </td>
                             {% if can_edit %}

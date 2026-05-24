@@ -33,21 +33,29 @@
                         <tr>
                             <td>{{ forloop.counter }}</td>
                             <td>
-                                <a href="{% url 'genview:family-detail' tree_id fam.pk %}">
-                                        {{ fam.gedcom_id }}
-                                </a>
+                                {% if apply_privacy and fam.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    <a href="{% url 'genview:family-detail' tree_id fam.pk %}">
+                                            {{ fam.gedcom_id }}
+                                    </a>
+                                {% endif %}
                             </td>
                             <td>
-                                {% if fam.husband %}
-                                    {{ fam.husband.full_name }} ({{ fam.husband.get_sex_display }})
+                                {% if apply_privacy and fam.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    <span class="text-muted">kein Husband</span>
-                                {% endif %}
-                                &nbsp;–&nbsp;
-                                {% if fam.wife %}
-                                    {{ fam.wife.full_name }} ({{ fam.wife.get_sex_display }})
-                                {% else %}
-                                    <span class="text-muted">keine Wife</span>
+                                    {% if fam.husband %}
+                                        {{ fam.husband.full_name }} ({{ fam.husband.get_sex_display }})
+                                    {% else %}
+                                        <span class="text-muted">kein Husband</span>
+                                    {% endif %}
+                                    &nbsp;–&nbsp;
+                                    {% if fam.wife %}
+                                        {{ fam.wife.full_name }} ({{ fam.wife.get_sex_display }})
+                                    {% else %}
+                                        <span class="text-muted">keine Wife</span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>{{ fam.children_count }}</td>

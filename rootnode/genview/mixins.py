@@ -34,6 +34,16 @@ class TreeAccessMixin(UserPassesTestMixin):
         # Zugriff wird NUR gewährt, wenn der Baum explizit als öffentlich markiert wurde!
         return self.tree_obj.is_public
     
+    # 1. NEU: Die reine Berechnungs-Logik bekommt eine eigene Methode im Mixin
+    def get_apply_privacy(self):
+        """Ermittelt, ob der Datenschutz für den aktuellen Aufruf gilt."""
+        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe)
+        if getattr(self, "membership", None):
+            if self.membership.role in ["VIEWER", "EDITOR", "ADMIN"]:
+                # Voller Durchblick: Datenschutz aushebeln!
+                return False
+        return True
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -41,7 +51,8 @@ class TreeAccessMixin(UserPassesTestMixin):
         context['can_edit'] = False
         
         # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe)
-        context['apply_privacy'] = True 
+        # Nutzt die neue Helfermethode:
+        context["apply_privacy"] = self.get_apply_privacy()
 
         # Wenn der Nutzer eine Mitgliedschaft hat, prüfen wir die Rolle
         if getattr(self, 'membership', None):

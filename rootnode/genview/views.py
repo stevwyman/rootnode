@@ -222,6 +222,29 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         )
 
     # -----------------------------------------------------------------
+    # Security Check for Data Privacy
+    # -----------------------------------------------------------------
+    def get_object(self, queryset=None):
+        # 1. Hole die Person wie gewohnt aus der Datenbank.
+        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
+        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        person = super().get_object(queryset)
+
+        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
+        apply_privacy = self.get_apply_privacy()
+
+        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
+        if apply_privacy and person.is_confidential:
+            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+            raise PermissionDenied(
+                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
+            )
+
+        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
+        return person
+
+    # -----------------------------------------------------------------
     # Kontext‑Aufbereitung: Ehepartner, Kinder, Eltern
     # -----------------------------------------------------------------
     def get_context_data(self, **kwargs):
@@ -731,7 +754,7 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
 # ----------------------------------------------------------------------
 
 
-class FamilyListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class FamilyListView(TreeAccessMixin, ListView):
     """
     Zeigt eine paginierte Liste aller Familien des ausgewählten Baums.
     Zusätzliche Annotationen:
@@ -758,7 +781,7 @@ class FamilyListView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return qs
 
 
-class FamilyDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class FamilyDetailView(TreeAccessMixin, DetailView):
     """
     Detail‑Ansicht einer Familie.
     - `husband` und `wife` werden bereits über `select_related` geladen.
@@ -792,6 +815,30 @@ class FamilyDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
             )
             .order_by("-id")
         )
+
+    # -----------------------------------------------------------------
+    # Security Check for Data Privacy
+    # -----------------------------------------------------------------
+    def get_object(self, queryset=None):
+        # 1. Hole die Person wie gewohnt aus der Datenbank.
+        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
+        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        family = super().get_object(queryset)
+
+        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
+        apply_privacy = self.get_apply_privacy()
+
+        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
+        if apply_privacy and family.is_confidential:
+            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+            raise PermissionDenied(
+                "Diese Familie unterliegt den Datenschutzrichtlinien. "
+                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
+            )
+
+        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
+        return family
+
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -885,7 +932,7 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
 # ----------------------------------------------------------------------
 
 
-class ProtectedMediaFileView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class ProtectedMediaFileView(TreeAccessMixin, DetailView):
     """
     Acts as a secure tunnel to serve media files ONLY if the user
     has access to the specific family tree.
@@ -900,20 +947,38 @@ class ProtectedMediaFileView(LoginRequiredMixin, TreeAccessMixin, DetailView):
 
     def get(self, request, *args, **kwargs):
         # 1. get_object() automatically applies the get_queryset() filter
-        # and the TreeAccessMixin automatically checks user permissions!
+        # and the TreeAccessMixin automatically checks basic tree access.
         media_obj = self.get_object()
 
-        # 2. Check if the file actually exists on the hard drive
+        # ---------------------------------------------------------
+        # 🔒 2. DATENSCHUTZ-PRÜFUNG (NEU)
+        # ---------------------------------------------------------
+        # Hier musst du deine bestehende Logik für 'apply_privacy' einsetzen.
+        # (z.B. prüfen, ob der User nur die Rolle "VIEWER" hat).
+        # Beispiel: apply_privacy = request.tree_membership.role == 'VIEWER'
+        
+        apply_privacy = self.get_apply_privacy()  # ERSETZE DIES durch deine echte Rollen-Prüfung!
+
+        if apply_privacy and media_obj.is_confidential:
+            # Blockiert den Download mit einem 403 Forbidden Fehler
+            raise PermissionDenied("Dieses Dokument enthält vertrauliche Daten und wurde aus Datenschutzgründen gesperrt.")
+        
+        if apply_privacy and media_obj.is_private:
+            # Blockiert den Download mit einem 403 Forbidden Fehler
+            raise PermissionDenied("Dieses Dokument enthält vertrauliche Daten und wurde aus Datenschutzgründen gesperrt.")
+                
+        # ---------------------------------------------------------
+
+        # 3. Check if the file actually exists on the hard drive
         if not media_obj.file or not os.path.exists(media_obj.file.path):
             raise Http404("Datei nicht gefunden.")
 
-        # 3. Serve the file securely
-        # FileResponse automatically guesses the correct MIME type (e.g., image/jpeg)
+        # 4. Serve the file securely
         file_handle = open(media_obj.file.path, "rb")
         return FileResponse(file_handle)
 
 
-class MediaObjectDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class MediaObjectDetailView(TreeAccessMixin, DetailView):
     model = MediaObject
     template_name = "genview/mediaobject_detail.html"
     context_object_name = "media"
@@ -930,8 +995,38 @@ class MediaObjectDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
             "events__family__wife"
         )
     
+        # -----------------------------------------------------------------
+    # Security Check for Data Privacy
+    # -----------------------------------------------------------------
+    def get_object(self, queryset=None):
+        # 1. Hole die Person wie gewohnt aus der Datenbank.
+        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
+        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        media = super().get_object(queryset)
 
-class MediaObjectListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
+        apply_privacy = self.get_apply_privacy()
+
+        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
+        if apply_privacy and media.is_confidential:
+            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+            raise PermissionDenied(
+                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
+            )
+        
+        if apply_privacy and media.is_private:
+            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+            raise PermissionDenied(
+                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
+            )
+        
+        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
+        return media
+
+    
+class MediaObjectListView(TreeAccessMixin, ListView):
     model = MediaObject
     template_name = "genview/mediaobject_list.html"
     context_object_name = "media"
@@ -1103,7 +1198,7 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
 # --------------------------------------------------------------
 
 # --- 1. List View ---
-class PlaceListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
+class PlaceListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Place
     template_name = "genview/place_list.html"
     context_object_name = "places"
@@ -1215,7 +1310,7 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 # --------------------------------------------------------------
 
 # --- 1. List View ---
-class EventListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
+class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Event
     template_name = "genview/event_list.html"
     context_object_name = "events"
@@ -1281,10 +1376,34 @@ class EventListView(LoginRequiredMixin, TreeAccessMixin, SortableListViewMixin, 
         return context
 
 
-class EventDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class EventDetailView(TreeAccessMixin, DetailView):
     model = Event
     template_name = "genview/event_detail.html"
 
+    # -----------------------------------------------------------------
+    # Security Check for Data Privacy
+    # -----------------------------------------------------------------
+    def get_object(self, queryset=None):
+        # 1. Hole die Person wie gewohnt aus der Datenbank.
+        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
+        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        event = super().get_object(queryset)
+
+        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
+        apply_privacy = self.get_apply_privacy()
+
+        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
+        if apply_privacy and event.is_confidential:
+            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+            raise PermissionDenied(
+                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
+            )
+
+        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
+        return event
+
+    
     def get_queryset(self):
         # Nur Events aus dem aktuellen Stammbaum erlauben
         tree_id = self.kwargs.get("tree_id")
