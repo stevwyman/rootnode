@@ -1,0 +1,54 @@
+
+.lead-text {
+  margin-bottom: 60px;
+  text-align: center;
+}
+
+progress {
+  display: block;
+}
+
+.table-custom {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  th,
+  td {
+    vertical-align: bottom;
+  }
+
+  th { 
+    border-bottom: 2px solid black;
+    text-align: left;
+  }
+
+  .bio {
+    vertical-align: top;
+  }
+  
+  td {
+    padding-left: 1rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .grand {
+    padding-top: 2rem;
+  }
+
+  .line-bottom {
+    border-bottom: 1px solid black;
+  }
+
+  .line-left-down {
+    border-left: 1px solid black;
+  }
+
+  .line-left-up {
+    border-left: 1px solid black;
+  }
+
+  .line-left {
+    border-left: 1px solid white;
+  }
+}

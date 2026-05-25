@@ -59,6 +59,11 @@
 
 {% block content %}
 <div class="row">
+            <h2 class="card-title fw-bold text-dark mb-1">
+                                    {{ object.full_name }}
+                                </h2>
+        </div>
+<div class="row">
     <div class="col-8">
         <div class="card shadow-sm border-0 mb-4 bg-white overflow-hidden">
             <div class="row g-0">
@@ -90,9 +95,12 @@
                         
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
+                                <!--
                                 <h2 class="card-title fw-bold text-dark mb-1">
                                     {{ object.full_name }}
                                 </h2>
+                                -->
+                                
                                 <span class="badge bg-secondary text-light shadow-sm">
                                     ID: {{ object.gedcom_id|default:"Unbekannt" }}
                                 </span>
@@ -142,7 +150,7 @@
                                 
                                 {% if object.birth_event and object.birth_event.place %}
                                     <div class="small text-muted">
-                                        📍 {{ object.birth_event.place.name }}
+                                        📍 {{ object.birth_event.place.short_name }}
                                     </div>
                                 {% endif %}
                             </div>
@@ -164,7 +172,7 @@
                                 
                                 {% if object.death_event and object.death_event.place %}
                                     <div class="small text-muted">
-                                        📍 {{ object.death_event.place.name }}
+                                        📍 {{ object.death_event.place.short_name }}
                                     </div>
                                 {% endif %}
                             </div>
@@ -268,11 +276,15 @@
 
                                                 {% if event.event_type == 'MARR' and event.family %}
                                                     <div class="fst-italic text-secondary small mb-2">
-                                                        💍 Mit 
-                                                        {% if event.family.husband.pk == person.pk %}
-                                                            {{ event.family.wife.full_name }}
-                                                        {% else %}
-                                                            {{ event.family.husband.full_name }}
+                                                        💍 Mit
+                                                        {% if apply_privacy and person.is_confidential %}
+                                                            <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                        {% else %} 
+                                                            {% if event.family.husband.pk == person.pk %}
+                                                                {{ event.family.wife.full_name }}
+                                                            {% else %}
+                                                                {{ event.family.husband.full_name }}
+                                                            {% endif %}
                                                         {% endif %}
                                                     </div>
                                                 {% endif %}
@@ -422,7 +434,11 @@
                                         <td rowspan="2" class="bg-opacity-10 bg-primary">
                                             <span class="d-block text-muted small mb-1">Vater</span>
                                             {% if pedigree.father %}
-                                                <a href="{{ pedigree.father.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.father.full_name }}</a>
+                                                {% if apply_privacy and pedigree.father.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.father.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.father.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">Unbekannt</span>
                                             {% endif %}
@@ -430,7 +446,11 @@
                                         <td>
                                             <span class="d-block text-muted small mb-1">Großvater (väterlich)</span>
                                             {% if pedigree.ff %}
-                                                <a href="{{ pedigree.ff.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.ff.full_name }}</a>
+                                                {% if apply_privacy and pedigree.ff.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.ff.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.ff.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">-</span>
                                             {% endif %}
@@ -441,7 +461,11 @@
                                         <td>
                                             <span class="d-block text-muted small mb-1">Großmutter (väterlich)</span>
                                             {% if pedigree.fm %}
-                                                <a href="{{ pedigree.fm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.fm.full_name }}</a>
+                                                {% if apply_privacy and pedigree.father.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.fm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.fm.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">-</span>
                                             {% endif %}
@@ -452,7 +476,11 @@
                                         <td rowspan="2" class="bg-opacity-10 bg-danger">
                                             <span class="d-block text-muted small mb-1">Mutter</span>
                                             {% if pedigree.mother %}
-                                                <a href="{{ pedigree.mother.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.mother.full_name }}</a>
+                                                {% if apply_privacy and pedigree.mother.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.mother.get_absolute_url }}?tab=pedigree" class="text-decoration-none fw-semibold">{{ pedigree.mother.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">Unbekannt</span>
                                             {% endif %}
@@ -460,7 +488,11 @@
                                         <td>
                                             <span class="d-block text-muted small mb-1">Großvater (mütterlich)</span>
                                             {% if pedigree.mf %}
-                                                <a href="{{ pedigree.mf.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mf.full_name }}</a>
+                                                {% if apply_privacy and pedigree.mf.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.mf.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mf.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">-</span>
                                             {% endif %}
@@ -471,7 +503,11 @@
                                         <td>
                                             <span class="d-block text-muted small mb-1">Großmutter (mütterlich)</span>
                                             {% if pedigree.mm %}
-                                                <a href="{{ pedigree.mm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mm.full_name }}</a>
+                                                {% if apply_privacy and pedigree.mm.is_confidential %}
+                                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                                {% else %}
+                                                    <a href="{{ pedigree.mm.get_absolute_url }}?tab=pedigree" class="text-decoration-none">{{ pedigree.mm.full_name }}</a>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="fst-italic text-muted">-</span>
                                             {% endif %}
@@ -509,11 +545,15 @@
                             <div>
                                 <span class="me-3 fs-5">👨</span>
                                 {% if fam.family.husband %}
-                                    <a href="{{ fam.family.husband.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                        {{ fam.family.husband.full_name }}
-                                    </a>
-                                    {% if fam.family.husband.birth_date_raw %}
-                                        <small class="text-muted ms-2">* {{ fam.family.husband.birth_date_raw }}</small>
+                                    {% if apply_privacy and fam.family.husband.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    {% else %}
+                                        <a href="{{ fam.family.husband.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                            {{ fam.family.husband.full_name }}
+                                        </a>
+                                        {% if fam.family.husband.birth_date_raw %}
+                                            <small class="text-muted ms-2">* {{ fam.family.husband.birth_date_raw }}</small>
+                                        {% endif %}
                                     {% endif %}
                                 {% else %}
                                     <span class="text-muted fst-italic">Vater unbekannt</span>
@@ -533,11 +573,15 @@
                             <div>
                                 <span class="me-3 fs-5">👩</span>
                                 {% if fam.family.wife %}
-                                    <a href="{{ fam.family.wife.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                        {{ fam.family.wife.full_name }}
-                                    </a>
-                                    {% if fam.family.wife.birth_date_raw %}
-                                        <small class="text-muted ms-2">* {{ fam.family.wife.birth_date_raw }}</small>
+                                    {% if apply_privacy and fam.family.wife.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    {% else %}
+                                        <a href="{{ fam.family.wife.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                            {{ fam.family.wife.full_name }}
+                                        </a>
+                                        {% if fam.family.wife.birth_date_raw %}
+                                            <small class="text-muted ms-2">* {{ fam.family.wife.birth_date_raw }}</small>
+                                        {% endif %}
                                     {% endif %}
                                 {% else %}
                                     <span class="text-muted fst-italic">Mutter unbekannt</span>
@@ -555,9 +599,13 @@
                         
                     </ul>
                     <div class="card-footer bg-white py-3 d-flex gap-2">
-                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.family.pk %}" class="btn btn-sm btn-outline-secondary w-100">
-                            👪 Zur Familie
-                        </a>
+                        {% if apply_privacy and fam.family.is_confidential %}
+                            <span class="text-muted fst-italic">🔒 vertraulich</span>
+                        {% else %}
+                            <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.family.pk %}" class="btn btn-sm btn-outline-secondary w-100">
+                                👪 Zur Familie
+                            </a>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}
@@ -597,13 +645,21 @@
                                     <span class="me-2">
                                         {% if sibling.sex == 'M' %}👦{% elif sibling.sex == 'F' %}👧{% else %}👶{% endif %}
                                     </span>
-                                    <a href="{{ sibling.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                        {{ sibling.full_name }}
-                                    </a>
+                                    {% if apply_privacy and sibling.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    {% else %}
+                                        <a href="{{ sibling.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                            {{ sibling.full_name }}
+                                        </a>
+                                    {% endif %}
                                 </div>
                                 
                                 {% if sibling.birth_date_raw %}
-                                    <small class="text-muted">* {{ sibling.birth_date_raw }}</small>
+                                    {% if apply_privacy and sibling.is_confidential %}
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    {% else %}
+                                        <small class="text-muted">* {{ sibling.birth_date_raw }}</small>
+                                    {% endif %}
                                 {% endif %}
                             </li>
                         {% endfor %}
@@ -626,9 +682,19 @@
                 <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
                     <h5 class="mb-0 fw-bold">
                         {% if family.husband == object and family.wife %}
-                            Partnerin: <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
+                            Partnerin: 
+                            {% if apply_privacy and family.wife.is_confidential %}
+                                <span class="text-muted fst-italic">🔒 vertraulich</span>
+                            {% else %}
+                                <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
+                            {% endif %}
                         {% elif family.wife == object and family.husband %}
-                            Partner: <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
+                            Partner: 
+                            {% if apply_privacy and sibling.is_confidential %}
+                                <span class="text-muted fst-italic">🔒 vertraulich</span>
+                            {% else %}
+                                <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
+                            {% endif %}
                         {% else %}
                             <span class="text-muted fst-italic">Unbekannter Partner</span>
                         {% endif %}
@@ -636,7 +702,12 @@
                     
                     {% if family.marriage_date_parsed or family.marriage_date_raw %}
                         <span class="badge bg-secondary text-light">
-                            ⚭ {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
+                            ⚭ 
+                            {% if apply_privacy and sibling.is_confidential %}
+                                <span class="text-muted fst-italic">🔒 vertraulich</span>
+                            {% else %}
+                                {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
+                            {% endif %}
                         </span>
                     {% endif %}
                 </div>

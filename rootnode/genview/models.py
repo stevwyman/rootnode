@@ -302,7 +302,6 @@ class Individual(GedcomIdMixin):
         Kombiniert die vorab geladenen (prefetched) Familien, 
         ohne eine neue, blockierende Datenbankabfrage auszulösen.
         """
-        print(self.families_as_husband.all())
         return list(self.families_as_husband.all()) + list(self.families_as_wife.all())
     
     @property
