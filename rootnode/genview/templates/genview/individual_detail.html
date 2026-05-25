@@ -59,13 +59,13 @@
 
 {% block content %}
 <div class="row">
-            <h2 class="card-title fw-bold text-dark mb-1">
-                                    {{ object.full_name }}
-                                </h2>
-        </div>
+    <h2 class="card-title fw-bold text-dark mb-1">
+        {{ object.full_name }}
+    </h2>
+</div>
 <div class="row">
     <div class="col-8">
-        <div class="card shadow-sm border-0 mb-4 bg-white overflow-hidden">
+        <div class="card shadow-sm border-0 mb-4 bg-white overflow-visible">
             <div class="row g-0">
                 <!-- portrait -->
                 <div class="col-sm-4 col-md-3 p-4 bg-light d-flex align-items-center justify-content-center border-end">
@@ -105,6 +105,27 @@
                                     ID: {{ object.gedcom_id|default:"Unbekannt" }}
                                 </span>
                             </div>
+
+                            <div class="dropdown mb-3">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-boundary="viewport">
+                                    🏷️ GEDCOM-Namensdetails
+                                </button>
+
+                                <div class="dropdown-menu p-3 shadow border-0" style="min-width: 350px; z-index: 1050;">
+                                    <h6 class="dropdown-header px-0 text-primary">Rohe GEDCOM-Daten</h6>
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <span class="text-muted small">Vorname (GIVN)</span><br>
+                                            <strong>{{ object.given_name|default:"-" }}</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <span class="text-muted small">Nachname (SURN)</span><br>
+                                            <strong>/{{ object.surname|default:"" }}/</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
 
                             {% if can_edit %}
                             <div class="dropdown ms-3">
@@ -226,12 +247,14 @@
                 <div class="tab-content tab-content-box p-4 mb-5" id="individualTabsContent">
                     
                     <div class="tab-pane fade show active" id="profile" role="tabpanel" aria-labelledby="profile-tab">
-                        <h4 class="mb-3">Biografie & Ereignisse</h4>
-                        {% if can_edit %}
-                        <a href="{% url 'genview:event-create-person' tree_id=tree_id %}?individual={{ person.pk }}" class="btn btn-sm btn-outline-primary shadow-sm">
-                            ✨ Ereignis hinzufügen
-                        </a>
-                        {% endif %}
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="mb-3">Biografie & Ereignisse</h4>
+                            {% if can_edit %}
+                            <a href="{% url 'genview:event-create-person' tree_id=tree_id %}?individual={{ person.pk }}" class="btn btn-sm btn-outline-primary shadow-sm">
+                                ✨ Ereignis hinzufügen
+                            </a>
+                            {% endif %}
+                        </div>
 
                         <div class="list-group list-group-flush position-relative">
                             <div class="timeline-line position-absolute h-100 border-start border-2 border-primary ms-3 z-0"></div>
@@ -333,12 +356,14 @@
                     </div>
 
                     <div class="tab-pane fade" id="media" role="tabpanel" aria-labelledby="media-tab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
                         <h4 class="mb-0 text-success">Medienarchiv</h4>
                         {% if can_edit %}
                         <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-outline-success shadow-sm">
                             📎 Datei hochladen
                         </a>
                         {% endif %}
+                        </div>
                         
                         <h6 class="text-uppercase text-muted fw-bold mb-3 mt-4 border-bottom pb-2">🖼️ Fotos & Portraits</h6>
                         
@@ -517,6 +542,62 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- alternative table visualisation-->
+                        <div>
+                            <table class="table-custom">
+                                <tbody>
+                                    <tr>
+                                        <th>Home Person</th>
+                                        <th>Parents</th>
+                                        <th>Grand Parents</th>
+                                    </tr>
+                                    <tr>
+                                        <td rowspan="4" id="homePerson" class="person line-bottom">Home Person</td>
+                                        <td rowspan="2" id="Father" class="person line-bottom">Father</td>
+                                        <td id="Grandfather" class="person grand line-bottom">Grandfather</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
+                                            Date here</td>
+                                    </tr>
+                                    <tr>
+                                        <td rowspan="2" class="bio line-left-down"><progress value="70" max="100">70 %</progress>
+                                        Date here
+                                        </td>
+                                        <td class="person line-bottom grand line-left-up">Grandmother</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
+                                        Date here
+                                        </td>
+                                </tr>
+                                <tr>
+                                    <td rowspan="4" class="bio"><progress value="78" max="100">78 %</progress>
+                                        1940 - 2018
+                                    </td>
+                                    <td rowspan="2" class="person line-bottom line-left-up">Mother</td>
+                                    <td class="person grand line-bottom">Grandfther</td>
+                                </tr>
+                                <tr>
+                                    <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
+                                        Date Here
+                                    </td>
+                                </tr>
+                                    <tr>
+                                        <td rowspan="2" class="bio"><progress value="70" max="100">70 %</progress>
+                                            Date Here
+                                        </td>
+                                        <td class="person grand line-bottom line-left-up">Grandmother</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
+                                            Date here
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                         
                     </div>
 
@@ -677,6 +758,8 @@
         <h4 class="mt-5 mb-3">💍 Familien & Kinder</h4>
 
         {% for family in object.spousal_families %}
+
+            
             <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
                 
                 <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
@@ -690,7 +773,7 @@
                             {% endif %}
                         {% elif family.wife == object and family.husband %}
                             Partner: 
-                            {% if apply_privacy and sibling.is_confidential %}
+                            {% if apply_privacy and family.husband.is_confidential %}
                                 <span class="text-muted fst-italic">🔒 vertraulich</span>
                             {% else %}
                                 <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
@@ -703,7 +786,7 @@
                     {% if family.marriage_date_parsed or family.marriage_date_raw %}
                         <span class="badge bg-secondary text-light">
                             ⚭ 
-                            {% if apply_privacy and sibling.is_confidential %}
+                            {% if apply_privacy and family.is_confidential %}
                                 <span class="text-muted fst-italic">🔒 vertraulich</span>
                             {% else %}
                                 {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
@@ -716,20 +799,24 @@
                     {% if family.children.all %}
                         <ul class="list-group list-group-flush">
                             {% for link in family.children.all %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                    <div>
-                                        <span class="me-2">
-                                            {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
-                                        </span>
-                                        <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                            {{ link.child.full_name }}
-                                        </a>
-                                    </div>
-                                    
-                                    {% if link.child.birth_date_raw %}
-                                        <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
-                                    {% endif %}
-                                </li>
+                                {% if apply_privacy and link.child.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                                        <div>
+                                            <span class="me-2">
+                                                {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
+                                            </span>
+                                            <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
+                                                {{ link.child.full_name }}
+                                            </a>
+                                        </div>
+                                        
+                                        {% if link.child.birth_date_raw %}
+                                            <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
+                                        {% endif %}
+                                    </li>
+                                {% endif %}
                             {% endfor %}
                         </ul>
                     {% else %}

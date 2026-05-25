@@ -52,29 +52,35 @@
                     <div class="list-group list-group-flush">
 
                         {% for event in place.events.all %}
-                            <div class="list-group-item">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1 fw-bold">{{ event.get_event_type_display }}</h6>
-                                    <small class="text-muted">
-                                        {{ event.parsed_date|date:"j. F Y"|default:event.raw_date|default:"Ohne Datum" }}
-                                    </small>
+                            {% if apply_privacy and event.is_confidential %}
+                                <div class="list-group-item">
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 </div>
-                                
-                                <p class="mb-1 mt-2">
-                                    {% if event.individual %}
-                                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
-                                            👤 {{ event.individual.given_name }} {{ event.individual.surname }}
-                                        </a>
-                                    {% elif event.family %}
-                                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
-                                            👪 Familie: 
-                                            {{ event.family.husband.surname|default:"Unbekannt" }} & {{ event.family.wife.surname|default:"Unbekannt" }}
-                                        </a>
-                                    {% else %}
-                                        <span class="text-muted">Keine Person/Familie zugeordnet</span>
-                                    {% endif %}
-                                </p>
-                            </div>
+                            {% else %}
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold">{{ event.get_event_type_display }}</h6>
+                                        <small class="text-muted">
+                                            {{ event.parsed_date|date:"j. F Y"|default:event.raw_date|default:"Ohne Datum" }}
+                                        </small>
+                                    </div>
+                                    
+                                    <p class="mb-1 mt-2">
+                                        {% if event.individual %}
+                                            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=event.individual.pk %}" class="text-decoration-none">
+                                                👤 {{ event.individual.given_name }} {{ event.individual.surname }}
+                                            </a>
+                                        {% elif event.family %}
+                                            <a href="{% url 'genview:family-detail' tree_id=tree_id pk=event.family.pk %}" class="text-decoration-none">
+                                                👪 Familie: 
+                                                {{ event.family.husband.surname|default:"Unbekannt" }} & {{ event.family.wife.surname|default:"Unbekannt" }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">Keine Person/Familie zugeordnet</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            {% endif %}
                         {% empty %}
                             <div class="list-group-item text-center py-4 text-muted">
                                 <p class="mb-0">Bisher sind keine Ereignisse mit diesem Ort verknüpft.</p>

@@ -60,21 +60,27 @@ def home(request):
 # ----------------------------------------------------------------------
 
 
-class TreeListView(LoginRequiredMixin, ListView):
+class TreeListView(ListView):
     model = Tree
     template_name = "genview/tree_list.html"
     context_object_name = "trees"
 
     def get_queryset(self):
-        # 1. Berechtigte Stammbaum-IDs ermitteln
+        # 1. Fall: Der Besucher ist NICHT eingeloggt (Anonymer Nutzer)
+        if not self.request.user.is_authenticated:
+            # Zeige ausschließlich Bäume an, die explizit öffentlich sind
+            return self.model.objects.filter(is_public=True).order_by('-id')
+
+        # 2. Fall: Der Nutzer IST eingeloggt
+        # Zuerst ermitteln wir alle IDs, für die er eine Mitgliedschaft hat
         allowed_tree_ids = TreeMembership.objects.filter(
             user=self.request.user
         ).values_list("gedcom_tree_id", flat=True)
 
-        # 2. Einfach nur filtern, KEIN annotate mehr!
+        # Dann filtern wir: Baum-ID ist in seiner Liste ODER der Baum ist öffentlich
         return self.model.objects.filter(
-            id__in=allowed_tree_ids
-        ).order_by('-id')
+            Q(id__in=allowed_tree_ids) | Q(is_public=True)
+        ).distinct().order_by('-id')
 
 
 class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
@@ -1240,7 +1246,7 @@ class PlaceListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
         return context
 
 # --- 2. Detail View ---
-class PlaceDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class PlaceDetailView(TreeAccessMixin, DetailView):
     model = Place
     template_name = "genview/place_detail.html"
     context_object_name = "place"
