@@ -20,7 +20,7 @@
                 
                 <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
                     <h3 class="mb-0 fw-bold">
-                        ⚡ {{ object.get_event_type_display }}-Ereignis
+                        ⚡ {{ object.event_type_name }}-Ereignis
                     </h3>
                     {% if object.parsed_date %}
                         <span class="badge bg-primary px-3 py-2 fs-6">📅 {{ object.parsed_date|date:"d.m.Y" }}</span>

@@ -4,7 +4,7 @@ import json
 import os
 from itertools import chain
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
@@ -26,6 +26,7 @@ from .models import (
     Individual,
     Family,
     Event,
+    EventType,
     ChildFamilyLink,
     MediaObject,
     Tree,
@@ -158,7 +159,7 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
     paginate_by = 25  # Helpful if you have thousands of records
 
     # --- Die Konfiguration für das Sortier-Mixin ---
-    sortable_fields = ['given_name', 'surname', 'annotated_birth_date', 'sex']
+    sortable_fields = ['given_name', 'surname', 'annotated_birth_date', 'annotated_death_date', 'sex']
     default_sort_field = 'surname'
     default_sort_dir = 'asc'
 
@@ -173,19 +174,32 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
         # Wir suchen das Geburts-Event, dessen 'individual'-Feld auf die aktuelle Person (OuterRef) zeigt.
         birth_date_sq = Event.objects.filter(
             individual_id=OuterRef('pk'),
-            event_type=Event.EventType.BIRTH
+            event_type__tag='BIRT'
         ).values('parsed_date')[:1]  # Wichtig: [:1] stellt sicher, dass wir exakt EINEN Wert zurückbekommen
 
-        birth_qs = Event.objects.filter(event_type=Event.EventType.BIRTH)
+        birth_qs = Event.objects.filter(event_type__tag='BIRT')
+
+        # Wir suchen das Todes-Ereignis für dieselbe Person (OuterRef)
+        death_date_sq = Event.objects.filter(
+            individual_id=OuterRef('pk'),
+            event_type__tag='DEAT'
+        ).values('parsed_date')[:1]
+
+        death_qs = Event.objects.filter(event_type__tag='DEAT').select_related('event_type')
 
         # 2. Basis-QuerySet mit der virtuellen Spalte annotieren
         qs = Individual.objects.filter(
             gedcom_tree_id=tree_id
         ).annotate(
-            # Erstellt eine virtuelle Datenbankspalte namens 'annotated_birth_date'
-            annotated_birth_date=Subquery(birth_date_sq)
+            # Virtuelle Spalte 1: Geburtsdatum für die Sortierung
+            annotated_birth_date=Subquery(birth_date_sq),
+            # 🔥 NEU: Virtuelle Spalte 2: Sterbedatum für die Sortierung
+            annotated_death_date=Subquery(death_date_sq)
         ).prefetch_related(
-            Prefetch("events", queryset=birth_qs, to_attr="birth_events")
+            # Lädt die Geburts-Events blitzschnell vorab ins Template
+            Prefetch("events", queryset=birth_qs, to_attr="birth_events"),
+            # 🔥 NEU: Lädt die Todes-Events blitzschnell vorab ins Template
+            Prefetch("events", queryset=death_qs, to_attr="death_events")
         )
 
         # 3. Filter anwenden (aus FilterableListViewMixin)
@@ -221,10 +235,11 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # Die saubere, robuste String-Notation für den Prefetch:
         return Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
             "events__media_objects",
-            "families_as_husband__wife",            # Holt die Ehefrauen, wenn die Person Ehemann ist
+            "families_as_husband__wife",             # Holt die Ehefrauen, wenn die Person Ehemann ist
             "families_as_husband__children__child",  # Holt die Kinder-Links + die Kinder-Personen dazu
-            "families_as_wife__husband",            # Holt die Ehemänner, wenn die Person Ehefrau ist
-            "families_as_wife__children__child"     # Holt die Kinder-Links + die Kinder-Personen dazu
+            "families_as_wife__husband",             # Holt die Ehemänner, wenn die Person Ehefrau ist
+            "families_as_wife__children__child",     # Holt die Kinder-Links + die Kinder-Personen dazu
+            "events__event_type"
         )
 
     # -----------------------------------------------------------------
@@ -340,9 +355,9 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             # Check the person's events to find birth and death dates
             # We use .all() and loop to avoid hitting the database multiple times per person
             for event in p.events.all():
-                if event.event_type == "BIRT" and not birth_date:
+                if event.event_type and event.event_type.tag == 'BIRT' and not birth_date:
                     birth_date = event.raw_date
-                elif event.event_type == "DEAT" and not death_date:
+                elif event.event_type and event.event_type.tag == 'DEAT' and not death_date:
                     death_date = event.raw_date
 
             # Format the date string nicely
@@ -760,30 +775,68 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
 # ----------------------------------------------------------------------
 
 
-class FamilyListView(TreeAccessMixin, ListView):
-    """
-    Zeigt eine paginierte Liste aller Familien des ausgewählten Baums.
-    Zusätzliche Annotationen:
-    * `children_count` – wie viele Kinder in der Familie verknüpft sind.
-    * `husband_name` / `wife_name` – für schnellere Anzeige (keine extra Query).
-    """
-
+class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = Family
     template_name = "genview/family_list.html"
     context_object_name = "families"
     paginate_by = 25
 
-    def get_queryset(self):
-        # 1. Grab the tree_id from the URL
-        tree_id = self.kwargs.get("tree_id")
+    # --- Die Konfiguration für das Sortier-Mixin ---
+    # Wir fügen 'children_count' zu den sortierbaren Feldern hinzu!
+    sortable_fields = ['husband__surname', 'wife__surname', 'annotated_marriage_date', 'children_count']
+    default_sort_field = 'husband__surname'
+    default_sort_dir = 'asc'
 
-        # 2. Filter by the tree FIRST, then do your joins and annotations
-        qs = (
-            Family.objects.filter(gedcom_tree_id=tree_id)
-            .select_related("husband", "wife")
-            .annotate(children_count=Count("children"))
-            .order_by("gedcom_id")
+    search_fields = [
+        'husband__given_name', 
+        'husband__surname', 
+        'wife__given_name', 
+        'wife__surname'
+    ]
+
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        
+        # 1. Die Subquery für das Heiratsdatum bauen
+        marriage_date_sq = Event.objects.filter(
+            family_id=OuterRef('pk'),
+            event_type__tag='MARR'
+        ).values('parsed_date')[:1]
+
+        # Das Basis-Queryset für das Prefetching im Template
+        marriage_qs = Event.objects.filter(event_type__tag='MARR').select_related('event_type')
+
+        # 2. Basis-QuerySet aufbauen und ALLE Annotationen mitgeben
+        qs = Family.objects.filter(
+            gedcom_tree_id=tree_id
+        ).select_related(
+            'husband', 'wife'
+        ).annotate(
+            # Annotation 1: Virtuelle Spalte für das Heiratsdatum
+            annotated_marriage_date=Subquery(marriage_date_sq),
+            # Annotation 2: Deine bisherige Logik für die Anzahl der Kinder
+            children_count=Count("children")
+        ).prefetch_related(
+            Prefetch("events", queryset=marriage_qs, to_attr="marriage_events")
         )
+
+        # 3. Filter anwenden (aus deinem Mixin)
+        filters = self.get_queryset_filters()
+        if filters:
+            qs = qs.filter(filters)
+
+        # 4. Sortierung anwenden (aus deinem Mixin)
+        ordering = self.get_ordering()
+        if ordering:
+            if ordering.startswith('-'):
+                field_name = ordering[1:]
+                qs = qs.order_by(F(field_name).desc(nulls_last=True))
+            else:
+                qs = qs.order_by(F(ordering).asc(nulls_last=True))
+        else:
+            # Fallback-Sortierung, falls kein Mixin-Ordering greift
+            qs = qs.order_by("gedcom_id")
+
         return qs
 
 
@@ -813,7 +866,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                 # Prefetch("events", queryset=Event.objects.all()),
                 Prefetch(
                     "events",
-                    queryset=Event.objects.filter(event_type=Event.EventType.MARRIAGE),
+                    queryset=Event.objects.filter(event_type__tag='MARR'),
                     to_attr="marriage_events",  # .marriage_events[0] ist das Event
                 ),
                 # Medien‑Objekte, die an die Familie gebunden sind
@@ -1320,7 +1373,7 @@ class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
     model = Event
     template_name = "genview/event_list.html"
     context_object_name = "events"
-    paginate_by = 50  # Shows 50 events per page for faster loading
+    paginate_by = 50
 
     # --- Sorting---
     sortable_fields = ['person_sort', 'parsed_date', 'place']
@@ -1333,17 +1386,16 @@ class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
         'family__husband__given_name', 'family__husband__surname',
         'family__wife__given_name', 'family__wife__surname'
     ]
-    exact_filter_fields = ['event_type']  # Z.B. ein Dropdown für Geburt, Tod, etc.
+    # Filtert jetzt automatisch auf die ID des EventTypes im ForeignKey
+    exact_filter_fields = ['event_type']  
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         
-        # 1. Wir laden alle Relationen vorab (für Performance) und annotieren die virtuelle Spalte
+        # FIX 1: 'event_type' zu select_related hinzugefügt für optimale Performance!
         qs = Event.objects.filter(gedcom_tree_id=tree_id).select_related(
-            'individual', 'family__husband', 'family__wife'
+            'individual', 'family__husband', 'family__wife', 'event_type'
         ).annotate(
-            # Wir erschaffen eine künstliche Spalte "person_sort" für die Datenbank.
-            # Coalesce nimmt den Nachnamen der Person. Wenn der NULL ist, nimmt es den des Mannes, dann den der Frau.
             person_sort=Coalesce(
                 'individual__surname',
                 'family__husband__surname',
@@ -1351,33 +1403,26 @@ class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
             )
         )
 
-        # 2. Filter aus dem Mixin anwenden (durchsucht die search_fields)
         filters = self.get_queryset_filters()
         if filters:
             qs = qs.filter(filters)
 
-        # 3. Sortierung aus dem Mixin anwenden (nutzt nun unser annotiertes 'person_sort')
         ordering = self.get_ordering()
         if ordering:
-            # Prüfen, ob absteigend (Minus-Zeichen) oder aufsteigend sortiert werden soll
             if ordering.startswith('-'):
-                # Feldname ohne Minus extrahieren
                 field_name = ordering[1:]
-                # Absteigend sortieren, leere Werte ans Ende!
                 qs = qs.order_by(F(field_name).desc(nulls_last=True))
             else:
-                # Aufsteigend sortieren, leere Werte ans Ende!
                 qs = qs.order_by(F(ordering).asc(nulls_last=True))
 
         return qs
     
     def get_context_data(self, **kwargs):
-        # 1. Den normalen Kontext (inklusive Paginierung, Sortierung, Filtern) laden
         context = super().get_context_data(**kwargs)
         
-        # 2. Die Auswahlmöglichkeiten für den Event-Typ aus dem Modell an das Template übergeben.
-        # .choices liefert eine Liste von Tupeln zurück: [('BIRT', 'Geburt'), ('DEAT', 'Tod'), ...]
-        context['event_types'] = Event.EventType.choices 
+        # FIX 2: Wir holen die dynamischen Event-Typen aus der neuen Tabelle
+        # (Alphabetisch sortiert, damit das Dropdown schön aufgeräumt ist)
+        context['event_types'] = EventType.objects.all().order_by('name') 
         
         return context
 
@@ -1386,36 +1431,37 @@ class EventDetailView(TreeAccessMixin, DetailView):
     model = Event
     template_name = "genview/event_detail.html"
 
+    def get_queryset(self):
+        """
+        Sicherheit: Stellt sicher, dass das Event überhaupt zu dem Baum 
+        gehört, der in der URL aufgerufen wurde.
+        Performance: Lädt die verknüpften Tabellen direkt mit.
+        """
+        tree_id = self.kwargs.get("tree_id")
+        return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
+            'event_type', 'individual', 'family', 'place'
+        )
+
     # -----------------------------------------------------------------
     # Security Check for Data Privacy
     # -----------------------------------------------------------------
     def get_object(self, queryset=None):
-        # 1. Hole die Person wie gewohnt aus der Datenbank.
-        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
-        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        # 1. Hole das EREIGNIS aus der Datenbank.
+        # (Das get_queryset oben sichert bereits ab, dass es zum Baum gehört)
         event = super().get_object(queryset)
 
-        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
+        # 2. Nutze die Helfermethode aus dem TreeAccessMixin
         apply_privacy = self.get_apply_privacy()
 
-        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
+        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND das Ereignis vertraulich ist:
         if apply_privacy and event.is_confidential:
-            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
             raise PermissionDenied(
-                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Dieses Ereignis unterliegt den Datenschutzrichtlinien. "
                 "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
             )
 
-        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
+        # 4. Nur wenn alles okay ist, wird das Ereignis an das Template übergeben
         return event
-
-    
-    def get_queryset(self):
-        # Nur Events aus dem aktuellen Stammbaum erlauben
-        tree_id = self.kwargs.get("tree_id")
-        return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
-            'individual', 'family', 'place'
-        )
     
 
 class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
@@ -1437,44 +1483,44 @@ class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['target_type'] = self.kwargs.get('target_type', 'individual')
-        kwargs["tree_id"] = self.kwargs.get("tree_id")
-
+        kwargs['tree_id'] = self.kwargs.get('tree_id')
         return kwargs
 
     def form_valid(self, form):
+        # 1. Den Baum zuweisen
         form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Ereignis erfolgreich hinzugefügt.")
+        
+        # 2. Speichern lassen (dadurch wird self.object erstellt)
+        response = super().form_valid(form)
+        
+        # 3. Maßgeschneiderte Erfolgsmeldung NACH dem erfolgreichen Speichern
+        if self.object.individual:
+            messages.success(self.request, f"Ereignis für {self.object.individual} erfolgreich hinzugefügt.")
+        elif self.object.family:
+            messages.success(self.request, "Familien-Ereignis erfolgreich hinzugefügt.")
+        else:
+            messages.success(self.request, "Ereignis erfolgreich gespeichert.")
 
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         
-        # 1. Prüfen: Gehört das gerade gespeicherte Event zu einer Person?
+        # Zurück zur Person?
         if self.object.individual:
-            messages.success(self.request, "Ereignis für Person erfolgreich gespeichert.")
-            return reverse_lazy(
-                "genview:individual-detail", 
-                kwargs={"tree_id": tree_id, "pk": self.object.individual.pk}
-            )
+            return reverse("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
             
-        # 2. Prüfen: Gehört das Event zu einer Familie?
+        # Zurück zur Familie?
         elif self.object.family:
-            messages.success(self.request, "Familien-Ereignis erfolgreich gespeichert.")
-            return reverse_lazy(
-                "genview:family-detail", 
-                kwargs={"tree_id": tree_id, "pk": self.object.family.pk}
-            )
+            return reverse("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
             
-        # 3. Fallback (sollte eigentlich nicht eintreten, aber sicher ist sicher)
-        messages.success(self.request, "Ereignis erfolgreich gespeichert.")
-        return reverse_lazy("genview:event-list", kwargs={"tree_id": tree_id})
+        # Fallback zur Liste
+        return reverse("genview:event-list", kwargs={"tree_id": tree_id})
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["target_type"] = self.kwargs.get('target_type')
         context["tree_id"] = self.kwargs.get("tree_id")
-
         return context
 
 
@@ -1483,34 +1529,55 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     form_class = EventForm
     template_name = "genview/event_form.html"
 
+    def get_queryset(self):
+        # SECURITY FIX: Verhindert das Bearbeiten von fremden Events per geratener ID
+        tree_id = self.kwargs.get("tree_id")
+        return Event.objects.filter(gedcom_tree_id=tree_id)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["tree_id"] = self.kwargs.get("tree_id")
+        
+        # FIX: Dem Formular mitteilen, welchen Typ wir gerade bearbeiten,
+        # damit es irrelevante Dropdowns (wie Familie bei einer Person) versteckt.
+        if self.object.family:
+            kwargs["target_type"] = "family"
+        else:
+            kwargs["target_type"] = "individual"
+            
         return kwargs
 
-    def get_queryset(self):
+    def form_valid(self, form):
+        # FIX: Saubere Erfolgsmeldungen (und kein "Bild" mehr 😉)
+        if self.object.individual:
+            messages.success(self.request, f"Ereignis für {self.object.individual} erfolgreich aktualisiert.")
+        elif self.object.family:
+            messages.success(self.request, "Familien-Ereignis erfolgreich aktualisiert.")
+        else:
+            messages.success(self.request, "Ereignis erfolgreich aktualisiert.")
+
+        return super().form_valid(form)
+    
+    def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        return Event.objects.filter(gedcom_tree_id=tree_id)
+        
+        if self.object.individual:
+            return reverse("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
+        elif self.object.family:
+            return reverse("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
+            
+        return reverse("genview:event-list", kwargs={"tree_id": tree_id})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["tree_id"] = self.kwargs.get("tree_id")
         
+        # Den target_type auch an das Template übergeben (nützlich für Überschriften)
+        context["target_type"] = "family" if self.object.family else "individual"
         context["person"] = self.object.individual
         context["family"] = self.object.family
         return context
     
-    def get_success_url(self):
-        tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Bild aktualisiert.")
-        
-        if self.object.individual:
-            return reverse_lazy("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
-        elif self.object.family:
-            return reverse_lazy("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
-        else:
-            return reverse_lazy("genview:event-list", kwargs={"tree_id": tree_id})
-
 
 class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Event

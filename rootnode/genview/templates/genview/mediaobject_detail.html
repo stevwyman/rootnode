@@ -68,7 +68,7 @@
                         {% for event in media.events.all %}
                             <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span>📅 Ereignis: <strong>{{ event.get_event_type_display }}</strong></span>
+                                    <span>📅 Ereignis: <strong>{{ event.event_type_name }}</strong></span>
                                     {% if event.parsed_date or event.raw_date %}
                                         <small class="text-muted d-block ps-4">
                                             Datum: {{ event.parsed_date|date:"d.m.Y"|default:event.raw_date }}

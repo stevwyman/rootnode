@@ -137,7 +137,7 @@ class IndividualForm(ModelForm):
         birth_raw = self.cleaned_data.get("birth_date_raw")
         birth_parsed = self.cleaned_data.get("birth_date_parsed")
         if birth_raw or birth_parsed:
-            birth_evt = self._get_or_create_event(individual, Event.EventType.BIRTH)
+            birth_evt = self._get_or_create_event(individual, event_type__tag='BIRT')
             birth_evt.raw_date = birth_raw or ""
             birth_evt.parsed_date = birth_parsed
             birth_evt.save()
@@ -145,7 +145,7 @@ class IndividualForm(ModelForm):
             # wenn beide Felder leer sind, löschen wir ggf. das Event
             Event.objects.filter(
                 individual=individual,
-                event_type=Event.EventType.BIRTH,
+                event_type__tag='BIRT',
             ).delete()
 
         # ----------------------------------------------------------
@@ -154,14 +154,14 @@ class IndividualForm(ModelForm):
         death_raw = self.cleaned_data.get("death_date_raw")
         death_parsed = self.cleaned_data.get("death_date_parsed")
         if death_raw or death_parsed:
-            death_evt = self._get_or_create_event(individual, Event.EventType.DEATH)
+            death_evt = self._get_or_create_event(individual, event_type__tag='DEAT')
             death_evt.raw_date = death_raw or ""
             death_evt.parsed_date = death_parsed
             death_evt.save()
         else:
             Event.objects.filter(
                 individual=individual,
-                event_type=Event.EventType.DEATH,
+                event_type__tag='DEAT',
             ).delete()
 
         return individual
@@ -271,11 +271,11 @@ class FamilyForm(ModelForm):
     # --------------------------------------------------------------
     @staticmethod
     def _get_or_create_marriage_event(family: Family) -> Event:
-        ev = family.events.filter(event_type=Event.EventType.MARRIAGE).first()
+        ev = family.events.filter(event_type__tag='MARR').first()
         if not ev:
             ev = Event.objects.create(
                 family=family,
-                event_type=Event.EventType.MARRIAGE,
+                event_type__tag='MARR',
             )
         return ev
 
@@ -304,7 +304,7 @@ class FamilyForm(ModelForm):
             # wenn alle Felder leer sind, entfernen wir ggf. das Event
             Event.objects.filter(
                 family=family,
-                event_type=Event.EventType.MARRIAGE,
+                event_type__tag='MARR',
             ).delete()
 
         return family
@@ -442,88 +442,69 @@ class PlaceForm(forms.ModelForm):
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
-        # Include your other event fields here too
         fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'description', 'sources', 'individual', 'family'] 
         widgets = {
             'event_type': forms.Select(attrs={'class': 'form-select'}),
-            'date_raw': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
+            # FIX: Hieß vorher 'date_raw'
+            'raw_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
             'parsed_date': forms.DateInput(
-                format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
+                format='%Y-%m-%d',
                 attrs={
                     'class': 'form-control', 
-                    'type': 'date'  # Öffnet den nativen Browser-Kalender
+                    'type': 'date'
                 }
             ),
-            'place': forms.Select(attrs={'class': 'form-select'}), # Change to Select
+            'place': forms.Select(attrs={'class': 'form-select'}),
             'sources': forms.CheckboxSelectMultiple(),
         }
 
-    # TODO: check if person, family and tree_id are necessary
     def __init__(self, *args, **kwargs):
-
-        # 1. WICHTIG: Zuerst mit .pop() unsere Variablen herausziehen und LÖSCHEN.
-        # So verhindern wir, dass Django's BaseModelForm davon erfährt!
+        # 1. Variablen herausziehen und löschen
         target_type = kwargs.pop('target_type', 'individual')
         tree_id = kwargs.pop('tree_id', None)
         
-        # 2. ERST JETZT rufen wir super() auf. Die kwargs sind jetzt "sauber".
+        # 2. Basis-Formular initialisieren
         super().__init__(*args, **kwargs)
 
-        # 3. Dropdowns filtern
-        if tree_id:
-            if 'individual' in self.fields:
-                self.fields['individual'].queryset = Individual.objects.filter(gedcom_tree_id=tree_id).order_by('surname', 'given_name')
-            if 'family' in self.fields:
-                self.fields['family'].queryset = Family.objects.filter(gedcom_tree_id=tree_id)
+        # 3. Den korrekten Stammbaum ermitteln (Priorität: Bestehendes Event > URL Parameter)
+        current_tree_id = self.instance.gedcom_tree_id if self.instance and self.instance.pk else tree_id
 
-        # 4. Formular anpassen und irrelevante Felder komplett entfernen
+        # 4. SECURITY FIX: Alle Dropdowns auf den aktuellen Baum filtern
+        if current_tree_id:
+            if 'individual' in self.fields:
+                self.fields['individual'].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id).order_by('surname', 'given_name')
+            if 'family' in self.fields:
+                self.fields['family'].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
+            if 'place' in self.fields:
+                self.fields['place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
+            if 'sources' in self.fields:
+                self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+        else:
+            # Sicherheits-Fallback: Wenn kein Baum bekannt ist, alles leeren!
+            for field in ['individual', 'family', 'place', 'sources']:
+                if field in self.fields:
+                    self.fields[field].queryset = self.fields[field].queryset.none()
+
+        # 5. Smart Workflow: Formular je nach Event-Ziel anpassen
         if target_type == 'individual':
             if 'family' in self.fields:
-                del self.fields['family']
+                del self.fields['family']  # Familienfeld bei Personen-Events löschen
             
-            # Sicherheits-Check: Nur ändern, wenn das Feld auch im Formular geladen wurde
             if 'individual' in self.fields:
                 self.fields['individual'].required = True
-                
-                # Smart Workflow: Feld verstecken, wenn per URL übergeben
+                # Feld verstecken, wenn die Person bereits übergeben wurde
                 if self.initial.get('individual'):
                     self.fields['individual'].widget = forms.HiddenInput()
                 
         elif target_type == 'family':
             if 'individual' in self.fields:
-                del self.fields['individual']
+                del self.fields['individual']  # Personenfeld bei Familien-Events löschen
             
-            # Sicherheits-Check: Nur ändern, wenn das Feld auch im Formular geladen wurde
             if 'family' in self.fields:
                 self.fields['family'].required = True
-                
-                # Smart Workflow: Feld verstecken, wenn per URL übergeben
+                # Feld verstecken, wenn die Familie bereits übergeben wurde
                 if self.initial.get('family'):
                     self.fields['family'].widget = forms.HiddenInput()
-        
-        # SECURITY FIX: Only show sources belonging to THIS tree
-        current_tree_id = tree_id
-        if self.instance and self.instance.pk:
-            current_tree_id = self.instance.gedcom_tree_id
-
-        if current_tree_id:
-            if 'sources' in self.fields:
-                self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
-            if 'place' in self.fields:
-                self.fields['place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id) # NEW
-        else:
-            if 'sources' in self.fields:
-                self.fields['sources'].queryset = Source.objects.none()
-            if 'place' in self.fields:
-                self.fields['place'].queryset = Place.objects.none() # NEW
-
-        # 4. Wenn die ID schon übergeben wurde, verstecken wir das Feld, 
-        # damit der Nutzer es nicht mehr ändern muss/kann!
-        if target_type == 'individual' and self.initial.get('individual'):
-            self.fields['individual'].widget = forms.HiddenInput()
-            
-        elif target_type == 'family' and self.initial.get('family'):
-            self.fields['family'].widget = forms.HiddenInput()
 
 
 class SourceForm(forms.ModelForm):

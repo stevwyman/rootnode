@@ -123,7 +123,14 @@
                                 {% endif %}
                                 </a>
                             </th>
-                            <th>Sterbedatum</th>
+                            <th>
+                                <a href="?sort=annotated_death_date&dir={% if current_sort == 'annotated_death_date' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
+                                Sterbedatum
+                                {% if current_sort == 'annotated_death_date' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
                             {% if can_edit %}
                             <th>Aktionen</th>
                             {% endif %}
@@ -133,6 +140,7 @@
                         {% for person in object_list %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
+                            
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
@@ -140,6 +148,7 @@
                                     <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
                                 {% endif %}
                             </td>
+                            
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
@@ -147,6 +156,7 @@
                                     <a href="{{ person.get_absolute_url }}">{{ person.given_name }}</a>
                                 {% endif %}
                             </td>
+                            
                             <td>{{ person.get_sex_display }}</td>
                             <td>
                                 {% if person.age %}
@@ -154,38 +164,42 @@
                                 {% endif %}
                             </td>
 
-                            {# ---- Geburtsdatum ---- #}
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    {% if person.birth_date %}
-                                        <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
-                                    {% elif person.birth_date_raw %}
-                                        <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
+                                    {% with b_event=person.birth_events|first %}
+                                        {% if b_event.parsed_date %}
+                                            <span class="badge bg-primary">{{ b_event.parsed_date|date:"d.m.Y" }}</span>
+                                        {% elif b_event.raw_date %}
+                                            <span class="badge bg-secondary">{{ b_event.raw_date }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    {% endwith %}
                                 {% endif %}
                             </td>
-                            {# ---- Sterbedatum (optional) ---- #}
+                            
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
                                     {% if person.is_deceased %}
-                                        {% if person.death_date %}
-                                            <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
-                                        {% elif person.death_date_raw %}
-                                            <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
-                                        {% else %}
-                                            <span class="text-muted">‑</span>
-                                        {% endif %}
+                                        {% with d_event=person.death_events|first %}
+                                            {% if d_event.parsed_date %}
+                                                <span class="badge bg-primary">{{ d_event.parsed_date|date:"d.m.Y" }}</span>
+                                            {% elif d_event.raw_date %}
+                                                <span class="badge bg-secondary">{{ d_event.raw_date }}</span>
+                                            {% else %}
+                                                <span class="text-muted">‑</span>
+                                            {% endif %}
+                                        {% endwith %}
                                     {% else %}
                                         <span class="text-muted">‑</span>
                                     {% endif %}
                                 {% endif %}
                             </td>
+                            
                             {% if can_edit %}
                             <td>
                                 <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
@@ -196,7 +210,7 @@
                             {% endif %}
                         </tr>
                         {% empty %}
-                        <tr><td colspan="5" class="text-center">Keine Personen gefunden.</td></tr>
+                        <tr><td colspan="8" class="text-center py-4 text-muted">Keine Personen gefunden.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

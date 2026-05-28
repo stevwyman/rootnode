@@ -107,7 +107,7 @@
                     <ul class="list-group list-group-flush">
                         {% for event in source.events.all %}
                             <li class="list-group-item">
-                                <strong>{{ event.get_event_type_display }}</strong>
+                                <strong>{{ event.event_type_name }}</strong>
                                 
                                 {% if event.parsed_date or event.raw_date %}
                                     <br><small class="text-muted">{{ event.parsed_date|date:"j N Y"|default:event.raw_date }}</small>

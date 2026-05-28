@@ -209,12 +209,12 @@ class Individual(GedcomIdMixin):
         """
         # `events` ist ein RelatedManager; ``filter`` gibt ein QuerySet zurück.
         # Wir holen das **erste** passende Event (es sollte nur eines geben).
-        return self.events.filter(event_type=Event.EventType.BIRTH).first()
+        return self.events.filter(event_type__tag='BIRT').first()
 
     @property
     def death_event(self) -> Optional["Event"]:
         """Liefert das zugehörige ``DEAT``‑Event (oder ``None``)."""
-        return self.events.filter(event_type=Event.EventType.DEATH).first()
+        return self.events.filter(event_type__tag='DEAT').first()
 
     @property
     def birth_date(self) -> Optional[date]:
@@ -449,7 +449,7 @@ class Family(MPTTModel, GedcomIdMixin):
         Gibt das erste Event vom Typ MARR (Marriage) zurück
         oder ``None`` wenn die Familie kein Heirats‑Eintrag hat.
         """
-        return self.events.filter(event_type=Event.EventType.MARRIAGE).first()
+        return self.events.filter(event_type__tag='MARR').first()
 
     # Optional: noch ein Property für den Ort (falls du es im Template
     # noch etwas kürzer schreiben willst)
@@ -578,25 +578,49 @@ class Place(GedcomIdMixin):
     
 
 # ----------------------------------------------------------------------
-# 7️⃣ EVENTS – können einer Person ODER einer Familie zugeordnet sein
+# 7️⃣ EVENT_Types – sind Teil eines Events
+# ----------------------------------------------------------------------
+class EventType(models.Model):
+    class Category(models.TextChoices):
+        INDIVIDUAL = 'IND', 'Personen-Ereignis'
+        FAMILY = 'FAM', 'Familien-Ereignis'
+        BOTH = 'BOTH', 'Beides'
+
+    # Der feste GEDCOM-Standard-Tag (z.B. 'BIRT', 'DEAT', 'OCCU', 'MARR')
+    # Das ist unser Anker für den Python-Code!
+    tag = models.CharField(max_length=4, unique=True, verbose_name="GEDCOM Tag")
+    
+    # Der Name, der in der Oberfläche angezeigt wird (z.B. "Beruf", "Geburt")
+    name = models.CharField(max_length=100, verbose_name="Anzeigename")
+    
+    category = models.CharField(
+        max_length=4, 
+        choices=Category.choices, 
+        default=Category.INDIVIDUAL,
+        verbose_name="Kategorie"
+    )
+
+    class Meta:
+        verbose_name = "Ereignis-Typ"
+        verbose_name_plural = "Ereignis-Typen"
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.tag})"
+
+
+# ----------------------------------------------------------------------
+# 8️⃣ EVENTS – können einer Person ODER einer Familie zugeordnet sein
 # ----------------------------------------------------------------------
 class Event(models.Model):
     """Einzel‑Event (z. B. BIRT, DEAT, MARR, DIV …)."""
 
-    class EventType(models.TextChoices):
-        # ---- Individual‑Events ----
-        BIRTH = "BIRT", "Birth"
-        CHRISTENING = "CHR", "Christening"
-        DEATH = "DEAT", "Death"
-        BURIAL = "BURI", "Burial"
-        RELIGION = "RELI", "Religion"
-        OCCUPATION = "OCCU", "Occupation"
-        # ---- Family‑Events ----
-        MARRIAGE = "MARR", "Marriage"
-        DIVORCE = "DIV", "Divorce"
-        ENGAGEMENT = "ENGA", "Engagement"
-
-    event_type = models.CharField(max_length=10, choices=EventType.choices)
+    event_type = models.ForeignKey(
+        EventType, 
+        on_delete=models.RESTRICT, # Verhindert, dass jemand aus Versehen "Geburt" löscht
+        related_name="events",
+        verbose_name="Ereignistyp"
+    )
 
     gedcom_tree = models.ForeignKey(
         Tree, on_delete=models.CASCADE, related_name="events"
@@ -651,13 +675,42 @@ class Event(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        verbose_name = "Ereignis"
+        verbose_name_plural = "Ereignisse"
+        
+        # 🔥 NEU: Der magische Performance-Turbo für deine Sortierung!
         indexes = [
-            models.Index(fields=["event_type", "parsed_date"]),
+            models.Index(fields=['individual', 'event_type', 'parsed_date']),
+            # Falls du später auch nach Familien-Events (z.B. Heirat) sortierst:
+            models.Index(fields=['family', 'event_type', 'parsed_date']),
         ]
 
-    def __str__(self) -> str:
-        target = self.individual or self.family
-        return f"{self.get_event_type_display()} – {target}"
+    def event_type_name(self):
+        return self.event_type.name if self.event_type else "Unbekanntes Ereignis"
+
+    def __str__(self):
+        # 1. Den Namen des Events aus der neuen verknüpften Tabelle holen
+        # (Sicherheits-Fallback, falls das Feld aus irgendeinem Grund leer sein sollte)
+        event_name = self.event_type.name if self.event_type else "Unbekanntes Ereignis"
+        
+        # 2. Wem gehört das Ereignis?
+        owner = ""
+        if self.individual:
+            # Nutzt automatisch die __str__ Methode der Person (z.B. "Max Mustermann")
+            owner = f" von {self.individual}"
+        elif self.family:
+            # Nutzt automatisch die __str__ Methode der Familie
+            owner = f" der Familie {self.family}"
+            
+        # 3. Wann ist es passiert? (Zieht das Jahr für mehr Übersichtlichkeit)
+        date_str = ""
+        if self.parsed_date:
+            date_str = f" ({self.parsed_date.year})"
+        elif self.raw_date:
+            date_str = f" ({self.raw_date})"
+            
+        # Baut alles zusammen: z.B. "Geburt von Max Mustermann (1990)"
+        return f"{event_name}{owner}{date_str}"
 
     # --------------------------------------------------------------
     # Validierung: Es darf nie **beide** FK gleichzeitig gesetzt sein
@@ -687,8 +740,9 @@ class Event(models.Model):
         return True
 
 
+
 # ----------------------------------------------------------------------
-# 8️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
+# 9️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
 # ----------------------------------------------------------------------
 class MediaObject(GedcomIdMixin):
     gedcom_prefix = "M"  # Ergibt z.B. M-M102

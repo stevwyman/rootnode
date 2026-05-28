@@ -85,7 +85,7 @@ class IndividualListViewTests(TestCase):
         """Logged-in users WITH a TreeMembership should see public data."""
         # Fix: Wir erstellen ein Sterbe-Event, damit das Property 'is_deceased' True wird!
         from genview.models import Event
-        Event.objects.create(individual=self.person, event_type=Event.EventType.DEATH, gedcom_tree=self.tree)
+        Event.objects.create(individual=self.person, event_type=event_type__tag='DEAT', gedcom_tree=self.tree)
 
         self.client.login(username="auth_user", password="password")
         response = self.client.get(self.url)

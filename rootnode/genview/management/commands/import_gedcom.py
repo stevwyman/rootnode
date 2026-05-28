@@ -4,7 +4,7 @@ from datetime import date
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from genview.models import Tree, Individual, Family, Event, Source, Place, ChildFamilyLink
+from genview.models import Tree, Individual, Family, Event, EventType, Source, Place, ChildFamilyLink
 
 class Command(BaseCommand):
     help = 'Importiert eine GEDCOM-Datei und erstellt dabei einen neuen Stammbaum, Orte und Quellen.'
@@ -237,21 +237,50 @@ class Command(BaseCommand):
     # EREIGNIS-ERSTELLUNG (Hier passiert die Magie für PLAC und SOUR!)
     # -------------------------------------------------------------------------
     def _create_events_from_record(self, tree, record, individual=None, family=None):
-        # Liste der GEDCOM Ereignis-Tags, die du unterstützen möchtest
-        event_tags = ['BIRT', 'DEAT', 'MARR', 'CHR', 'BURI'] 
+        # 1. Blacklist: Diese Level-1-Tags sind reine Struktur-Daten, KEINE Ereignisse!
+        structural_tags = {
+            'NAME', 'SEX', 'FAMS', 'FAMC', 'HUSB', 'WIFE', 'CHIL', 
+            'NOTE', 'OBJE', 'CHAN', 'RESN', 'RIN', 'AFN', 'SOUR'
+        }
         
-        for e_tag in event_tags:
+        # 2. Sammle alle unbekannten/Ereignis-Tags aus dem aktuellen Record
+        found_event_tags = set()
+        for line in record:
+            parts = line.split(' ', 2)
+            if parts[0] == '1':  # Wir schauen nur auf Ebene 1
+                tag = parts[1]
+                if tag not in structural_tags:
+                    found_event_tags.add(tag)
+
+        # 3. Schleife über alle entdeckten Ereignisse
+        for e_tag in found_event_tags:
+            
+            # 🔥 NEU: Auto-Discovery! Wenn der Tag fehlt, legt Django ihn jetzt an.
+            event_type_obj, created = EventType.objects.get_or_create(
+                tag=e_tag,
+                defaults={
+                    # Als Platzhalter-Name nehmen wir erstmal den Tag selbst (z.B. "OCCU")
+                    'name': e_tag, 
+                    # Automatische Zuweisung, ob das zu einer Person oder Familie gehört
+                    'category': EventType.Category.INDIVIDUAL if individual else EventType.Category.FAMILY
+                }
+            )
+
+            # Optional: Gibt eine kleine Info im Terminal aus, wenn das Skript etwas Neues lernt
+            if created:
+                self.stdout.write(self.style.WARNING(f"  -> Neuer Event-Typ entdeckt und gelernt: {e_tag}"))
+
+            # Jetzt holen wir die Daten (Datum, Ort) für diesen Tag
             event_data = self._extract_tags(record, e_tag)
             
             if not event_data:
-                continue # Dieses Ereignis gibt es in diesem Record nicht
+                continue
 
             # 1. ORT (PLAC) VERARBEITEN
             place_obj = None
             if 'PLAC' in event_data and event_data['PLAC']:
                 place_name = event_data['PLAC'][0]
-                # get_or_create verhindert, dass "Berlin" hundertmal angelegt wird!
-                place_obj, created = Place.objects.get_or_create(
+                place_obj, _ = Place.objects.get_or_create(
                     gedcom_tree=tree, 
                     name=place_name
                 )
@@ -262,10 +291,10 @@ class Command(BaseCommand):
             # 2. EREIGNIS (EVENT) ERSTELLEN
             event = Event.objects.create(
                 gedcom_tree=tree,
-                event_type=e_tag,
+                event_type=event_type_obj,  # Nutzt unser gefundenes oder neu erstelltes Objekt
                 raw_date=raw_date_str,
                 parsed_date=parsed_date_obj,
-                place=place_obj, # Hier wird der ForeignKey zugewiesen!
+                place=place_obj,
                 individual=individual,
                 family=family
             )
@@ -273,7 +302,6 @@ class Command(BaseCommand):
             # 3. QUELLEN (SOUR) VERKNÜPFEN
             if 'SOUR' in event_data:
                 for sour_id in event_data['SOUR']:
-                    # Wenn die Quelle in Phase 1 gefunden wurde, verbinden!
                     if sour_id in self.source_map:
                         event.sources.add(self.source_map[sour_id])
 

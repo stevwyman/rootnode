@@ -4,6 +4,7 @@ from .models import (
     Individual,
     Family,
     Event,
+    EventType,
     Source,
     MediaObject,
     ChildFamilyLink,
@@ -12,7 +13,7 @@ from .models import (
 )
 
 admin.site.register(
-    [Tree, TreeMembership, Individual, Family, Event, Source, ChildFamilyLink]
+    [Tree, TreeMembership, Individual, Family, Event, EventType, Source, ChildFamilyLink]
 )
 
 

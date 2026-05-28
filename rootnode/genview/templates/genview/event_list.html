@@ -45,15 +45,12 @@
 
                 <div class="col-md-3">
                     <select name="event_type" class="form-select">
-                        <option value="">Alle Ereignistypen</option>
-                        
-                        {% for code, label in event_types %}
-                            <option value="{{ code }}" {% if current_filter_event_type == code|stringformat:"s" %}selected{% endif %}>
-                                {{ label }}
-                            </option>
+                        <option value="">Alle Ereignisse</option>
+                        {% for type in event_types %}
+                            <option value="{{ type.id }}">{{ type.name }}</option>
                         {% endfor %}
-                        
                     </select>
+
                 </div>
 
                 <div class="col-md-4">
@@ -122,7 +119,7 @@
                                     {% else %}
                                         <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}">
                                             <span class="badge bg-secondary">
-                                                {{ event.get_event_type_display }}
+                                                {{ event.event_type_name }}
                                             </span>
                                         </a> 
                                     {% endif %}

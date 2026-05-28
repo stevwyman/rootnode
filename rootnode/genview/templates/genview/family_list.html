@@ -13,6 +13,26 @@
         {% endif %}
     </div>
 
+    <!-- filter and search -->
+    <div class="card mb-4 shadow-sm border-0 bg-light">
+        <div class="card-body">
+            <form method="get" class="d-flex mb-3">
+                {% if current_sort %}
+                    <input type="hidden" name="sort" value="{{ current_sort }}">
+                    <input type="hidden" name="dir" value="{{ current_dir }}">
+                {% endif %}
+                
+                <span class="input-group-text">🔍</span>
+                <input type="search" name="q" value="{{ current_search|default:'' }}" class="form-control me-2" placeholder="Nach Namen suchen...">
+                <button class="btn btn-primary" type="submit">Suchen</button>
+                
+                {% if current_search %}
+                    <a href="?" class="btn btn-outline-secondary ms-2">Zurücksetzen</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -20,50 +40,84 @@
                     <thead class="table-primary">
                         <tr>
                             <th>#</th>
-                            <th>Familien‑ID</th>
-                            <th>Ehepartner / Partner</th>
-                            <th>Kinder‑Anzahl</th>
+                            <th>ID</th>
+                            <th>Ehemann</th>
+                            <th>Ehefrau</th>
+                            <th>
+                                <a href="?sort=annotated_marriage_date&dir={% if current_sort == 'annotated_marriage_date' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}" class="text-decoration-none text-dark d-block">
+                                Heiratsdatum
+                                {% if current_sort == 'annotated_marriage_date' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=children_count&dir={% if current_sort == 'children_count' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}" class="text-decoration-none text-dark d-block">
+                                Kinder
+                                {% if current_sort == 'children_count' %}
+                                    {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
+                                {% endif %}
+                                </a>
+                            </th>
                             {% if can_edit %}
                             <th>Aktionen</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
-                    {% for fam in families %}
+                    {% for family in families %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
                             <td>
-                                {% if apply_privacy and fam.is_confidential %}
+                                {% if apply_privacy and family.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    <a href="{% url 'genview:family-detail' tree_id fam.pk %}">
-                                            {{ fam.gedcom_id }}
+                                    <a href="{% url 'genview:family-detail' tree_id family.pk %}">
+                                            {{ family.gedcom_id }}
                                     </a>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if apply_privacy and fam.is_confidential %}
+                                {% if apply_privacy and family.husband.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    {% if fam.husband %}
-                                        {{ fam.husband.full_name }} ({{ fam.husband.get_sex_display }})
-                                    {% else %}
-                                        <span class="text-muted">kein Husband</span>
-                                    {% endif %}
-                                    &nbsp;–&nbsp;
-                                    {% if fam.wife %}
-                                        {{ fam.wife.full_name }} ({{ fam.wife.get_sex_display }})
-                                    {% else %}
-                                        <span class="text-muted">keine Wife</span>
-                                    {% endif %}
+                                    {{ family.husband.surname }}, {{ family.husband.given_name|default:"-" }}
                                 {% endif %}
                             </td>
-                            <td>{{ fam.children_count }}</td>
+                            <td>
+                                {% if apply_privacy and family.wife.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {{ family.wife.surname }}, {{ family.wife.given_name|default:"-" }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if apply_privacy and family.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {% with m_event=family.marriage_events|first %}
+                                        {% if m_event.parsed_date %}
+                                            <span class="badge bg-primary">{{ m_event.parsed_date|date:"d.m.Y" }}</span>
+                                        {% elif m_event.raw_date %}
+                                            <span class="badge bg-secondary">{{ m_event.raw_date }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if family.children_count > 0 %}
+                                    <span class="badge bg-info text-light">{{ family.children_count }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
                             {% if can_edit %}
                             <td class="text-end pe-4">
                                 <div class="btn-group">
-                                    <a href="{% url 'genview:family-edit' tree_id=tree_id pk=fam.pk %}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
-                                    <a href="{% url 'genview:family-delete' tree_id=tree_id pk=fam.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                                    <a href="{% url 'genview:family-edit' tree_id=tree_id pk=family.pk %}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
+                                    <a href="{% url 'genview:family-delete' tree_id=tree_id pk=family.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
                                 </div>
                             </td>
                             {% endif %}
