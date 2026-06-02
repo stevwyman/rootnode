@@ -4,7 +4,7 @@ from datetime import date
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from genview.models import Tree, Individual, Family, Event, EventType, Source, Place, ChildFamilyLink
+from genview.models import Tree, Individual, Family, Event, EventType, Source, Place, ChildFamilyLink, AlternativeName
 
 class Command(BaseCommand):
     help = 'Importiert eine GEDCOM-Datei und erstellt dabei einen neuen Stammbaum, Orte und Quellen.'
