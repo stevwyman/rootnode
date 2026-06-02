@@ -849,3 +849,39 @@ class MediaObject(GedcomIdMixin):
         # Wenn das Bild mit gar nichts Vertraulichem verknüpft ist (oder historische
         # Personen zeigt), darf es öffentlich angezeigt werden.
         return False
+
+
+# ----------------------------------------------------------------------
+# 🔟 alternative names for i.e. marriage
+# ----------------------------------------------------------------------
+class AlternativeName(models.Model):
+    class NameType(models.TextChoices):
+        MARRIED = 'married', 'Ehename'
+        MAIDEN = 'maiden', 'Geburtsname (abweichend)'
+        AKA = 'aka', 'Alias / Spitzname'
+        IMMIGRANT = 'immigrant', 'Einwanderer-Name'
+        UNKNOWN = 'unknown', 'Alternativer Name'
+
+    individual = models.ForeignKey(
+        'Individual', 
+        on_delete=models.CASCADE, 
+        related_name='alternative_names'
+    )
+    given_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Vorname")
+    surname = models.CharField(max_length=100, blank=True, null=True, verbose_name="Nachname")
+    
+    # Speichert den GEDCOM-Typ (z.B. married, aka)
+    name_type = models.CharField(
+        max_length=20, 
+        choices=NameType.choices, 
+        default=NameType.MARRIED,
+        verbose_name="Namens-Typ"
+    )
+
+    class Meta:
+        verbose_name = "Alternativer Name"
+        verbose_name_plural = "Alternative Namen"
+
+    def __str__(self):
+        type_display = self.get_name_type_display()
+        return f"{self.given_name or ''} {self.surname or ''} ({type_display})".strip()

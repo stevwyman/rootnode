@@ -49,25 +49,46 @@ class Command(BaseCommand):
     # HILFSFUNKTIONEN FÜR DAS PARSING
     # -------------------------------------------------------------------------
     def _parse_to_records(self, file_path):
-        """Teilt die GEDCOM Datei in logische Blöcke (jeder startet mit '0')."""
+        """Teilt die GEDCOM Datei in logische Blöcke und repariert mehrzeilige Texte."""
         records = []
         current_record = []
         
         with open(file_path, 'r', encoding='utf-8-sig') as f:
             for line in f:
-                line = line.strip()
+                # WICHTIG: Hier nutzen wir rstrip('\r\n') statt strip(). 
+                # Ein Leerzeichen am Ende einer Zeile MUSS erhalten bleiben, 
+                # da sonst Wörter bei CONC ungewollt zusammenkleben!
+                line = line.rstrip('\r\n')
                 if not line: continue
                 
                 parts = line.split(' ', 2)
                 level = parts[0]
+                tag = parts[1] if len(parts) > 1 else ""
+                value = parts[2] if len(parts) > 2 else ""
                 
+                # --- DER MAGISCHE REPARATUR-BLOCK FÜR CONC UND CONT ---
+                if tag == 'CONC':
+                    if current_record:
+                        # Nahtlos an die vorherige Zeile anhängen
+                        current_record[-1] += value
+                    continue  # Diese Zeile NICHT als eigene Zeile im Record speichern!
+                    
+                elif tag == 'CONT':
+                    if current_record:
+                        # Mit einem echten Python-Zeilenumbruch (\n) anhängen
+                        current_record[-1] += "\n" + value
+                    continue  # Diese Zeile NICHT als eigene Zeile im Record speichern!
+                # -------------------------------------------------------
+
                 if level == '0' and current_record:
                     records.append(current_record)
                     current_record = []
+                    
                 current_record.append(line)
                 
         if current_record:
             records.append(current_record)
+            
         return records
 
     def _extract_tags(self, record, parent_tag):
@@ -123,7 +144,7 @@ class Command(BaseCommand):
                 )
                 self.source_map[gedcom_id] = source
 
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # PHASE 2: PERSONEN (Und ihre Ereignisse/Orte)
     # -------------------------------------------------------------------------
     def _import_individuals(self, tree, records):
@@ -132,48 +153,62 @@ class Command(BaseCommand):
             if len(header) > 2 and header[2] == 'INDI':
                 gedcom_id = header[1]
                 
-                # Default values
+                # --- NAMENS-PARSING UPDATE ---
                 given_name = "Unbekannt"
                 surname = "Unbekannt"
-                sex = "U"  # Default to Individual.Sex.UNKNOWN
+                sex = "U"
                 
+                primary_name_set = False
+                alt_names_to_create = [] # Temporärer Speicher für zusätzliche Namen
+
                 for i, line in enumerate(record):
-                    # 1. Parse Name
                     if line.startswith("1 NAME "):
                         raw_name = line[7:].strip()
                         
+                        # Lokale Variablen für diesen spezifischen Namensblock
+                        current_given = ""
+                        current_surname = ""
+                        current_type = "unknown" # Fallback, falls kein 2 TYPE kommt
+
+                        # 1. Basis-Parsing des Strings (mit Slashes)
                         if '/' in raw_name:
                             parts = raw_name.split('/')
                             if len(parts) >= 2:
-                                parsed_given = parts[0].strip()
-                                parsed_sur = parts[1].strip()
-                                if parsed_given: given_name = parsed_given
-                                if parsed_sur: surname = parsed_sur
+                                current_given = parts[0].strip()
+                                current_surname = parts[1].strip()
                         else:
-                            if raw_name: given_name = raw_name
+                            current_given = raw_name
                             
-                        # Look for specific GIVN and SURN sub-tags
+                        # 2. Sub-Tags (GIVN, SURN, TYPE) für DIESEN Namen scannen
                         j = i + 1
                         while j < len(record) and record[j].startswith("2 "):
                             if record[j].startswith("2 GIVN "):
-                                given_name = record[j][7:].strip()
+                                current_given = record[j][7:].strip()
                             elif record[j].startswith("2 SURN "):
-                                surname = record[j][7:].strip()
+                                current_surname = record[j][7:].strip()
+                            elif record[j].startswith("2 TYPE "):
+                                # Liest z.B. "married" oder "aka" aus
+                                current_type = record[j][7:].strip().lower()
                             j += 1
-                            
-                        # WE REMOVED THE `break` HERE! 
-                        # Now the loop continues to check the other lines in the block.
+
+                        # 3. Entscheidung: Ist es der Hauptname oder ein alternativer Name?
+                        if not primary_name_set:
+                            if current_given: given_name = current_given
+                            if current_surname: surname = current_surname
+                            primary_name_set = True
+                        else:
+                            # Es ist ein zweiter/dritter Name -> ab auf die Warteliste
+                            alt_names_to_create.append({
+                                'given_name': current_given,
+                                'surname': current_surname,
+                                'type': current_type
+                            })
                     
-                    # 2. Parse Sex
                     elif line.startswith("1 SEX "):
                         parsed_sex = line[6:].strip().upper()
-                        # Map standard GEDCOM sex to our Django choices
-                        if parsed_sex in ['M', 'F']:
-                            sex = parsed_sex
-                        else:
-                            sex = "U"
+                        sex = parsed_sex if parsed_sex in ['M', 'F'] else "U"
 
-                # Person in der Datenbank erstellen
+                # Person in der Haupttabelle erstellen
                 person = Individual.objects.create(
                     gedcom_tree=tree, 
                     gedcom_id=gedcom_id,
@@ -183,7 +218,23 @@ class Command(BaseCommand):
                 )
                 self.person_map[gedcom_id] = person
 
-                # Ereignisse parsen (z.B. Geburt)
+                # 🔥 JETZT: Die gesammelten Alternativnamen in die neue Tabelle schreiben
+                for alt in alt_names_to_create:
+                    # Sicherstellen, dass wir gültige Choices nutzen (Mapping)
+                    valid_type = AlternativeName.NameType.UNKNOWN
+                    if alt['type'] == 'married': valid_type = AlternativeName.NameType.MARRIED
+                    elif alt['type'] == 'maiden': valid_type = AlternativeName.NameType.MAIDEN
+                    elif alt['type'] == 'aka': valid_type = AlternativeName.NameType.AKA
+                    elif alt['type'] == 'immigrant': valid_type = AlternativeName.NameType.IMMIGRANT
+
+                    AlternativeName.objects.create(
+                        individual=person,
+                        given_name=alt['given_name'],
+                        surname=alt['surname'],
+                        name_type=valid_type
+                    )
+
+                # Ereignisse parsen (Geburt, Tod...)
                 self._create_events_from_record(tree, record, individual=person)
 
     # -------------------------------------------------------------------------

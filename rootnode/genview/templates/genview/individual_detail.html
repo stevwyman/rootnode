@@ -62,6 +62,18 @@
     <h2 class="card-title fw-bold text-dark mb-1">
         {{ object.full_name }}
     </h2>
+    {% if object.alternative_names.all %}
+    <div class="mt-1 text-muted small">
+        Alternative Namen: 
+        {% for alt in object.alternative_names.all %}
+            <span class="badge bg-light text-dark border">
+                {{ alt.given_name }} {{ alt.surname }} 
+                <small class="text-muted">({{ alt.get_name_type_display }})</small>
+            </span>
+            {% if not forloop.last %}, {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 <div class="row">
     <div class="col-8">
@@ -280,6 +292,11 @@
                                                     </div>
                                                     {% endif %}
                                                 </div>
+
+                                                {% if event.description %}
+                                                <!-- TODO -->
+                                                <div>Description: {{ event.description|linebreaks }}</div>
+                                                {% endif %}
 
                                                 <div class="text-muted small mb-2">
                                                     <span class="badge bg-secondary me-2">

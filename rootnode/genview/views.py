@@ -164,7 +164,10 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
     default_sort_dir = 'asc'
 
     # --- NEU: Filter-Konfiguration ---
-    search_fields = ['given_name', 'surname']  # In diesen Feldern wird gesucht
+    search_fields = [
+        'given_name', 'surname', 
+        'alternative_names__given_name', 'alternative_names__surname' # 🔥 NEU!
+    ]
     exact_filter_fields = ['sex']              # Diese Felder müssen exakt übereinstimmen
 
     def get_queryset(self):
@@ -221,7 +224,7 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
                 qs = qs.order_by(F(ordering).asc(nulls_last=True))
             
 
-        return qs
+        return qs.distinct()
 
 
 class IndividualDetailView(TreeAccessMixin, DetailView):
@@ -788,10 +791,10 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
     default_sort_dir = 'asc'
 
     search_fields = [
-        'husband__given_name', 
-        'husband__surname', 
-        'wife__given_name', 
-        'wife__surname'
+        'husband__given_name', 'husband__surname', 
+        'husband__alternative_names__surname', # 🔥 NEU!
+        'wife__given_name', 'wife__surname',
+        'wife__alternative_names__surname'     # 🔥 NEU!
     ]
 
     def get_queryset(self):
@@ -837,7 +840,7 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
             # Fallback-Sortierung, falls kein Mixin-Ordering greift
             qs = qs.order_by("gedcom_id")
 
-        return qs
+        return qs.distinct()
 
 
 class FamilyDetailView(TreeAccessMixin, DetailView):
