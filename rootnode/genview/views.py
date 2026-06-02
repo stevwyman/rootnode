@@ -12,7 +12,7 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.safestring import mark_safe
@@ -1261,6 +1261,57 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
         # Fallback, falls kein person_pk in der URL übergeben wurde
         return reverse_lazy("genview:tree-list")
 
+
+class BulkMediaUploadView(TreeAccessMixin, TemplateView):
+    template_name = "genview/bulk_media_upload.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        tree_id = self.kwargs.get("tree_id")
+        
+        # Zählen, wie viele Bilder aktuell noch in der Datenbank fehlen
+        context['missing_media_count'] = MediaObject.objects.filter(
+            gedcom_tree_id=tree_id,
+            file=''
+        ).count()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        
+        # 'media_files' ist der Name des Eingabefeldes im HTML-Formular
+        files = request.FILES.getlist('media_files')
+        
+        matched_count = 0
+        unmatched_count = 0
+
+        for uploaded_file in files:
+            filename = uploaded_file.name
+            
+            # MAGIE: Wir suchen Datensätze, die noch leer sind (file='')
+            # UND deren alter GEDCOM-Pfad mit dem hochgeladenen Dateinamen endet.
+            # iendswith = Case Insensitive (ignoriert Groß-/Kleinschreibung)
+            media_objs = MediaObject.objects.filter(
+                gedcom_tree_id=tree_id,
+                file=''
+            ).filter(gedcom_original_filepath__iendswith=filename)
+
+            if media_objs.exists():
+                for media in media_objs:
+                    media.file = uploaded_file
+                    media.save()
+                    matched_count += 1
+            else:
+                unmatched_count += 1
+
+        # Nutzer-Feedback
+        if matched_count > 0:
+            messages.success(request, f"{matched_count} Bilder wurden erfolgreich zugeordnet!")
+        if unmatched_count > 0:
+            messages.warning(request, f"{unmatched_count} hochgeladene Dateien konnten keinem fehlenden Eintrag zugeordnet werden.")
+
+        # Nach dem Post-Request laden wir die Seite neu (Post/Redirect/Get-Pattern)
+        return redirect('genview:bulk-media-upload', tree_id=tree_id)
 
 # --------------------------------------------------------------
 # 6️⃣ Places

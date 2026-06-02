@@ -345,19 +345,21 @@ class Command(BaseCommand):
     # -------------------------------------------------------------------------
     def _create_events_from_record(self, tree, record, individual=None, family=None):
         """
-        Liest alle Events (Ereignisse) und Attribute (Eigenschaften) aus einem GEDCOM-Record 
-        und speichert sie in der Event-Tabelle.
+        Liest alle Events (Ereignisse) und Attribute aus und legt unbekannte Event-Typen automatisch an.
         """
-        # PERFORMANCE-FIX: Wir laden alle EventTypes einmalig in ein Dictionary (Cache).
-        # Das verhindert Hunderte unnötiger Datenbankabfragen während des Imports!
         if not hasattr(self, '_event_types_cache'):
             from genview.models import EventType
             self._event_types_cache = {et.tag: et for et in EventType.objects.all()}
 
+        # Eine Blacklist aller Level-1-Tags, die DEFINITIV keine Events/Attribute sind
+        structural_tags = {
+            'NAME', 'SEX', 'FAMC', 'FAMS', 'CHIL', 'HUSB', 'WIFE', 
+            'OBJE', 'NOTE', 'SOUR', 'RFN', 'RIN', 'RESN'
+        }
+
         current_event = None
 
         for line in record:
-            # Zeile aufteilen in: Level (z.B. '1'), Tag (z.B. 'OCCU'), Wert (z.B. 'Bäcker')
             parts = line.split(' ', 2)
             level = parts[0]
             tag = parts[1] if len(parts) > 1 else ""
@@ -365,41 +367,51 @@ class Command(BaseCommand):
 
             # --- LEVEL 1: Ein neues Ereignis / Attribut beginnt ---
             if level == '1':
-                # Prüfen, ob wir diesen Tag kennen (BIRT, OCCU, MARR, etc.)
-                if tag in self._event_types_cache:
+                # Wenn es ein Tag ist, der NICHT auf der Blacklist steht, behandeln wir ihn als Event
+                if tag and tag not in structural_tags:
                     
-                    # Falls wir vorher schon ein Event bearbeitet haben, jetzt speichern!
+                    # 🔥 NEU: Die automatische Erstellung ist zurück!
+                    if tag not in self._event_types_cache:
+                        from genview.models import EventType
+                        new_type, created = EventType.objects.get_or_create(
+                            tag=tag,
+                            # Fallback: Wir nutzen den Tag als Name, bis du ihn im Admin-Bereich umbenennst
+                            defaults={'name': tag} 
+                        )
+                        # Sofort in den Cache aufnehmen, damit er beim nächsten Mal nicht neu abgefragt wird
+                        self._event_types_cache[tag] = new_type
+
+                    # Vorheriges Event speichern, falls vorhanden
                     if current_event:
                         current_event.save()
                     
-                    # Neues Event im Arbeitsspeicher vorbereiten
+                    # Neues Event starten
                     current_event = Event(
                         gedcom_tree=tree,
                         individual=individual,
                         family=family,
                         event_type=self._event_types_cache[tag],
-                        # 🔥 HIER PASSIERT DIE MAGIE FÜR OCCU/EDUC:
-                        # Wenn die Zeile einen Wert hat (z.B. "Bäcker"), landet er in description!
                         description=value 
                     )
                 else:
-                    # Es ist ein Level-1-Tag, den wir nicht als Event verarbeiten (z.B. NAME, SEX, FAMC).
-                    # Wir setzen current_event auf None, damit Unter-Tags (Level 2) ignoriert werden.
+                    # Es ist ein struktureller Tag (z.B. NAME) -> Ignorieren
                     current_event = None
 
-            # --- LEVEL 2: Details zum aktuellen Ereignis (Datum, Ort, Notizen) ---
+            # --- LEVEL 2: (Dein bestehender Code ab hier) ---
             elif level == '2' and current_event:
                 if tag == 'DATE':
                     current_event.raw_date = value
-                    
-                    # (Optional) Hier könntest du deinen Date-Parser aufrufen:
-                    # current_event.parsed_date = parse_gedcom_date(value)
+                    current_event.parsed_date = self._parse_gedcom_date(value)
                     
                 elif tag == 'PLAC':
                     # Je nachdem, wie du Orte verwaltest. Meist ein ForeignKey:
                     # place_obj, created = Place.objects.get_or_create(gedcom_tree=tree, name=value)
                     # current_event.place = place_obj
-                    pass # Passe dies an deine bisherige Orte-Logik an!
+                    place_obj, created = Place.objects.get_or_create(
+                        gedcom_tree=tree, 
+                        name=value
+                    )
+                    current_event.place = place_obj
 
                 elif tag == 'NOTE':
                     # Manchmal hat ein Beruf ("Bäcker") zusätzlich noch eine Notiz.

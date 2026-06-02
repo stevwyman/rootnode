@@ -1,0 +1,47 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Massen-Upload für Medien</h4>
+                </div>
+                <div class="card-body">
+                    
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="alert alert-info">
+                        <strong>Fehlende Bilder:</strong> Aktuell warten <strong>{{ missing_media_count }}</strong> Medienobjekte in der Datenbank auf ihre Datei.
+                    </div>
+
+                    <p>
+                        Wähle hier alle Bilder aus, die du zu deinem Stammbaum hinzufügen möchtest. 
+                        Das System vergleicht die Dateinamen automatisch mit den Pfaden aus der GEDCOM-Datei und ordnet sie den richtigen Personen zu.
+                    </p>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="media_files" class="form-label fw-bold">Dateien auswählen:</label>
+                            <input class="form-control form-control-lg" type="file" id="media_files" name="media_files" multiple>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100 fs-5">
+                            ⬆️ Alle Dateien hochladen und zuordnen
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
