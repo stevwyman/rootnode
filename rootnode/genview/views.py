@@ -330,6 +330,13 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         ctx["timeline_events"] = combined_events
 
         # -------------- Portrait holen --------------
+        """
+        TODO:
+        Weil deine is_confidential-Methode über .all() auf die verknüpften Personen, Familien und Events zugreift, feuert sie für jedes einzelne Bild in einer Galerie drei Datenbankabfragen ab.
+        Wenn du später eine Seite baust, die 50 Bilder (MediaObject) gleichzeitig anzeigt, stelle sicher, dass die View dazu diese Daten vorab lädt:
+        MediaObject.objects.filter(...).prefetch_related('individuals', 'families', 'events')
+        Damit bleibt dein Galerie-Rendering blitzschnell!
+        """
         portrait = person.media_objects.filter(is_portrait=True).first()
         # Falls kein explizites Portrait gesetzt ist, nimm das erste Bild:
         if not portrait:

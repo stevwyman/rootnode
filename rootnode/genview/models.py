@@ -783,6 +783,12 @@ class MediaObject(GedcomIdMixin):
         upload_to=tree_media_directory_path, verbose_name="Datei/Bild"
     )
 
+    gedcom_original_filepath = models.CharField(
+        max_length=500, 
+        blank=True, 
+        help_text="Temporärer Speicher für den Dateipfad aus der GEDCOM-Datei."
+    )
+
     category = models.CharField(
         max_length=10,
         choices=Category.choices,

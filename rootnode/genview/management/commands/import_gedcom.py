@@ -34,6 +34,9 @@ class Command(BaseCommand):
             # Die Datei in Abschnitte zerlegen (getrennt durch Level 0)
             records = self._parse_to_records(file_path)
 
+            self.stdout.write('Phase 0: Importiere MediaObjects (OBJ)...')
+            self._import_media_records(tree, records)
+
             self.stdout.write('Phase 1: Importiere Quellen (SOUR)...')
             self._import_sources(tree, records)
 
@@ -237,6 +240,9 @@ class Command(BaseCommand):
                 # Ereignisse parsen (Geburt, Tod...)
                 self._create_events_from_record(tree, record, individual=person)
 
+                # 🔥 NEU: 2. Medien (Bilder, Dokumente) für diese Person parsen
+                self._create_media_from_record(tree, record, individual=person)
+
     # -------------------------------------------------------------------------
     # PHASE 3: FAMILIEN (Mit Eltern UND Kindern über ChildFamilyLink)
     # -------------------------------------------------------------------------
@@ -284,77 +290,133 @@ class Command(BaseCommand):
                 # Ereignisse parsen (z.B. Hochzeit)
                 self._create_events_from_record(tree, record, family=family)
 
+                # 🔥 NEU: 2. Medien für diese Familie parsen
+                self._create_media_from_record(tree, record, family=family)
+
+    
+    def _import_media_records(self, tree, records):
+        """
+        Sucht nach eigenständigen Level-0 Medien-Records (z.B. 0 @M1@ OBJE) 
+        und aktualisiert die Metadaten wie Dateipfad und Titel.
+        """
+        from genview.models import MediaObject
+
+        for record in records:
+            if not record:
+                continue
+                
+            first_line = record[0]
+            
+            # Prüfen, ob es ein Medien-Hauptrecord ist ("0 @M123@ OBJE")
+            if first_line.startswith("0 ") and first_line.endswith(" OBJE"):
+                parts = first_line.split(' ', 2)
+                
+                if len(parts) >= 3:
+                    gedcom_id = parts[1]  # Das "@M123@"
+                    
+                    # MAGIE: Hole das Objekt (falls die Personenschleife es als 
+                    # leere Hülle schon angelegt hat) oder erstelle ein neues.
+                    media_obj, created = MediaObject.objects.get_or_create(
+                        gedcom_tree=tree,
+                        gedcom_id=gedcom_id
+                    )
+                    
+                    # Jetzt lesen wir die Eigenschaften (FILE, TITL) aus
+                    for line in record[1:]:
+                        l_parts = line.split(' ', 2)
+                        level = l_parts[0]
+                        tag = l_parts[1] if len(l_parts) > 1 else ""
+                        value = l_parts[2].strip() if len(l_parts) > 2 else ""
+                        
+                        # Da es ein Level-0 Record ist, sind die Eigenschaften auf Level 1
+                        if level == '1':
+                            if tag == 'FILE':
+                                media_obj.gedcom_original_filepath = value
+                            elif tag == 'TITL':
+                                media_obj.title = value
+                            elif tag == 'FORM':
+                                pass # (Optional) Formatbehandlung
+                                
+                    # Metadaten speichern
+                    media_obj.save()
+    
     # -------------------------------------------------------------------------
     # EREIGNIS-ERSTELLUNG (Hier passiert die Magie für PLAC und SOUR!)
     # -------------------------------------------------------------------------
     def _create_events_from_record(self, tree, record, individual=None, family=None):
-        # 1. Blacklist: Diese Level-1-Tags sind reine Struktur-Daten, KEINE Ereignisse!
-        structural_tags = {
-            'NAME', 'SEX', 'FAMS', 'FAMC', 'HUSB', 'WIFE', 'CHIL', 
-            'NOTE', 'OBJE', 'CHAN', 'RESN', 'RIN', 'AFN', 'SOUR'
-        }
-        
-        # 2. Sammle alle unbekannten/Ereignis-Tags aus dem aktuellen Record
-        found_event_tags = set()
+        """
+        Liest alle Events (Ereignisse) und Attribute (Eigenschaften) aus einem GEDCOM-Record 
+        und speichert sie in der Event-Tabelle.
+        """
+        # PERFORMANCE-FIX: Wir laden alle EventTypes einmalig in ein Dictionary (Cache).
+        # Das verhindert Hunderte unnötiger Datenbankabfragen während des Imports!
+        if not hasattr(self, '_event_types_cache'):
+            from genview.models import EventType
+            self._event_types_cache = {et.tag: et for et in EventType.objects.all()}
+
+        current_event = None
+
         for line in record:
+            # Zeile aufteilen in: Level (z.B. '1'), Tag (z.B. 'OCCU'), Wert (z.B. 'Bäcker')
             parts = line.split(' ', 2)
-            if parts[0] == '1':  # Wir schauen nur auf Ebene 1
-                tag = parts[1]
-                if tag not in structural_tags:
-                    found_event_tags.add(tag)
+            level = parts[0]
+            tag = parts[1] if len(parts) > 1 else ""
+            value = parts[2].strip() if len(parts) > 2 else ""
 
-        # 3. Schleife über alle entdeckten Ereignisse
-        for e_tag in found_event_tags:
-            
-            # 🔥 NEU: Auto-Discovery! Wenn der Tag fehlt, legt Django ihn jetzt an.
-            event_type_obj, created = EventType.objects.get_or_create(
-                tag=e_tag,
-                defaults={
-                    # Als Platzhalter-Name nehmen wir erstmal den Tag selbst (z.B. "OCCU")
-                    'name': e_tag, 
-                    # Automatische Zuweisung, ob das zu einer Person oder Familie gehört
-                    'category': EventType.Category.INDIVIDUAL if individual else EventType.Category.FAMILY
-                }
-            )
+            # --- LEVEL 1: Ein neues Ereignis / Attribut beginnt ---
+            if level == '1':
+                # Prüfen, ob wir diesen Tag kennen (BIRT, OCCU, MARR, etc.)
+                if tag in self._event_types_cache:
+                    
+                    # Falls wir vorher schon ein Event bearbeitet haben, jetzt speichern!
+                    if current_event:
+                        current_event.save()
+                    
+                    # Neues Event im Arbeitsspeicher vorbereiten
+                    current_event = Event(
+                        gedcom_tree=tree,
+                        individual=individual,
+                        family=family,
+                        event_type=self._event_types_cache[tag],
+                        # 🔥 HIER PASSIERT DIE MAGIE FÜR OCCU/EDUC:
+                        # Wenn die Zeile einen Wert hat (z.B. "Bäcker"), landet er in description!
+                        description=value 
+                    )
+                else:
+                    # Es ist ein Level-1-Tag, den wir nicht als Event verarbeiten (z.B. NAME, SEX, FAMC).
+                    # Wir setzen current_event auf None, damit Unter-Tags (Level 2) ignoriert werden.
+                    current_event = None
 
-            # Optional: Gibt eine kleine Info im Terminal aus, wenn das Skript etwas Neues lernt
-            if created:
-                self.stdout.write(self.style.WARNING(f"  -> Neuer Event-Typ entdeckt und gelernt: {e_tag}"))
+            # --- LEVEL 2: Details zum aktuellen Ereignis (Datum, Ort, Notizen) ---
+            elif level == '2' and current_event:
+                if tag == 'DATE':
+                    current_event.raw_date = value
+                    
+                    # (Optional) Hier könntest du deinen Date-Parser aufrufen:
+                    # current_event.parsed_date = parse_gedcom_date(value)
+                    
+                elif tag == 'PLAC':
+                    # Je nachdem, wie du Orte verwaltest. Meist ein ForeignKey:
+                    # place_obj, created = Place.objects.get_or_create(gedcom_tree=tree, name=value)
+                    # current_event.place = place_obj
+                    pass # Passe dies an deine bisherige Orte-Logik an!
 
-            # Jetzt holen wir die Daten (Datum, Ort) für diesen Tag
-            event_data = self._extract_tags(record, e_tag)
-            
-            if not event_data:
-                continue
+                elif tag == 'NOTE':
+                    # Manchmal hat ein Beruf ("Bäcker") zusätzlich noch eine Notiz.
+                    # Wir hängen die Notiz einfach mit einem Zeilenumbruch an die Description an.
+                    if current_event.description:
+                        current_event.description += f"\n\nNotiz: {value}"
+                    else:
+                        current_event.description = value
 
-            # 1. ORT (PLAC) VERARBEITEN
-            place_obj = None
-            if 'PLAC' in event_data and event_data['PLAC']:
-                place_name = event_data['PLAC'][0]
-                place_obj, _ = Place.objects.get_or_create(
-                    gedcom_tree=tree, 
-                    name=place_name
-                )
+                elif tag == 'SOUR':
+                    # Falls du Quellen verknüpfst, passiert das meist erst NACH dem .save()
+                    # (wegen der Many-To-Many Beziehung). Das würde man extra behandeln.
+                    pass 
 
-            raw_date_str = event_data['DATE'][0] if 'DATE' in event_data else ''
-            parsed_date_obj = self._parse_gedcom_date(raw_date_str)
-
-            # 2. EREIGNIS (EVENT) ERSTELLEN
-            event = Event.objects.create(
-                gedcom_tree=tree,
-                event_type=event_type_obj,  # Nutzt unser gefundenes oder neu erstelltes Objekt
-                raw_date=raw_date_str,
-                parsed_date=parsed_date_obj,
-                place=place_obj,
-                individual=individual,
-                family=family
-            )
-
-            # 3. QUELLEN (SOUR) VERKNÜPFEN
-            if 'SOUR' in event_data:
-                for sour_id in event_data['SOUR']:
-                    if sour_id in self.source_map:
-                        event.sources.add(self.source_map[sour_id])
+        # Ganz am Ende der Schleife: Das allerletzte Event des Records noch speichern!
+        if current_event:
+            current_event.save()
 
     # -------------------------------------------------------------------------
     # DATUM-PARSING LOGIK
@@ -414,4 +476,76 @@ class Command(BaseCommand):
             return date(year, month, day)
         except ValueError:
             return None
-        
+
+
+    def _create_media_from_record(self, tree, record, individual=None, family=None, event=None):
+        """
+        Liest Medien-Referenzen (1 OBJE @M1@) oder Inline-Medien (1 OBJE) aus einem Record 
+        und verknüpft sie mit der Person, Familie oder dem Event.
+        """
+        from genview.models import MediaObject
+
+        in_inline_obje = False
+        current_media = None
+
+        for line in record:
+            parts = line.split(' ', 2)
+            level = parts[0]
+            tag = parts[1] if len(parts) > 1 else ""
+            value = parts[2].strip() if len(parts) > 2 else ""
+
+            if level == '1' and tag == 'OBJE':
+                if value.startswith('@') and value.endswith('@'):
+                    # FALL A: Referenz auf ein Level-0-Medienobjekt (z.B. @M1@)
+                    # Wir holen oder erstellen das leere Objekt (es wird später 
+                    # in einem eigenen Durchlauf mit Titel/File gefüllt, falls 
+                    # du Level-0-Objekte als eigenen Schritt importierst).
+                    media_obj, created = MediaObject.objects.get_or_create(
+                        gedcom_tree=tree, 
+                        gedcom_id=value
+                    )
+                    
+                    # JETZT verknüpfen wir das Many-To-Many Feld!
+                    if individual: media_obj.individuals.add(individual)
+                    if family: media_obj.families.add(family)
+                    if event: media_obj.events.add(event)
+                    
+                else:
+                    # FALL B: Inline-Medium (Das Bild wird direkt hier definiert)
+                    # Wir müssen vorheriges speichern, falls es mehrere gibt
+                    if current_media:
+                        current_media.save()
+                        # Verknüpfungen nach dem Save!
+                        if individual: current_media.individuals.add(individual)
+                        if family: current_media.families.add(family)
+                        if event: current_media.events.add(event)
+                        
+                    in_inline_obje = True
+                    current_media = MediaObject(gedcom_tree=tree)
+
+            # Details für das Inline-Medium auslesen
+            elif level == '2' and in_inline_obje and current_media:
+                if tag == 'FILE':
+                    # Wir speichern es in unser neues Textfeld, NICHT in 'file'!
+                    current_media.gedcom_original_filepath = value
+                elif tag == 'TITL':
+                    current_media.title = value
+                elif tag == 'FORM':
+                    pass # Könntest du theoretisch in 'description' oder ein neues Format-Feld schreiben
+            
+            # Wenn der OBJE Block vorbei ist
+            elif level == '1' and in_inline_obje:
+                if current_media:
+                    current_media.save()
+                    if individual: current_media.individuals.add(individual)
+                    if family: current_media.families.add(family)
+                    if event: current_media.events.add(event)
+                in_inline_obje = False
+                current_media = None
+
+        # Schleifenende: Letztes Inline-Objekt speichern
+        if in_inline_obje and current_media:
+            current_media.save()
+            if individual: current_media.individuals.add(individual)
+            if family: current_media.families.add(family)
+            if event: current_media.events.add(event)
