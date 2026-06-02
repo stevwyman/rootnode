@@ -145,6 +145,7 @@ urlpatterns = [
         views.MediaObjectDeleteView.as_view(),
         name="media-delete",
     ),
+    path('tree/<int:tree_id>/media/bulk-upload/', views.BulkMediaUploadView.as_view(), name='bulk-media-upload'),
     # ----------------------------------------------
     # ---- event management 
     # ----------------------------------------------
