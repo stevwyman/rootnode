@@ -153,7 +153,7 @@
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
                                 {% else %}
-                                    <a href="{{ person.get_absolute_url }}">{{ person.given_name }}</a>
+                                    <a href="{{ person.get_absolute_url }}">{{ person.short_given_name }}</a>
                                 {% endif %}
                             </td>
                             

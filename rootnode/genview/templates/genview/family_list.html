@@ -81,7 +81,7 @@
                                 {% if apply_privacy and family.husband.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
-                                    {{ family.husband.surname }}, {{ family.husband.given_name|default:"-" }}
+                                    {{ family.husband.surname }}, {{ family.husband.short_given_name|default:"-" }}
                                 {% endif %}
                             </td>
                             <td>

@@ -201,6 +201,29 @@ class Individual(GedcomIdMixin):
     # ★★ Neu: Convenience‑Properties für Geburts‑ und Sterbedatum ★★
     # --------------------------------------------------------------
     @property
+    def short_given_name(self):
+        """
+        Kürzt lange Vornamen für Listenansichten.
+        Beispiel: 'Johann Georg Wilhelm' -> 'Johann G. W.'
+        """
+        if not self.given_name:
+            return ""
+            
+        # Teile den String an den Leerzeichen in eine Liste von Namen
+        name_parts = self.given_name.split()
+        
+        # Wenn es nur ein Vorname ist, gib ihn direkt zurück
+        if len(name_parts) <= 1:
+            return self.given_name
+            
+        # Nimm den ersten Namen voll, vom Rest nur den ersten Buchstaben + Punkt
+        first_name = name_parts[0]
+        initials = [f"{part[0]}." for part in name_parts[1:] if part]
+        
+        # Füge alles wieder mit Leerzeichen zusammen
+        return f"{first_name} {' '.join(initials)}"
+    
+    @property
     def birth_event(self) -> Optional["Event"]:
         """
         Liefert das zugehörige ``BIRT``‑Event (oder ``None``).
