@@ -84,6 +84,7 @@ class TreeListView(ListView):
         ).distinct().order_by('-id')
 
 
+
 class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
     template_name = "genview/global_search.html"
 
@@ -1752,22 +1753,3 @@ class RegisterView(CreateView):
         # Automatisch anmelden – das macht die UX leichter
         login(self.request, self.object)
         return response
-
-
-class ChooseTreeView(TemplateView):
-    """Seite, auf der ein bereits eingeloggter Nutzer einen Baum auswählt / wechselt."""
-    template_name = 'registration/choose_tree.html'
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['trees'] = Tree.objects.all()
-        # Aktuell gewählter Baum (falls schon gesetzt)
-        ctx['current_tree_id'] = self.request.session.get('tree_id')
-        return ctx
-
-    def post(self, request, *args, **kwargs):
-        """Formular: Baum‑ID wird in die Session geschrieben."""
-        tree_id = request.POST.get('tree_id')
-        if tree_id:
-            request.session['tree_id'] = int(tree_id)
-        return self.get(request, *args, **kwargs)
