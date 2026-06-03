@@ -50,10 +50,12 @@
                             <a href="{% url 'genview:family-list' tree_id=tree.pk %}" class="btn btn-outline-danger">
                                 👪 {% trans "Familien anzeigen" %}
                             </a>
-
+                            
+                            {% if user.is_superuser %}
                             <a href="{% url 'genview:tree-delete' tree_id=tree.pk %}" class="btn btn-outline-danger">
                                 ⚠️ {% trans "Baum löschen" %}
                             </a>
+                            {% endif %}
 
                         </div>
                     </div>

@@ -330,7 +330,7 @@
                                                 </div>
 
                                                 
-                                                {% if event.event_type_name == 'MARR' and event.family %}
+                                                {% if event.event_type.tag == 'MARR' and event.family %}
                                                     <div class="fst-italic text-secondary small mb-2">
                                                         💍 Mit
                                                         {% if apply_privacy and person.is_confidential %}
@@ -366,7 +366,7 @@
                                                             <ul class="dropdown-menu shadow">
                                                                 {% for source in event.sources.all %}
                                                                     <li>
-                                                                        <a class="dropdown-item" href="#">
+                                                                        <a class="dropdown-item" href="{% url 'genview:source-detail' tree_id=tree_id pk=source.id %}">
                                                                             {{ source.title }}
                                                                         </a>
                                                                     </li>
@@ -678,11 +678,27 @@
                                         <span class="text-muted fst-italic">🔒 vertraulich</span>
                                     {% else %}
                                         <a href="{{ fam.family.husband.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                            {{ fam.family.husband.full_name }}
+                                            {{ fam.family.husband.short_given_name }} {{ fam.family.husband.surname }}
                                         </a>
-                                        {% if fam.family.husband.birth_date_raw %}
-                                            <small class="text-muted ms-2">* {{ fam.family.husband.birth_date_raw }}</small>
+
+                                        
+
+                                        {% if fam.family.husband.birth_date %}
+                                            <small class="text-muted ms-2">* {{ fam.family.husband.birth_date|date:"Y" }}</small>
+                                        {% elif fam.family.husband.birth_date_raw %}
+                                            <span class="badge bg-secondary">{{ fam.family.husband.birth_date_raw }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
                                         {% endif %}
+                                        
+                                        {% if fam.family.husband.death_date %}
+                                            <small class="text-muted ms-2">+ {{ fam.family.husband.death_date|date:"Y" }}</small>
+                                        {% elif fam.family.husband.death_date_raw %}
+                                            <span class="badge bg-secondary">{{ fam.family.husband.death_date_raw }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+
                                     {% endif %}
                                 {% else %}
                                     <span class="text-muted fst-italic">Vater unbekannt</span>

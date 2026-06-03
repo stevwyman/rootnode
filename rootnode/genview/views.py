@@ -14,7 +14,7 @@ from django.views.generic import ListView, DetailView, CreateView, DeleteView, T
 from django.views.generic.edit import UpdateView
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.utils.safestring import mark_safe
 from typing import Set, List, Tuple
 
@@ -153,7 +153,7 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
                 place.search_title = place.name
                 place.search_desc = "Ort im Stammbaum"
                 # Falls du noch keine Detail-URL für Orte hast, kannst du hier ein '#' setzen
-                place.search_url = "#" 
+                place.search_url = place.get_absolute_url()
 
             # 4. QUELLEN durchsuchen
             sources = Source.objects.filter(gedcom_tree_id=tree_id, title__icontains=q)[:10]
@@ -162,7 +162,7 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
                 src.search_icon = "📚"
                 src.search_title = src.title
                 src.search_desc = src.author or "Kein Autor angegeben"
-                src.search_url = "#" # Oder src.get_absolute_url()
+                src.search_url = src.get_absolute_url()
 
             # 5. Alles zu einer einzigen flachen Liste zusammenketten!
             results = list(chain(individuals, families, places, sources))

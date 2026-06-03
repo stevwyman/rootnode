@@ -394,7 +394,9 @@ class Command(BaseCommand):
                         description=value 
                     )
                 else:
-                    # Es ist ein struktureller Tag (z.B. NAME) -> Ignorieren
+                    if current_event:
+                        current_event.save()
+                        
                     current_event = None
 
             # --- LEVEL 2: (Dein bestehender Code ab hier) ---

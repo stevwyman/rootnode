@@ -20,16 +20,31 @@
             {% else %}
                 <div class="col">
                     <div class="card h-100 shadow-sm">
-                        {% if item.is_image and item.file %}
-                            <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
-                                <img src="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" 
-                                    class="card-img-top" 
-                                    alt="{{ item.title }}" 
-                                    style="object-fit: cover; height: 200px;">
-                            </a>
+                        {% if item.file and item.file.name %}
+                            {% if item.is_image and item.file %}
+                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
+                                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" 
+                                        class="card-img-top" 
+                                        alt="{{ item.title }}" 
+                                        style="object-fit: cover; height: 200px;">
+                                </a>
+                            {% else %}
+                                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                                    <span class="text-muted fs-1">📄 Dokument</span>
+                                </div>
+                            {% endif %}
                         {% else %}
-                            <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
-                                <span class="text-muted fs-1">📄 Dokument</span>
+                            <div class="p-3 bg-light border rounded text-center text-muted">
+                                <div class="fs-1 mb-2">📷</div>
+                                <strong>Bild fehlt</strong><br>
+                                <small>{{ media.title|default:"Ohne Titel" }}</small>
+                                
+                                {% if media.gedcom_original_filepath %}
+                                    <hr class="my-2">
+                                    <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
+                                        Pfad: {{ media.gedcom_original_filepath }}
+                                    </small>
+                                {% endif %}
                             </div>
                         {% endif %}
 

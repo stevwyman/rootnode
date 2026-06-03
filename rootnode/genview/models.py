@@ -141,6 +141,12 @@ class Source(GedcomIdMixin):
 
     def __str__(self) -> str:
         return self.title
+    
+    def get_absolute_url(self):
+        return reverse(
+            "genview:source-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
 
 
 # ----------------------------------------------------------------------
@@ -603,6 +609,12 @@ class Place(GedcomIdMixin):
             # Teilt den String am ersten Komma und entfernt überflüssige Leerzeichen
             return self.name.split(',')[0].strip()
         return "Unbekannter Ort"
+    
+    def get_absolute_url(self):
+        return reverse(
+            "genview:place-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
     
 
 # ----------------------------------------------------------------------
