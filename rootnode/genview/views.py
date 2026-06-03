@@ -45,7 +45,7 @@ from .forms import (
     PlaceForm,
     UserRegistrationForm,
 )
-from .mixins import TreeAccessMixin, TreeEditAccessMixin, SortableListViewMixin, FilterableListViewMixin
+from .mixins import UserPassesTestMixin, TreeAccessMixin, TreeEditAccessMixin, SortableListViewMixin, FilterableListViewMixin
 
 
 def home(request):
@@ -83,6 +83,29 @@ class TreeListView(ListView):
             Q(id__in=allowed_tree_ids) | Q(is_public=True)
         ).distinct().order_by('-id')
 
+
+class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = Tree
+    template_name = "genview/tree_confirm_delete.html"
+    # Passe den Namen deiner Übersichtsseite hier an!
+    success_url = reverse_lazy('genview:tree-list') 
+    
+    # Da deine URLs vermutlich auf <int:tree_id> lauten:
+    pk_url_kwarg = 'tree_id'
+
+    def test_func(self):
+        """
+        Sicherheits-Check: Nur Superuser (Admins) dürfen einen Baum löschen!
+        (Alternativ: prüfen, ob der User der Besitzer des Baumes ist).
+        """
+        return self.request.user.is_superuser
+
+    def form_valid(self, form):
+        """Wird aufgerufen, wenn die Löschung bestätigt wird."""
+        tree = self.get_object()
+        # Eine Erfolgsmeldung für den Admin setzen
+        messages.success(self.request, f"Der Stammbaum '{tree.name}' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.")
+        return super().form_valid(form)
 
 
 class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):

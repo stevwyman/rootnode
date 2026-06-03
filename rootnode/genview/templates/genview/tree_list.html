@@ -1,11 +1,12 @@
 {% extends "genview/base.html" %}
+{% load i18n%}
 
-{% block title %}Meine Stammbäume{% endblock %}
+{% block title %}🌳 {% trans "Meine Stammbäume" %}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>🌳 Meine Stammbäume</h1>
+        <h1>🌳 {% trans "Meine Stammbäume" %}</h1>
     </div>
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
@@ -21,21 +22,21 @@
 
                     <div class="card-body">
                         <p class="text-muted text-center small mb-4">
-                            ID: {{ tree.pk }} | Erstellt: {{ tree.created_at|date:"d.m.Y"|default:"Unbekannt" }}
+                            ID: {{ tree.pk }} | 🌳 {% trans "Erstellt" %}: {{ tree.created_at|date:"d.m.Y"|default:"Unbekannt" }}
                         </p>
                         
                         <div class="row text-center mb-3">
                             <div class="col-4">
                                 <h3 class="mb-0 fw-bold text-primary">{{ tree.individuals.count|default:"0" }}</h3>
-                                <small class="text-muted">Personen</small>
+                                <small class="text-muted">🌳 {% trans "Personen" %}</small>
                             </div>
                             <div class="col-4 border-start border-end">
                                 <h3 class="mb-0 fw-bold text-danger">{{ tree.families.count|default:"0" }}</h3>
-                                <small class="text-muted">Familien</small>
+                                <small class="text-muted">🌳 {% trans "Familien" %}</small>
                             </div>
                             <div class="col-4">
                                 <h3 class="mb-0 fw-bold text-success">{{ tree.places.count|default:"0" }}</h3>
-                                <small class="text-muted">Orte</small>
+                                <small class="text-muted">🌳 {% trans "Orte" %}</small>
                             </div>
                         </div>
                     </div>
@@ -43,12 +44,17 @@
                     <div class="card-footer bg-light border-top-0 p-3">
                         <div class="d-grid gap-2">
                             <a href="{% url 'genview:individual-list' tree_id=tree.pk %}" class="btn btn-outline-primary">
-                                👥 Personen anzeigen
+                                👥 🌳 {% trans "Personen anzeigen" %}
                             </a>
                             
                             <a href="{% url 'genview:family-list' tree_id=tree.pk %}" class="btn btn-outline-danger">
-                                👪 Familien anzeigen
+                                👪 {% trans "Familien anzeigen" %}
                             </a>
+
+                            <a href="{% url 'genview:tree-delete' tree_id=tree.pk %}" class="btn btn-outline-danger">
+                                ⚠️ {% trans "Baum löschen" %}
+                            </a>
+
                         </div>
                     </div>
                     
@@ -57,7 +63,7 @@
         {% empty %}
             <div class="col-12">
                 <div class="alert alert-info text-center py-5 shadow-sm">
-                    <h4>Noch keine Stammbäume vorhanden</h4>
+                    <h4>{% trans "Noch keine Stammbäume vorhanden" %}</h4>
                     <p class="text-muted">Lade eine GEDCOM-Datei hoch oder erstelle deinen ersten Stammbaum.</p>
                 </div>
             </div>

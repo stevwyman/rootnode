@@ -1,0 +1,34 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-danger shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">⚠️ Stammbaum löschen</h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Bist du dir absolut sicher?</h5>
+                    <p class="card-text">
+                        Du bist dabei, den Stammbaum <strong>"{{ object.name }}"</strong> zu löschen.
+                    </p>
+                    <div class="alert alert-warning">
+                        <strong>Achtung:</strong> Diese Aktion löscht den Baum sowie alle verknüpften Personen, Familien, Ereignisse und Quellen unwiderruflich aus der Datenbank! Dies kann nicht rückgängig gemacht werden.
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'genview:tree-list' %}" class="btn btn-outline-secondary">
+                                Abbrechen und zurück
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                Ja, unwiderruflich löschen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

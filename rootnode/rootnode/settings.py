@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 
+from django.utils.translation import gettext_lazy as _
 from pathlib import Path
 
 from logging import getLogger
@@ -120,9 +121,18 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'de-DE'
 
+LANGUAGES = [
+    ('de', _('German')),
+    ('en', _('English')),
+]
+
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
+
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, 'locale'),
+]
 
 USE_TZ = True
 

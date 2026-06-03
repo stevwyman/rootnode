@@ -1,14 +1,19 @@
 # genview/models.py
 from __future__ import annotations
 
+import os
+
 from datetime import date
 from typing import Optional
 
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Q
+from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
+from django.dispatch import receiver
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
 
 
@@ -780,7 +785,7 @@ class MediaObject(GedcomIdMixin):
 
     # file = models.FileField(upload_to="gedcom_media/")
     file = models.FileField(
-        upload_to=tree_media_directory_path, verbose_name="Datei/Bild"
+        upload_to=tree_media_directory_path, verbose_name=_("Datei/Bild")
     )
 
     gedcom_original_filepath = models.CharField(
@@ -821,12 +826,12 @@ class MediaObject(GedcomIdMixin):
         'Event', 
         blank=True, 
         related_name='media_objects',
-        help_text="Ereignisse, mit denen dieses Medium verknüpft ist"
+        help_text=_("Ereignisse, mit denen dieses Medium verknüpft ist")
     )
 
     is_portrait = models.BooleanField(
         default=False,
-        help_text="Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt.",
+        help_text=_("Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt."),
         db_index=True,
     )
 
@@ -916,3 +921,13 @@ class AlternativeName(models.Model):
     def __str__(self):
         type_display = self.get_name_type_display()
         return f"{self.given_name or ''} {self.surname or ''} ({type_display})".strip()
+    
+@receiver(post_delete, sender=MediaObject)
+def auto_delete_file_on_delete(sender, instance, **kwargs):
+    """
+    Löscht die physische Datei vom Server, wenn das MediaObject
+    (z.B. durch das Löschen eines Stammbaums) aus der Datenbank entfernt wird.
+    """
+    if instance.file:
+        if os.path.isfile(instance.file.path):
+            os.remove(instance.file.path)

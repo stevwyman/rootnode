@@ -1,0 +1,75 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-03 12:02+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+#: genview/models.py:788
+msgid "Datei/Bild"
+msgstr ""
+
+#: genview/models.py:829
+msgid "Ereignisse, mit denen dieses Medium verknüpft ist"
+msgstr ""
+
+#: genview/models.py:834
+msgid "Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt."
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:4
+#: genview/templates/genview/tree_list.html:9
+msgid "Meine Stammbäume"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:25
+msgid "Erstellt"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:31
+msgid "Personen"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:35
+msgid "Familien"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:39
+msgid "Orte"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:47
+msgid "Personen anzeigen"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:51
+msgid "Familien anzeigen"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:55
+msgid "Baum löschen"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:66
+msgid "Noch keine Stammbäume vorhanden"
+msgstr ""
+
+#: rootnode/settings.py:125
+msgid "German"
+msgstr ""
+
+#: rootnode/settings.py:126
+msgid "English"
+msgstr ""

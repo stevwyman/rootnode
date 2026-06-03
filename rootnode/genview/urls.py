@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.TreeListView.as_view(), name="tree-list"),
     # 2. Tree-Specific Views:
     path('tree/<int:tree_id>/search/', views.GlobalSearchView.as_view(), name='global-search'),
+    path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
     # ----------------------------------------------
     # --- persons / individuals
     # ----------------------------------------------
