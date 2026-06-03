@@ -11,7 +11,7 @@ from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
-from django.views.generic.edit import UpdateView
+from django.views.generic.edit import UpdateView, FormView
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
@@ -41,7 +41,9 @@ from .forms import (
     ChildFamilyLinkForm,
     MediaObjectForm,
     EventForm,
+    AddExistingMediaToEventForm,
     SourceForm,
+    AddExistingMediaToSourceForm,
     PlaceForm,
     UserRegistrationForm,
 )
@@ -373,6 +375,46 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             if portrait
             else person.media_objects.all()
         )
+
+        #
+        # unsere neue intelligente Gallery
+        #
+
+        # 🔥 Die magische ODER-Abfrage für die Galerie
+        tree_id = person.gedcom_tree_id
+        birth_family_ids = ChildFamilyLink.objects.filter(
+            child=person
+        ).values_list('family_id', flat=True)
+
+        all_gallery_media = MediaObject.objects.filter(
+            gedcom_tree_id=tree_id
+        ).filter(
+            # Bedingung 1: Das Medium hängt direkt an der Person
+            Q(individuals=person) | 
+            
+            # Bedingung 2: Das Medium hängt an einem individuellen Ereignis (z.B. Geburt)
+            Q(events__individual=person) |
+            
+            # Bedingung 3: Das Medium hängt an einem Familien-Ereignis (z.B. Heirat)
+            Q(events__family__husband=person) |
+            Q(events__family__wife=person) |
+            
+            # Bedingung 4: Das Medium hängt direkt an der Familie, wo die Person Vater/Mutter ist
+            Q(families__husband=person) |
+            Q(families__wife=person) |
+            
+            # 🔥 HIER IST DER ERSATZ: 
+            # Das Medium hängt an einer Familie, in der die Person ein Kind ist (nutzt die IDs von oben)
+            Q(families__in=birth_family_ids) |
+            
+            # Bedingung 6: Das Medium hängt an einer Quelle eines individuellen Events
+            Q(sources__events__individual=person)
+            
+        ).distinct() # Verhindert Duplikate in der Anzeige
+
+        # 2. Die Medien in zwei Listen für das Template aufteilen
+        ctx['gallery_photos'] = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
+        ctx['gallery_documents'] = all_gallery_media.filter(category=MediaObject.Category.DOCUMENT)
 
         #
         # for tree view
@@ -1337,6 +1379,7 @@ class BulkMediaUploadView(TreeAccessMixin, TemplateView):
         # Nach dem Post-Request laden wir die Seite neu (Post/Redirect/Get-Pattern)
         return redirect('genview:bulk-media-upload', tree_id=tree_id)
 
+
 # --------------------------------------------------------------
 # 6️⃣ Places
 # --------------------------------------------------------------
@@ -1662,7 +1705,44 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         context["person"] = self.object.individual
         context["family"] = self.object.family
         return context
-    
+
+
+class AddExistingMediaToEventView(TreeAccessMixin, FormView):
+    template_name = "genview/add_existing_media.html"
+    form_class = AddExistingMediaToEventForm
+
+    def get_form_kwargs(self):
+        """Übergibt den aktuellen Stammbaum an die Form für das Queryset."""
+        kwargs = super().get_form_kwargs()
+        # TreeAccessMixin stellt meistens das Tree-Objekt bereit, 
+        # alternativ holen wir es über die URL-Parameter
+        tree_id = self.kwargs.get("tree_id")
+        kwargs['tree'] = get_object_or_404(Tree, pk=tree_id)
+        return kwargs
+
+    def form_valid(self, form):
+        tree_id = self.kwargs.get("tree_id")
+        event_id = self.kwargs.get("event_id")
+        
+        # Das bestehende Ereignis holen
+        event = get_object_or_404(Event, pk=event_id, gedcom_tree_id=tree_id)
+        
+        # Die ausgewählten Medien aus der Form holen
+        selected_media = form.cleaned_data['media_objects']
+        
+        # MAGIE: Mittels .add(*queryset) fügen wir alle ausgewählten Medien 
+        # dem Many-to-Many Feld 'media_objects' des Events hinzu!
+        event.media_objects.add(*selected_media)
+        
+        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit dem Ereignis verknüpft.")
+        
+        # Weiterleitung zurück zur Detailseite des Events oder der Person
+        if event.individual:
+            return redirect('genview:individual-detail', tree_id=tree_id, pk=event.individual.pk)
+        elif event.family:
+            return redirect('genview:family-detail', tree_id=tree_id, pk=event.family.pk)
+        return redirect('genview:tree-dashboard', tree_id=tree_id)
+
 
 class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Event
@@ -1749,6 +1829,35 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, "Quelle aktualisiert.")
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
+
+class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
+    template_name = "genview/add_existing_media_to_source.html"
+    form_class = AddExistingMediaToSourceForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        tree_id = self.kwargs.get("tree_id")
+        kwargs['tree'] = get_object_or_404(Tree, pk=tree_id)
+        return kwargs
+
+    def form_valid(self, form):
+        tree_id = self.kwargs.get("tree_id")
+        source_id = self.kwargs.get("source_id")
+        
+        # Die bestehende Quelle holen
+        source = get_object_or_404(Source, pk=source_id, gedcom_tree_id=tree_id)
+        
+        # Die ausgewählten Medien holen
+        selected_media = form.cleaned_data['media_objects']
+        
+        # Da 'sources' im MediaObject definiert ist, greifen wir über den 
+        # related_name 'media_objects' von der Quelle aus darauf zu:
+        source.media_objects.add(*selected_media)
+        
+        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Quelle verknüpft.")
+        
+        # Zurück zur Detailseite der Quelle leiten
+        return redirect('genview:source-detail', tree_id=tree_id, pk=source.pk)
 
 # --- 5. Delete View ---
 class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):

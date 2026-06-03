@@ -147,6 +147,7 @@ urlpatterns = [
         name="media-delete",
     ),
     path('tree/<int:tree_id>/media/bulk-upload/', views.BulkMediaUploadView.as_view(), name='bulk-media-upload'),
+    
     # ----------------------------------------------
     # ---- event management 
     # ----------------------------------------------
@@ -177,6 +178,11 @@ urlpatterns = [
          views.MediaObjectCreateView.as_view(), 
          name='media-create-event'
     ),
+    path(
+        'tree/<int:tree_id>/event/<int:event_id>/add-existing-media/', 
+        views.AddExistingMediaToEventView.as_view(), 
+        name='add-existing-media-to-event',
+    ),
 
     path('tree/<int:tree_id>/sources/', views.SourceListView.as_view(), name='source-list'),
     path('tree/<int:tree_id>/sources/add/', views.SourceCreateView.as_view(), name='source-create'),
@@ -184,6 +190,11 @@ urlpatterns = [
     path('tree/<int:tree_id>/sources/<int:pk>/edit/', views.SourceUpdateView.as_view(), name='source-edit'),
     path('tree/<int:tree_id>/sources/<int:pk>/delete/', views.SourceDeleteView.as_view(), name='source-delete'),
     path('tree/<int:tree_id>/sources/<int:source_pk>/media/add/', views.MediaObjectCreateView.as_view(), name='media-create-source'),
+    path(
+        'tree/<int:tree_id>/source/<int:source_id>/add-existing-media/', 
+        views.AddExistingMediaToSourceView.as_view(), 
+        name='add-existing-media-to-source'
+    ),
 
     # Place Management
     path('tree/<int:tree_id>/places/', views.PlaceListView.as_view(), name='place-list'),

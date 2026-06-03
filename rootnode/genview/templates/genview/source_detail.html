@@ -58,6 +58,9 @@
                     <a href="{% url 'genview:media-create-source' tree_id=tree_id source_pk=source.pk %}" 
                         class="btn btn-sm btn-primary">+ Neues Dokument
                     </a>
+                    <a href="{% url 'genview:add-existing-media-to-source' tree_id=tree_id source_id=object.pk %}" class="btn btn-outline-primary">
+                        ➕ Bestehendes Dokument/Foto verknüpfen
+                    </a>
                     {% endif %}
                 </div>
                 <div class="card-body">

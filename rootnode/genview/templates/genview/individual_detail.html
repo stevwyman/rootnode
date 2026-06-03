@@ -259,6 +259,11 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="album-tab" data-bs-toggle="tab" data-bs-target="#album" type="button" role="tab">
+                            🖼️ Album
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link" id="pedigree-tab" data-bs-toggle="tab" data-bs-target="#pedigree" type="button" role="tab">
                             🌳 Ahnentafel
                         </button>
@@ -483,6 +488,63 @@
                                 Noch keine Dokumente (z.B. Scans von Geburtsurkunden) verknüpft.
                             </div>
                         {% endif %}
+
+                    </div>
+
+                    <div class="tab-pane fade" id="album" role="tabpanel" aria-labelledby="album-tab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="mb-0 text-success">Album</h4>
+                        </div>
+                        
+                        <h6 class="mt-4 mb-3 border-bottom pb-2">🖼️ Fotos & Portraits</h4>
+                        <div class="row row-cols-1 row-cols-md-3 g-3 mb-5">
+                            {% for media in gallery_photos %}
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm">
+                                        {% if media.file and media.file.name %}
+                                            <img src="{{ media.file.url }}" class="card-img-top" alt="{{ media.title }}">
+                                        {% else %}
+                                            <div class="bg-light text-center py-5 text-muted card-img-top">📷 Bild fehlt</div>
+                                        {% endif %}
+                                        <div class="card-body p-2 text-center">
+                                            <small class="fw-bold d-block text-truncate">{{ media.title|default:"Ohne Titel" }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="col-12 text-muted">
+                                    <p class="fst-italic">Keine Fotos zu dieser Person gefunden.</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <h6 class="mt-4 mb-3 border-bottom pb-2">📄 Urkunden & Dokumente</h4>
+                        <div class="row row-cols-1 row-cols-md-3 g-3">
+                            {% for media in gallery_documents %}
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm border-secondary">
+                                        {% if media.file and media.file.name %}
+                                            <a href="{{ media.file.url }}" target="_blank">
+                                                {% if media.is_image %}
+                                                    <img src="{{ media.file.url }}" class="card-img-top" alt="{{ media.title }}">
+                                                {% else %}
+                                                    <div class="bg-light text-center py-5 text-secondary card-img-top fs-1">📑</div>
+                                                {% endif %}
+                                            </a>
+                                        {% else %}
+                                            <div class="bg-light text-center py-5 text-muted card-img-top">📄 Datei fehlt</div>
+                                        {% endif %}
+                                        <div class="card-body p-2 text-center bg-light">
+                                            <small class="fw-bold d-block text-truncate">{{ media.title|default:"Ohne Titel" }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="col-12 text-muted">
+                                    <p class="fst-italic">Keine historischen Dokumente oder Urkunden verknüpft.</p>
+                                </div>
+                            {% endfor %}
+                        </div>
 
                     </div>
 

@@ -507,6 +507,28 @@ class EventForm(forms.ModelForm):
                     self.fields['family'].widget = forms.HiddenInput()
 
 
+class AddExistingMediaToEventForm(forms.Form):
+    # Ein Feld für Mehrfachauswahl (Checkboxen oder Multi-Select)
+    media_objects = forms.ModelMultipleChoiceField(
+        queryset=MediaObject.objects.none(),  # Wird im __init__ dynamisch befüllt
+        widget=forms.CheckboxSelectMultiple,  # Rendert schicke Checkboxen
+        required=True,
+        label="Bestehende Medien auswählen"
+    )
+
+    def __init__(self, *args, **kwargs):
+        # Wir übergeben den Stammbaum (tree) beim Erstellen der Form,
+        # damit Nutzer keine Bilder aus fremden Stammbäumen sehen!
+        self.tree = kwargs.pop('tree', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.tree:
+            # Filtere nur Medien aus diesem Stammbaum
+            self.fields['media_objects'].queryset = MediaObject.objects.filter(
+                gedcom_tree=self.tree
+            )
+
+
 class SourceForm(forms.ModelForm):
     class Meta:
         model = Source
@@ -519,6 +541,25 @@ class SourceForm(forms.ModelForm):
             "publication_facts": forms.TextInput(attrs={"class": "form-control"}),
             "text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
+
+
+class AddExistingMediaToSourceForm(forms.Form):
+    media_objects = forms.ModelMultipleChoiceField(
+        queryset=MediaObject.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+        label="Bestehende Medien auswählen"
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.tree = kwargs.pop('tree', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.tree:
+            # Nur Medien aus dem aktuellen Stammbaum anzeigen
+            self.fields['media_objects'].queryset = MediaObject.objects.filter(
+                gedcom_tree=self.tree
+            )
 
 
 class UserRegistrationForm(forms.ModelForm):

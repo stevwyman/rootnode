@@ -134,6 +134,11 @@
                         {% else %}
                             <span class="text-muted fst-italic small">Keine Medien mit diesem Ereignis verknüpft.</span>
                         {% endif %}
+                        <div>
+                            <a href="{% url 'genview:add-existing-media-to-event' tree_id=tree_id event_id=object.pk %}" class="btn btn-primary shadow-sm">
+                                ➕ Bestehendes Dokument/Foto verknüpfen
+                            </a>
+                        </div>
                     </li>
 
                 </ul>

@@ -1,0 +1,43 @@
+{% extends "genview/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Bestehende Medien mit Quelle verknüpfen</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Wähle aus der Liste Medienobjekte (z.B. Urkunden-Scans) aus, 
+                        die du dieser Quelle zuordnen möchtest.
+                    </p>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4 border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                            {% for checkbox in form.media_objects %}
+                                <div class="form-check py-1 border-bottom">
+                                    {{ checkbox.tag }}
+                                    <label class="form-check-label ms-2" for="{{ checkbox.id_for_label }}">
+                                        <strong>{{ checkbox.choice_label }}</strong>
+                                    </label>
+                                </div>
+                            {% empty %}
+                                <p class="text-center text-muted my-3">Keine Medien in diesem Stammbaum vorhanden.</p>
+                            {% endfor %}
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="javascript:history.back()" class="btn btn-outline-secondary">Abbrechen</a>
+                            <button type="submit" class="btn btn-success">🔗 Medien mit Quelle verknüpfen</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
