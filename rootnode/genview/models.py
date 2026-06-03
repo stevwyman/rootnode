@@ -842,9 +842,11 @@ class MediaObject(GedcomIdMixin):
 
     @property
     def is_image(self) -> bool:
-        """True, wenn das gespeicherte File ein Bild ist – praktisch für Templates."""
-        if not self.file:
+        """True, wenn das gespeicherte File ein Bild ist – crash-sicher!"""
+        # Explizit prüfen, ob das Feld wirklich eine Datei enthält
+        if not self.file or not self.file.name:
             return False
+            
         return self.file.name.lower().endswith(
             (".png", ".jpg", ".jpeg", ".gif", ".webp")
         )
