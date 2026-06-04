@@ -9,7 +9,9 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
+from django.forms import modelformset_factory
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
+from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView, FormView
 from django.shortcuts import render, redirect, get_object_or_404
@@ -40,10 +42,10 @@ from .forms import (
     FamilyForm,
     ChildFamilyLinkForm,
     MediaObjectForm,
+    AddExistingMediaForm,
     EventForm,
-    AddExistingMediaToEventForm,
+    EventTypeForm,
     SourceForm,
-    AddExistingMediaToSourceForm,
     PlaceForm,
     UserRegistrationForm,
 )
@@ -1181,10 +1183,11 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
     template_name = "genview/mediaobject_form.html"
 
     def dispatch(self, request, *args, **kwargs):
+        # Deine bisherige, perfekte Logik bleibt!
         self.person = None
         self.family = None
         self.source = None
-        self.event = None  # <-- NEU
+        self.event = None  
 
         tree_id = kwargs.get("tree_id")
 
@@ -1194,48 +1197,40 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
             self.family = get_object_or_404(Family, pk=kwargs.get("family_pk"), gedcom_tree_id=tree_id)
         if "source_pk" in kwargs:
             self.source = get_object_or_404(Source, pk=kwargs.get("source_pk"), gedcom_tree_id=tree_id)
-        if "event_pk" in kwargs:  # <-- NEU
+        if "event_pk" in kwargs:
             self.event = get_object_or_404(Event, pk=kwargs.get("event_pk"), gedcom_tree_id=tree_id)
 
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-
-        # Objekte übergeben (bei CreateView ggf. None, wenn man aus der Galerie kommt)
-        kwargs["person"] = getattr(self, "person", None)
-        kwargs["family"] = self.family
-        kwargs["source"] = self.source
-        kwargs["event"] = self.event  # <-- NEU
-
-        # Baum-ID für die Sicherheits-Filter im Formular übergeben!
+        # Baum-ID an die Form übergeben (für die Querysets)
         kwargs["tree_id"] = self.kwargs.get("tree_id")
-
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        """Übergibt die gefundenen Objekte an das Template, damit JS sie anzeigen kann."""
+        context = super().get_context_data(**kwargs)
+        context['tree_id'] = self.kwargs.get("tree_id")
+        context['person'] = self.person
+        context['family'] = self.family
+        context['source'] = self.source
+        context['event'] = self.event
+        return context
+
     def form_valid(self, form):
-        """
-        Hier weisen wir dem neuen MediaObject den aktuellen Baum zu,
-        bevor es in die Datenbank geschrieben wird.
-        """
-        tree_id = self.kwargs.get("tree_id")
-        form.instance.gedcom_tree_id = tree_id
-
-        # super().form_valid speichert das Objekt in die DB und setzt self.object
+        # 1. Den Baum zuweisen
+        form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
+        
+        # 2. Speichern. Da wir ein ModelForm nutzen, speichert super().form_valid() 
+        # das Objekt UND alle ausgewählten Many-to-Many Verbindungen aus dem Formular automatisch!
         response = super().form_valid(form)
-
-        # Falls ein Objekt verknüpft ist, fügen wir es direkt dem ManyToMany-Feld hinzu
-        # (Das muss nach dem super().form_valid passieren, da das Objekt erst eine ID braucht)
-        if self.person:
-            self.object.individuals.add(self.person)
-        if self.family:
-            self.object.families.add(self.family)
-        if self.source:
-            self.object.sources.add(self.source)
-        if self.event:  # <-- NEU
-            self.object.events.add(self.event)
-
-        return HttpResponseRedirect(self.get_success_url())
+        
+        # Hinweis: Die .add() Aufrufe haben wir entfernt! 
+        # Warum? Weil die Felder jetzt im UI vorbefüllt sind. Wenn der Nutzer das 
+        # vorbefüllte Feld versehentlich weggklickt, würde .add() es gegen seinen Willen 
+        # wieder hinzufügen. Wir vertrauen jetzt voll auf das Formular.
+        return response
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
@@ -1264,7 +1259,7 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
         # Fallback: Zur Medien-Übersicht des Baums
         return reverse_lazy("genview:media-list", kwargs={"tree_id": tree_id})
-    
+   
 
 class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = MediaObject
@@ -1709,7 +1704,7 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 
 class AddExistingMediaToEventView(TreeAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
-    form_class = AddExistingMediaToEventForm
+    form_class = AddExistingMediaForm
 
     def get_form_kwargs(self):
         """Übergibt den aktuellen Stammbaum an die Form für das Queryset."""
@@ -1772,6 +1767,46 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         # Passe diesen Fallback an deine existierende Übersichtsseite an
         return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
 
+
+class EventTypeManageView(TreeEditAccessMixin, View):
+    template_name = "genview/event_type_manage.html"
+
+    def get_formset(self, tree_id, post_data=None):
+        """Hilfsmethode, um das Formset zu erstellen und zu befüllen."""
+        # Wir bauen eine Fabrik für EventType-Formulare
+        EventTypeFormSet = modelformset_factory(
+            EventType,
+            form=EventTypeForm,
+            extra=0  # Keine leeren, neuen Zeilen anzeigen
+        )
+        
+        # 🔥 Nur Event-Typen holen, die in DIESEM Stammbaum existieren
+        queryset = EventType.objects.filter(
+            events__gedcom_tree_id=tree_id
+        ).distinct().order_by('tag')
+        
+        return EventTypeFormSet(data=post_data, queryset=queryset)
+
+    def get(self, request, tree_id):
+        formset = self.get_formset(tree_id)
+        return render(request, self.template_name, {
+            'formset': formset,
+            'tree_id': tree_id
+        })
+
+    def post(self, request, tree_id):
+        formset = self.get_formset(tree_id, request.POST)
+        
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, "Alle Event-Typen wurden erfolgreich aktualisiert!")
+            return redirect('genview:manage-event-types', tree_id=tree_id)
+            
+        return render(request, self.template_name, {
+            'formset': formset,
+            'tree_id': tree_id
+        })
+    
 # --------------------------------------------------------------
 # 2️⃣ Sources
 # --------------------------------------------------------------
@@ -1831,8 +1866,8 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
 class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
-    template_name = "genview/add_existing_media_to_source.html"
-    form_class = AddExistingMediaToSourceForm
+    template_name = "genview/add_existing_media.html"
+    form_class = AddExistingMediaForm
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1885,3 +1920,126 @@ class RegisterView(CreateView):
         # Automatisch anmelden – das macht die UX leichter
         login(self.request, self.object)
         return response
+
+# --------------------------------------------------------------
+# Search API
+# --------------------------------------------------------------
+
+class GenericSelect2APIView(TreeAccessMixin, View):
+    """
+    Eine generische API-View für Select2-Dropdowns.
+    Kann für jedes beliebige Modell im Stammbaum verwendet werden.
+    """
+    model = None          # Z.B. Individual, Source, Place
+    search_fields = []    # Z.B. ['given_name', 'surname'] oder ['title']
+    
+    def get_display_text(self, obj):
+        """
+        Kann überschrieben werden, um festzulegen, wie das Objekt 
+        im Dropdown angezeigt wird. Standard: Die __str__ Methode.
+        """
+        return str(obj)
+
+    def get(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        query = request.GET.get('q', '').strip()
+        
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+            
+        # 1. Auf den aktuellen Stammbaum filtern
+        qs = self.model.objects.filter(gedcom_tree_id=tree_id)
+        
+        # 2. Dynamisch nach allen definierten Feldern suchen (mit ODER verknüpft)
+        if self.search_fields:
+            q_objects = Q()
+            for field in self.search_fields:
+                # Baut dynamisch z.B. Q(given_name__icontains=query)
+                q_objects |= Q(**{f"{field}__icontains": query})
+            
+            qs = qs.filter(q_objects)
+            
+        # 3. Auf 30 Treffer limitieren für maximale Performance
+        qs = qs[:30]
+        
+        # 4. JSON zusammenbauen
+        results = [
+            {'id': obj.id, 'text': self.get_display_text(obj)} 
+            for obj in qs
+        ]
+        
+        return JsonResponse({'results': results})
+    
+# --- Die API für Personen ---
+class IndividualSearchAPIView(GenericSelect2APIView):
+    model = Individual
+    search_fields = ['given_name', 'surname', 'gedcom_id']
+    
+    def get_display_text(self, obj):
+        return f"{obj.given_name} {obj.surname} ({obj.gedcom_id})"
+
+# --- Die API für Quellen ---
+class SourceSearchAPIView(GenericSelect2APIView):
+    model = Source
+    search_fields = ['title', 'author', 'gedcom_id']
+
+# --- Die API für Familien ---
+class FamilySearchAPIView(GenericSelect2APIView):
+    model = Family
+    search_fields = ['gedcom_id', 'husband__surname', 'wife__surname']
+    
+    def get_display_text(self, obj):
+        # Nutzt einfach die __str__ Methode deiner Familie (z.B. "Mustermann & Müller")
+        return f"{obj} ({obj.gedcom_id})"
+    
+# --- Die API für Events ---    
+class EventSearchAPIView(GenericSelect2APIView):
+    model = Event
+    # Wir suchen im Event-Typ, im Datum, in der Notiz/Description und im Namen der Person!
+    search_fields = [
+        'event_type__name', 
+        'raw_date', 
+        'description',
+        'individual__given_name',
+        'individual__surname',
+        'family__husband__surname'
+    ]
+    
+    def get_display_text(self, obj):
+        """
+        Baut einen sprechenden Namen für das Dropdown zusammen.
+        Beispiel: 'Geburt - 1880 (Max Mustermann)' oder 'Heirat - 1890 (Familie Müller)'
+        """
+        # 1. Typ und Datum
+        event_name = obj.event_type.name if obj.event_type else "Unbekanntes Ereignis"
+        date_str = obj.parsed_date.strftime('%d.%m.%Y') if obj.parsed_date else obj.raw_date
+        date_display = f" am {date_str}" if date_str else ""
+        
+        # 2. Wem gehört das Event?
+        owner_display = ""
+        if obj.individual:
+            owner_display = f" ({obj.individual.given_name} {obj.individual.surname})"
+        elif obj.family:
+            owner_display = f" (Familie {obj.family})"
+            
+        return f"{event_name}{date_display}{owner_display}"    
+
+# --- Die API für Media Objects --- 
+class MediaSearchAPIView(GenericSelect2APIView):
+    model = MediaObject
+    # Wir suchen im Titel, in der Beschreibung und im Dateipfad!
+    search_fields = ['title', 'description', 'gedcom_original_filepath']
+    
+    def get_display_text(self, obj):
+        # Zeigt z.B. "Hochzeitsfoto (Foto)" oder "Geburtsurkunde Max (Dokument)" an
+        category = obj.get_category_display()
+        title = obj.title if obj.title else "Ohne Titel"
+        return f"{title} [{category}]"
+
+# --- Die API für Orte ---     
+class PlaceSearchAPIView(GenericSelect2APIView):
+    model = Place
+    search_fields = ['name']
+    
+    def get_display_text(self, obj):
+        return obj.name

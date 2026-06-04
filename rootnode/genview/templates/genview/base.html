@@ -52,7 +52,10 @@
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
                                     <li><a class="dropdown-item" href="#">⚙️ Einstellungen</a></li>
-                                    
+                                    {% if user.is_authenticated and tree_id %}
+                                    <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:manage-event-types' tree_id %}">📅 event types</a></li>
+                                    {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     
                                     <li>
@@ -151,6 +154,9 @@
                 </ul>
             </footer>
         </div>
+        {% block extra_js %}
+
+        {% endblock %}
 
         {% bootstrap_javascript %}
     </body>

@@ -2,7 +2,7 @@
 from django import forms
 from django.forms import ModelForm, CheckboxSelectMultiple, DateInput
 from django.contrib.auth.models import User
-from .models import Individual, Family, ChildFamilyLink, Event, MediaObject, Source, Place, Tree, TreeMembership
+from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, Tree, TreeMembership
 
 
 # ----------------------------------------------------------------------
@@ -344,22 +344,36 @@ class MediaObjectForm(forms.ModelForm):
             "individuals",
             "families",
             "sources",
+            "events",
             "is_portrait",
+            "is_private"
         ]
         widgets = {
             "gedcom_id": forms.TextInput(attrs={"class": "form-control"}),
             "title": forms.TextInput(attrs={"class": "form-control"}),
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
             "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
-            'category': forms.Select(attrs={'class': 'form-select'}),
-            "individuals": forms.CheckboxSelectMultiple(),
-            "families": forms.CheckboxSelectMultiple(),
-            "sources": forms.CheckboxSelectMultiple(),
+            "category": forms.Select(attrs={'class': 'form-select'}),
+            'individuals': forms.SelectMultiple(attrs={'class': 'form-control select2-individuals'}),
+            'sources': forms.SelectMultiple(attrs={'class': 'form-control select2-sources'}),
+            'events': forms.SelectMultiple(attrs={'class': 'form-control select2-events'}),
+            "families": forms.SelectMultiple(attrs={'class': 'form-control select2-families'}),
             "is_portrait": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_private": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     # Füge tree_id als optionalen Parameter hinzu, um Daten-Leaks zu verhindern!
     def __init__(self, *args, person=None, family=None, source=None, event=None, tree_id=None, **kwargs):
+        
+        # 🔥 DER FIX FÜRS ANLEGEN: Wir setzen die initial-Werte VOR dem super() Aufruf!
+        # So weiß Django direkt beim Aufbau des Formulars, was markiert sein soll.
+        initial = kwargs.get('initial', {})
+        if person: initial['individuals'] = [person.pk]
+        if family: initial['families'] = [family.pk]
+        if source: initial['sources'] = [source.pk]
+        if event: initial['events'] = [event.pk]
+        kwargs['initial'] = initial
+
         super().__init__(*args, **kwargs)
 
         # 1. SICHERHEIT: Finde heraus, in welchem Baum wir uns befinden
@@ -375,37 +389,58 @@ class MediaObjectForm(forms.ModelForm):
         elif self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
-        # 2. QUERYSETS FILTERN: Nur Personen/Quellen aus DIESEM Baum anzeigen!
+        # 2. QUERYSETS FILTERN & PERFORMANCE-HACK: 
         if current_tree_id:
-            self.fields["individuals"].queryset = Individual.objects.filter(
-                gedcom_tree_id=current_tree_id
-            )
-            if "families" in self.fields:
-                self.fields["families"].queryset = Family.objects.filter(
-                    gedcom_tree_id=current_tree_id)
-            if "sources" in self.fields:
-                self.fields["sources"].queryset = Source.objects.filter(
-                    gedcom_tree_id=current_tree_id
-                )
-            if "events" in self.fields:
-                self.fields["events"].queryset = Event.objects.filter(
-                    gedcom_tree_id=current_tree_id
-                )
-        else:
-            # Fallback: Falls kein Baum gefunden wird, zeige sicherheitshalber nichts an
-            self.fields["individuals"].queryset = Individual.objects.none()
-            if "families" in self.fields:
-                self.fields["families"].queryset = Family.objects.none()
+            # --- Individuals ---
+            self.fields["individuals"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            sel_inds = list(self.instance.individuals.all()) if self.instance and self.instance.pk else []
+            if person and person not in sel_inds:
+                sel_inds.append(person)
+            
+            # HTML-Optionen NUR für die ausgewählten/vorselektierten bauen
+            self.fields["individuals"].widget.choices = [
+                (obj.id, f"{obj.given_name} {obj.surname} ({obj.gedcom_id})") for obj in sel_inds
+            ]
 
-        # 3. PRESELECTION: Person in der Checkbox-Liste anhaken
-        if person:
-            self.fields["individuals"].initial = [person]
-        if family and "families" in self.fields:
-            self.fields["families"].initial = [family]
-        if source and "sources" in self.fields:
-            self.fields["sources"].initial = [source]
-        if event and "events" in self.fields:
-            self.fields["events"].initial = [event]
+            # --- Families ---
+            if "families" in self.fields:
+                self.fields["families"].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
+                sel_fams = list(self.instance.families.all()) if self.instance and self.instance.pk else []
+                if family and family not in sel_fams:
+                    sel_fams.append(family)
+                    
+                self.fields["families"].widget.choices = [
+                    (obj.id, f"{obj} ({obj.gedcom_id})") for obj in sel_fams
+                ]
+
+            # --- Sources ---
+            if "sources" in self.fields:
+                self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+                sel_srcs = list(self.instance.sources.all()) if self.instance and self.instance.pk else []
+                if source and source not in sel_srcs:
+                    sel_srcs.append(source)
+                    
+                self.fields["sources"].widget.choices = [
+                    (obj.id, f"{obj.title} ({obj.gedcom_id})") for obj in sel_srcs
+                ]
+
+            # --- Events ---
+            if "events" in self.fields:
+                self.fields["events"].queryset = Event.objects.filter(gedcom_tree_id=current_tree_id)
+                sel_evts = list(self.instance.events.all()) if self.instance and self.instance.pk else []
+                if event and event not in sel_evts:
+                    sel_evts.append(event)
+                    
+                self.fields["events"].widget.choices = [
+                    (obj.id, f"{obj.event_type.name if obj.event_type else 'Event'} - {obj.parsed_date or obj.raw_date or ''}") 
+                    for obj in sel_evts
+                ]
+        else:
+            # Fallback (bleibt wie vorher)
+            self.fields["individuals"].queryset = Individual.objects.none()
+            if "families" in self.fields: self.fields["families"].queryset = Family.objects.none()
+            if "sources" in self.fields: self.fields["sources"].queryset = Source.objects.none()
+            if "events" in self.fields: self.fields["events"].queryset = Event.objects.none()   
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen
@@ -427,6 +462,27 @@ class MediaObjectForm(forms.ModelForm):
 
         return media
 
+
+class AddExistingMediaForm(forms.Form):
+    media_objects = forms.ModelMultipleChoiceField(
+        queryset=MediaObject.objects.none(),
+        required=True,
+        label="Bestehende Medien suchen und auswählen",
+        # 🔥 Das Checkbox-Widget fliegt raus, Select2 kommt rein:
+        widget=forms.SelectMultiple(attrs={'class': 'form-control select2-media'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.tree = kwargs.pop('tree', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.tree:
+            self.fields['media_objects'].queryset = MediaObject.objects.filter(
+                gedcom_tree=self.tree
+            )
+            # 🔥 Der Performance-Hack: Wir leeren die HTML-Auswahlliste!
+            self.fields['media_objects'].widget.choices = []
+            
 
 class PlaceForm(forms.ModelForm):
     class Meta:
@@ -454,8 +510,8 @@ class EventForm(forms.ModelForm):
                     'type': 'date'
                 }
             ),
-            'place': forms.Select(attrs={'class': 'form-select'}),
-            'sources': forms.CheckboxSelectMultiple(),
+            'place': forms.Select(attrs={'class': 'form-control select2-place'}),
+            'sources': forms.SelectMultiple(attrs={'class': 'form-control select2-sources'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -475,12 +531,25 @@ class EventForm(forms.ModelForm):
                 self.fields['individual'].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id).order_by('surname', 'given_name')
             if 'family' in self.fields:
                 self.fields['family'].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
-            if 'place' in self.fields:
-                self.fields['place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
-            if 'sources' in self.fields:
-                self.fields['sources'].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+            # --- Orte (Places) filtern & optimieren ---
+            if "place" in self.fields:
+                self.fields["place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
+                # Beim Update den aktuell gewählten Ort behalten, sonst HTML leeren
+                sel_place = [self.instance.place] if self.instance and self.instance.place else []
+                self.fields["place"].widget.choices = [(obj.id, obj.name) for obj in sel_place]
+
+            # --- Quellen (Sources) filtern & optimieren ---
+            if "sources" in self.fields:
+                self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+                # Bereits verknüpfte Quellen holen
+                sel_srcs = list(self.instance.sources.all()) if self.instance and self.instance.pk else []
+                self.fields["sources"].widget.choices = [(obj.id, f"{obj.title} ({obj.gedcom_id})") for obj in sel_srcs]
+            
         else:
             # Sicherheits-Fallback: Wenn kein Baum bekannt ist, alles leeren!
+            if "place" in self.fields: self.fields["place"].queryset = Place.objects.none()
+            if "sources" in self.fields: self.fields["sources"].queryset = Source.objects.none()
+            
             for field in ['individual', 'family', 'place', 'sources']:
                 if field in self.fields:
                     self.fields[field].queryset = self.fields[field].queryset.none()
@@ -507,26 +576,14 @@ class EventForm(forms.ModelForm):
                     self.fields['family'].widget = forms.HiddenInput()
 
 
-class AddExistingMediaToEventForm(forms.Form):
-    # Ein Feld für Mehrfachauswahl (Checkboxen oder Multi-Select)
-    media_objects = forms.ModelMultipleChoiceField(
-        queryset=MediaObject.objects.none(),  # Wird im __init__ dynamisch befüllt
-        widget=forms.CheckboxSelectMultiple,  # Rendert schicke Checkboxen
-        required=True,
-        label="Bestehende Medien auswählen"
-    )
-
-    def __init__(self, *args, **kwargs):
-        # Wir übergeben den Stammbaum (tree) beim Erstellen der Form,
-        # damit Nutzer keine Bilder aus fremden Stammbäumen sehen!
-        self.tree = kwargs.pop('tree', None)
-        super().__init__(*args, **kwargs)
-        
-        if self.tree:
-            # Filtere nur Medien aus diesem Stammbaum
-            self.fields['media_objects'].queryset = MediaObject.objects.filter(
-                gedcom_tree=self.tree
-            )
+class EventTypeForm(forms.ModelForm):
+    class Meta:
+        model = EventType
+        fields = ['name']
+        widgets = {
+            # Das Eingabefeld für den schönen Namen
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+        }
 
 
 class SourceForm(forms.ModelForm):
@@ -541,25 +598,6 @@ class SourceForm(forms.ModelForm):
             "publication_facts": forms.TextInput(attrs={"class": "form-control"}),
             "text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
-
-
-class AddExistingMediaToSourceForm(forms.Form):
-    media_objects = forms.ModelMultipleChoiceField(
-        queryset=MediaObject.objects.none(),
-        widget=forms.CheckboxSelectMultiple,
-        required=True,
-        label="Bestehende Medien auswählen"
-    )
-
-    def __init__(self, *args, **kwargs):
-        self.tree = kwargs.pop('tree', None)
-        super().__init__(*args, **kwargs)
-        
-        if self.tree:
-            # Nur Medien aus dem aktuellen Stammbaum anzeigen
-            self.fields['media_objects'].queryset = MediaObject.objects.filter(
-                gedcom_tree=self.tree
-            )
 
 
 class UserRegistrationForm(forms.ModelForm):

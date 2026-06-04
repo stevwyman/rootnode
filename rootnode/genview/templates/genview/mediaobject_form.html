@@ -2,76 +2,131 @@
 {% block title %}{% if view.object %}Bild bearbeiten{% else %}Bild hinzufügen{% endif %}{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">{% if view.object %}Bild bearbeiten{% else %}Neues Bild hinzufügen{% endif %}</h1>
-
-<form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-
-    {# verstecktes Feld, wenn das Bild bereits einer Person zugeordnet ist #}
-    {% if form.person_hidden %}{{ form.person_hidden }}{% endif %}
-
-    <div class="mb-3">
-        {{ form.title.label_tag }} {{ form.title }}
-        {{ form.title.errors }}
-    </div>
-
-    <div class="mb-3">
-        {{ form.file.label_tag }} {{ form.file }}
-        {{ form.file.errors }}
-    </div>
-
-    <div class="mb-3">
-    {{ form.category.label_tag }}
-    {{ form.category }}
-    {{ form.category.errors }}
-    <small class="form-text text-muted">
-        Bitte wähle aus, ob es sich um ein Foto oder ein Dokument handelt.
-    </small>
-</div>
-
-    <div class="mb-3">
-        {{ form.description.label_tag }} {{ form.description }}
-        {{ form.description.errors }}
-    </div>
-
-    {# Wenn das Formular ohne feste Person verwendet wird (z. B. Admin) #}
-    {% if form.individuals %}
-        <div class="mb-3">
-            {{ form.individuals.label_tag }} {{ form.individuals }}
-            {{ form.individuals.errors }}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">{% if view.object %}Medium bearbeiten{% else %}Neues Medium hinzufügen{% endif %}</h4>
         </div>
+        <div class="card-body">
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.title.label }}</label>
+                    {{ form.title }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.file.label }}</label>
+                    {{ form.file }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.category.label }}</label>
+                    {{ form.category }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.description.label }}</label>
+                    {{ form.description }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.individuals.label }}</label>
+                    {{ form.individuals }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.families.label }}</label>
+                    {{ form.families }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.sources.label }}</label>
+                    {{ form.sources }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.events.label }}</label>
+                    {{ form.events }}
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.is_portrait }} {{ form.is_portrait.label_tag }}
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.is_private }} {{ form.is_private.label_tag }}
+                </div>
+
+                <button type="submit" class="btn btn-success mt-3">💾 {% if view.object %}Änderungen speichern{% else %}Medium speichern{% endif %}</button>
+            </form>
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+jQuery(document).ready(function($) {
+    
+    // Helferfunktion für AJAX
+    function initSelect2(elementClass, apiUrl, placeholderText) {
+        $(elementClass).select2({
+            placeholder: placeholderText,
+            minimumInputLength: 2,
+            allowClear: true,
+            ajax: {
+                url: apiUrl,
+                dataType: 'json',
+                delay: 250,
+                data: function (params) { return { q: params.term }; },
+                processResults: function (data) { return { results: data.results }; }
+            }
+        });
+    }
+
+    // Die 4 Suchfelder initialisieren
+    initSelect2('.select2-individuals', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
+    initSelect2('.select2-families', "{% url 'genview:api-search-families' tree_id=tree_id %}", "Familien suchen...");
+    initSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
+    initSelect2('.select2-events', "{% url 'genview:api-search-events' tree_id=tree_id %}", "Ereignisse suchen...");
+
+    // ==========================================
+    // 🔥 DER FIX: JS zwingt Select2 zur Vorauswahl beim Anlegen
+    // ==========================================
+
+    {% if person %}
+        var indSelect = $('.select2-individuals');
+        // Wenn das Feld leer ist (also beim Neuanlegen), fügen wir die Person per JS ein
+        if (!indSelect.val() || indSelect.val().length === 0) {
+            var indOption = new Option("{{ person.given_name }} {{ person.surname }} ({{ person.gedcom_id }})", "{{ person.id }}", true, true);
+            indSelect.append(indOption).trigger('change');
+        }
     {% endif %}
 
-    <div class="mb-3">
-        {{ form.sources.label_tag }} {{ form.sources }}
-        {{ form.sources.errors }}
-    </div>
-
-    <div class="form-check mb-3">
-        {{ form.is_portrait }} {{ form.is_portrait.label_tag }}
-    </div>
-
-    <div class="form-check mb-3">
-        {{ form.is_private }} {{ form.is_private.label_tag }}
-    </div>
-
-    <button type="submit" class="btn btn-success">
-        {% if view.object %}Änderungen speichern{% else %}Bild speichern{% endif %}
-    </button>
-
-    <div class="d-flex justify-content-between mt-4">
-    {% if object %}
-        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=object.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
-    {% elif person %}
-        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
-    {% elif family %}
-        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
-    {% elif source %}
-        <a href="{% url 'genview:source-detail' tree_id=tree_id pk=source.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
-    {% else %}
-        <a href="{% url 'genview:media-list' tree_id=tree_id %}" class="btn btn-outline-secondary">Abbrechen</a>
+    {% if family %}
+        var familySelect = $('.select2-families');
+        if (!familySelect.val() || familySelect.val().length === 0) {
+            var familyOption = new Option("{{ family }} ({{ family.gedcom_id }})", "{{ family.id }}", true, true);
+            familySelect.append(familyOption).trigger('change');
+        }
     {% endif %}
-    </div>
-</form>
+
+    {% if source %}
+        var sourceSelect = $('.select2-sources');
+        if (!sourceSelect.val() || sourceSelect.val().length === 0) {
+            var sourceOption = new Option("{{ source.title }} ({{ source.gedcom_id }})", "{{ source.id }}", true, true);
+            sourceSelect.append(sourceOption).trigger('change');
+        }
+    {% endif %}
+
+    {% if event %}
+        var eventSelect = $('.select2-events');
+        if (!eventSelect.val() || eventSelect.val().length === 0) {
+            var eventOption = new Option("{{ event.event_type.name|default:'Ereignis' }} - {{ event.parsed_date|default:event.raw_date|default:'Kein Datum' }}", "{{ event.id }}", true, true);
+            eventSelect.append(eventOption).trigger('change');
+        }
+    {% endif %}
+});
+</script>
 {% endblock %}

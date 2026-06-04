@@ -183,6 +183,7 @@ urlpatterns = [
         views.AddExistingMediaToEventView.as_view(), 
         name='add-existing-media-to-event',
     ),
+    path('tree/<int:tree_id>/event-types/manage/', views.EventTypeManageView.as_view(), name='manage-event-types'),
 
     path('tree/<int:tree_id>/sources/', views.SourceListView.as_view(), name='source-list'),
     path('tree/<int:tree_id>/sources/add/', views.SourceCreateView.as_view(), name='source-create'),
@@ -203,4 +204,11 @@ urlpatterns = [
     path('tree/<int:tree_id>/places/<int:pk>/edit/', views.PlaceUpdateView.as_view(), name='place-edit'),
     path('tree/<int:tree_id>/places/<int:pk>/delete/', views.PlaceDeleteView.as_view(), name='place-delete'),
 
+    # API for drop-down search
+    path('tree/<int:tree_id>/api/search/individuals/', views.IndividualSearchAPIView.as_view(), name='api-search-individuals'),
+    path('tree/<int:tree_id>/api/search/sources/', views.SourceSearchAPIView.as_view(), name='api-search-sources'),
+    path('tree/<int:tree_id>/api/search/places/', views.PlaceSearchAPIView.as_view(), name='api-search-places'),
+    path('tree/<int:tree_id>/api/search/families/', views.FamilySearchAPIView.as_view(), name='api-search-families'),
+    path('tree/<int:tree_id>/api/search/events/', views.EventSearchAPIView.as_view(), name='api-search-events'),
+    path('tree/<int:tree_id>/api/search/media/', views.MediaSearchAPIView.as_view(), name='api-search-media'),
 ]
