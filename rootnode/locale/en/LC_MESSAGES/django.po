@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-03 12:02+0000\n"
+"POT-Creation-Date: 2026-06-04 06:46+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,59 +17,60 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-#: genview/models.py:788
-msgid "Datei/Bild"
-msgstr ""
 
-#: genview/models.py:829
+#: genview/models.py:800
+msgid "Datei/Bild"
+msgstr "file/picture"
+
+#: genview/models.py:841
 msgid "Ereignisse, mit denen dieses Medium verknüpft ist"
 msgstr ""
 
-#: genview/models.py:834
+#: genview/models.py:846
 msgid "Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt."
 msgstr ""
 
 #: genview/templates/genview/tree_list.html:4
 #: genview/templates/genview/tree_list.html:9
 msgid "Meine Stammbäume"
-msgstr ""
+msgstr "My Family Trees"
 
 #: genview/templates/genview/tree_list.html:25
 msgid "Erstellt"
-msgstr ""
+msgstr "created"
 
 #: genview/templates/genview/tree_list.html:31
 msgid "Personen"
-msgstr ""
+msgstr "persons"
 
 #: genview/templates/genview/tree_list.html:35
 msgid "Familien"
-msgstr ""
+msgstr "families"
 
 #: genview/templates/genview/tree_list.html:39
 msgid "Orte"
-msgstr ""
+msgstr "places"
 
 #: genview/templates/genview/tree_list.html:47
 msgid "Personen anzeigen"
-msgstr ""
+msgstr "list persons"
 
 #: genview/templates/genview/tree_list.html:51
 msgid "Familien anzeigen"
-msgstr ""
+msgstr "list families"
 
-#: genview/templates/genview/tree_list.html:55
+#: genview/templates/genview/tree_list.html:56
 msgid "Baum löschen"
-msgstr ""
+msgstr "delete tree"
 
-#: genview/templates/genview/tree_list.html:66
+#: genview/templates/genview/tree_list.html:68
 msgid "Noch keine Stammbäume vorhanden"
-msgstr ""
+msgstr "no trees available"
 
 #: rootnode/settings.py:125
 msgid "German"
-msgstr ""
+msgstr "deutsch"
 
 #: rootnode/settings.py:126
 msgid "English"
-msgstr ""
+msgstr "englisch"
