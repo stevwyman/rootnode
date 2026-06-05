@@ -6,7 +6,7 @@ register = template.Library()
 @register.simple_tag
 def paginate_range(page_obj, surrounding=2):
     """
-    Gibt eine Liste von Seiten‑Nummern zurück, bei Bedarf mit dem Zeichen '...'.
+    Gibt eine Liste von Seiten-Nummern zurück, bei Bedarf mit dem Zeichen '...'.
     - `surrounding`   → wie viele Nachbarn links/rechts von `page_obj.number`
     - Beispiel: page 7 von 20 → [1, '...', 5, 6, 7, 8, 9, '...', 20]
     """
@@ -45,7 +45,7 @@ def paginate_range(page_obj, surrounding=2):
     # immer die letzte Seite
     pages.append(total_pages)
 
-    # Entferne mögliche Duplikate (z. B. wenn left == 2)
+    # Entferne mögliche Duplikate (z. B. wenn left == 2)
     cleaned = []
     for p in pages:
         if not cleaned or cleaned[-1] != p:

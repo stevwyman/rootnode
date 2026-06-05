@@ -1,7 +1,7 @@
 # Dockerfile (oder Containerfile)
 FROM python:3.11-slim
 
-# System‑Abhängigkeiten (falls du lokale Bootstrap‑Dateien hast)
+# System-Abhängigkeiten (falls du lokale Bootstrap-Dateien hast)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
@@ -13,7 +13,7 @@ RUN pip install poetry && poetry config virtualenvs.create false && poetry insta
 
 COPY . /app/
 
-# Collect static files (Bootstrap‑CSS/JS wird mitkopiert)
+# Collect static files (Bootstrap-CSS/JS wird mitkopiert)
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000

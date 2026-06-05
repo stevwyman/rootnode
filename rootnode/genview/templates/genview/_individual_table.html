@@ -1,5 +1,5 @@
 {% comment %}
-Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
+Nur das <tbody>-Fragment – wird von Ajax ersetzt.
 {% endcomment %}
 {% load event_extras %}  
 <tbody>
@@ -45,10 +45,10 @@ Nur das <tbody>‑Fragment – wird von Ajax ersetzt.
                 {% elif person.death_date_raw %}
                     <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
                 {% else %}
-                    <span class="text-muted">‑</span>
+                    <span class="text-muted">-</span>
                 {% endif %}
             {% else %}
-                <span class="text-muted">‑</span>
+                <span class="text-muted">-</span>
             {% endif %}
         </td>
         {% if can_edit %}

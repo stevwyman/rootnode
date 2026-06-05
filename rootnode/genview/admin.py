@@ -19,12 +19,12 @@ admin.site.register(
 
 class IsImageFilter(admin.SimpleListFilter):
     title = "Bildtyp"  # Anzeigename im Admin
-    parameter_name = "is_image"  # URL‑Parameter
+    parameter_name = "is_image"  # URL-Parameter
 
     def lookups(self, request, model_admin):
         return (
             ("yes", "Nur Bilder"),
-            ("no", "Nur Nicht‑Bilder"),
+            ("no", "Nur Nicht-Bilder"),
         )
 
     def queryset(self, request, queryset):
@@ -49,7 +49,7 @@ class MediaObjectAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
 
-        # Identische Logik wie im Form‑save(): andere Portraits zurücksetzen
+        # Identische Logik wie im Form-save(): andere Portraits zurücksetzen
         if obj.is_portrait:
             for person in obj.individuals.all():
                 MediaObject.objects.filter(

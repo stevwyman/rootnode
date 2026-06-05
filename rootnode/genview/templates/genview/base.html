@@ -7,9 +7,9 @@
 <html lang="de">
     <head>
         <meta charset="utf-8">
-        <title>{% block title %}GEDCOM‑Stammbaum{% endblock %}</title>
+        <title>{% block title %}GEDCOM-Stammbaum{% endblock %}</title>
 
-        <!-- Bootstrap‑CSS über das django_bootstrap5‑Tag -->
+        <!-- Bootstrap-CSS über das django_bootstrap5-Tag -->
         {% bootstrap_css %}
 
         <link rel="stylesheet"
@@ -51,13 +51,14 @@
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Signed in as {{ user.username }}</a>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
-                                    <li><a class="dropdown-item" href="#">⚙️ Einstellungen</a></li>
                                     {% if user.is_authenticated and tree_id %}
                                     <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:manage-event-types' tree_id %}">📅 event types</a></li>
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
-                                    
+                                    <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 import gedcom</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:tree-membership-management' %}">⚙️ manage memberships</a></li>
+                                    <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form method="post" action="{% url 'logout' %}" class="m-0 p-0 d-inline">
                                             {% csrf_token %}

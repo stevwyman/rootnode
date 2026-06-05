@@ -47,7 +47,7 @@
     </div>
 
     {# -------------------------------------------------------------- #}
-    {#  Suchformular (GET‑Methode)                                   #}
+    {#  Suchformular (GET-Methode)                                   #}
     {# -------------------------------------------------------------- #}
     <!--
     <form method="get" action="{% url 'genview:individual-search' tree_id=tree_id %}" class="row g-3 mb-4">
@@ -62,13 +62,13 @@
 
 
     {# -------------------------------------------------------------- #}
-    {#  Suchformular (AJAX‑Methode)                                   #}
+    {#  Suchformular (AJAX-Methode)                                   #}
     {# -------------------------------------------------------------- #}
     <!-- 
     <form id="search-form" class="row g-3 mb-4">
         <div class="col-md-9">
             <input type="text" name="q" id="search-input"
-                class="form-control" placeholder="Name, GEDCOM‑ID …"
+                class="form-control" placeholder="Name, GEDCOM-ID …"
                 value="{{ request.GET.q|default_if_none:'' }}">
         </div>
         <div class="col-md-3">
@@ -191,11 +191,11 @@
                                             {% elif d_event.raw_date %}
                                                 <span class="badge bg-secondary">{{ d_event.raw_date }}</span>
                                             {% else %}
-                                                <span class="text-muted">‑</span>
+                                                <span class="text-muted">-</span>
                                             {% endif %}
                                         {% endwith %}
                                     {% else %}
-                                        <span class="text-muted">‑</span>
+                                        <span class="text-muted">-</span>
                                     {% endif %}
                                 {% endif %}
                             </td>

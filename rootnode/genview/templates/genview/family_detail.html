@@ -58,50 +58,50 @@
 <hr>
 
 <dl class="row">
-    <dt class="col-sm-3">GEDCOM‑ID</dt><dd class="col-sm-9">{{ family.gedcom_id }}</dd>
+    <dt class="col-sm-3">GEDCOM-ID</dt><dd class="col-sm-9">{{ family.gedcom_id }}</dd>
 
     <dt class="col-sm-3">Ehemann</dt>
     <dd class="col-sm-9">
         {% if family.husband %}
             <a href="{{ family.husband.get_absolute_url }}">{{ family.husband.full_name }}</a>
-        {% else %}<span class="text-muted">‑</span>{% endif %}
+        {% else %}<span class="text-muted">-</span>{% endif %}
     </dd>
 
     <dt class="col-sm-3">Ehefrau</dt>
     <dd class="col-sm-9">
         {% if family.wife %}
             <a href="{{ family.wife.get_absolute_url }}">{{ family.wife.full_name }}</a>
-        {% else %}<span class="text-muted">‑</span>{% endif %}
+        {% else %}<span class="text-muted">-</span>{% endif %}
     </dd>
 
-    {# ---------- Heirats‑Datum & Ort ---------- #}
-    <dt class="col-sm-3">Heirats‑Datum</dt>
+    {# ---------- Heirats-Datum & Ort ---------- #}
+    <dt class="col-sm-3">Heirats-Datum</dt>
     <dd class="col-sm-9">
         {% if family.marriage_event %}
             {# Wenn du das geparste Datum willst: #}
             {% if family.marriage_event.parsed_date %}
                 {{ family.marriage_event.parsed_date|date:"Y-m-d" }}
             {% else %}
-                {{ family.marriage_event.raw_date }}   {# Roh‑String fallback #}
+                {{ family.marriage_event.raw_date }}   {# Roh-String fallback #}
             {% endif %}
         {% else %}
-            <span class="text-muted">‑</span>
+            <span class="text-muted">-</span>
         {% endif %}
     </dd>
 
-    <dt class="col-sm-3">Heirats‑Ort</dt>
+    <dt class="col-sm-3">Heirats-Ort</dt>
     <dd class="col-sm-9">
         {% if family.marriage_event and family.marriage_event.place %}
             {{ family.marriage_event.place }}
         {% else %}
-            <span class="text-muted">‑</span>
+            <span class="text-muted">-</span>
         {% endif %}
     </dd>
 
     <dt class="col-sm-3">Notizen</dt><dd class="col-sm-9">{{ family.notes|linebreaksbr }}</dd>
 </dl>
 
-<!-- Familien‑Events -->
+<!-- Familien-Events -->
 <h4 class="mt-4">Ereignisse der Familie</h4>
 {% if family.events %}
     <ul class="list-group mb-3">
@@ -120,7 +120,7 @@
     <p class="text-muted">Keine Ereignisse erfasst.</p>
 {% endif %}
 
-<!-- Medien‑Objekte -->
+<!-- Medien-Objekte -->
 <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
     <h4 class="mt-4">Medien</h4>
     {% if can_edit %}

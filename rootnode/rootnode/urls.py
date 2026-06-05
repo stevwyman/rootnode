@@ -53,7 +53,7 @@ urlpatterns += i18n_patterns(
     # ------------------ Home / Startseite ------------------
     #path('', genview_views.home, name='home'),   
     path('', genview_views.TreeListView.as_view(), name='tree-list'),
-    # ------------------ App‑bezogene URLs -----------------
+    # ------------------ App-bezogene URLs -----------------
     path('genview/', include('genview.urls'))
 ) + debug_toolbar_urls()
 

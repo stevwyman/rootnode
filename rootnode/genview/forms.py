@@ -6,13 +6,13 @@ from .models import Individual, Family, ChildFamilyLink, Event, EventType, Media
 
 
 # ----------------------------------------------------------------------
-#  IndividualForm – für Person‑Datensatz
+#  IndividualForm – für Person-Datensatz
 # ----------------------------------------------------------------------
 class IndividualForm(ModelForm):
     """
-    Formular für das Bearbeiten einer Person inkl. Geburts‑/Sterbedatum.
+    Formular für das Bearbeiten einer Person inkl. Geburts-/Sterbedatum.
     Die Felder `birth_date` und `death_date` sind *virtuell* – sie werden im
-    `save()`‑Methoden‑Override auf die zugehörigen Event‑Objekte geschrieben.
+    `save()`-Methoden-Override auf die zugehörigen Event-Objekte geschrieben.
     """
 
     # --------------------------------------------------------------
@@ -20,26 +20,26 @@ class IndividualForm(ModelForm):
     # --------------------------------------------------------------
     birth_date_raw = forms.CharField(
         required=False,
-        label="Geburts‑Datum (Roh‑String, z. B. 'ABT 1900')",
+        label="Geburts-Datum (Roh-String, z. B. 'ABT 1900')",
         widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "z. B. 12 JAN 1885"}
+            attrs={"class": "form-control", "placeholder": "z. B. 12 JAN 1885"}
         ),
     )
     birth_date_parsed = forms.DateField(
         required=False,
-        label="Geburts‑Datum (geparst)",
+        label="Geburts-Datum (geparst)",
         widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
     death_date_raw = forms.CharField(
         required=False,
-        label="Sterbe‑Datum (Roh‑String)",
+        label="Sterbe-Datum (Roh-String)",
         widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "z. B. 5 MAY 1972"}
+            attrs={"class": "form-control", "placeholder": "z. B. 5 MAY 1972"}
         ),
     )
     death_date_parsed = forms.DateField(
         required=False,
-        label="Sterbe‑Datum (geparst)",
+        label="Sterbe-Datum (geparst)",
         widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
 
@@ -67,7 +67,7 @@ class IndividualForm(ModelForm):
         }
 
     # --------------------------------------------------------------
-    # Initial‑Daten für die virtuellen Felder befüllen
+    # Initial-Daten für die virtuellen Felder befüllen
     # --------------------------------------------------------------
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -86,7 +86,7 @@ class IndividualForm(ModelForm):
             self.fields['sex'].help_text = "Das Geschlecht wurde durch die gewählte Rolle automatisch festgelegt."
 
         # Wenn ein bereits existierendes Individual bearbeitet wird,
-        # laden wir die zugehörigen BIRT‑/DEAT‑Events (falls vorhanden).
+        # laden wir die zugehörigen BIRT-/DEAT-Events (falls vorhanden).
         if self.instance.pk:
             birth_evt = self.instance.birth_event
             death_evt = self.instance.death_event
@@ -119,7 +119,7 @@ class IndividualForm(ModelForm):
 
     # --------------------------------------------------------------
     # Überschreiben von save() – schreibt die virtuellen Felder in die
-    # zugehörigen Event‑Instanzen.
+    # zugehörigen Event-Instanzen.
     # --------------------------------------------------------------
     def save(self, commit=True):
         # 1️⃣ zuerst das Individual selbst speichern
@@ -127,7 +127,7 @@ class IndividualForm(ModelForm):
 
         if commit:
             individual.save()
-            self.save_m2m()  # speichert ManyToMany‑Beziehungen (Sources)
+            self.save_m2m()  # speichert ManyToMany-Beziehungen (Sources)
 
         # 2️⃣ jetzt die Events für Geburt und Tod updaten
         #    (nur wenn mindestens ein Feld ausgefüllt ist)
@@ -179,7 +179,7 @@ class IndividualSearchForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "class": "form-control",
-                "placeholder": "Name, GEDCOM‑ID, Geschlecht …",
+                "placeholder": "Name, GEDCOM-ID, Geschlecht …",
                 "autocomplete": "off",
             }
         ),
@@ -187,25 +187,25 @@ class IndividualSearchForm(forms.Form):
 
 
 # ----------------------------------------------------------------------
-#  FamilyForm – für Familien‑Datensatz
+#  FamilyForm – für Familien-Datensatz
 # ----------------------------------------------------------------------
 class FamilyForm(ModelForm):
     """
-    Standard‑Formular für Familie + zwei zusätzliche Felder für das
-    Heirats‑Event (Roh‑String, geparstes Datum und Ort).
+    Standard-Formular für Familie + zwei zusätzliche Felder für das
+    Heirats-Event (Roh-String, geparstes Datum und Ort).
     """
 
     # ---------- Virtuelle Felder ----------
     marriage_raw_date = forms.CharField(
         required=False,
-        label="Heirats‑Datum (Roh‑String, z. B. '15 JUN 1890')",
+        label="Heirats-Datum (Roh-String, z. B. '15 JUN 1890')",
         widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "z. B. 15 JUN 1890"}
+            attrs={"class": "form-control", "placeholder": "z. B. 15 JUN 1890"}
         ),
     )
     marriage_parsed_date = forms.DateField(
         required=False,
-        label="Heirats‑Datum (geparst)",
+        label="Heirats-Datum (geparst)",
         widget=forms.DateInput(
                 format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
                 attrs={
@@ -227,7 +227,7 @@ class FamilyForm(ModelForm):
             "gedcom_id",
             "husband",
             "wife",
-            "parent",  # MPTT‑Hierarchie (optional)
+            "parent",  # MPTT-Hierarchie (optional)
             "notes",
             "sources",
         ]
@@ -241,7 +241,7 @@ class FamilyForm(ModelForm):
         }
 
     # --------------------------------------------------------------
-    #  Initial‑Daten für die virtuellen Felder befüllen
+    #  Initial-Daten für die virtuellen Felder befüllen
     # --------------------------------------------------------------
     def __init__(self, *args, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -267,7 +267,7 @@ class FamilyForm(ModelForm):
                 self.fields["marriage_place"].initial = ev.place
 
     # --------------------------------------------------------------
-    #  Hilfsmethode: MARR‑Event holen oder neu anlegen
+    #  Hilfsmethode: MARR-Event holen oder neu anlegen
     # --------------------------------------------------------------
     @staticmethod
     def _get_or_create_marriage_event(family: Family) -> Event:
@@ -283,13 +283,13 @@ class FamilyForm(ModelForm):
     #  Override save() – speichert die virtuellen Felder in das Event
     # --------------------------------------------------------------
     def save(self, commit=True):
-        family = super().save(commit=False)  # speichert Family‑Stammdaten
+        family = super().save(commit=False)  # speichert Family-Stammdaten
 
         if commit:
             family.save()
-            self.save_m2m()  # Sources‑ManyToMany
+            self.save_m2m()  # Sources-ManyToMany
 
-        # ----- Heirats‑Daten schreiben / ggf. Event löschen ----------
+        # ----- Heirats-Daten schreiben / ggf. Event löschen ----------
         raw = self.cleaned_data.get("marriage_raw_date")
         parsed = self.cleaned_data.get("marriage_parsed_date")
         place = self.cleaned_data.get("marriage_place")
@@ -311,7 +311,7 @@ class FamilyForm(ModelForm):
 
 
 # ----------------------------------------------------------------------
-#  ChildFamilyLinkForm – Kind‑zu‑Familie‑Verknüpfung
+#  ChildFamilyLinkForm – Kind-zu-Familie-Verknüpfung
 # ----------------------------------------------------------------------
 class ChildFamilyLinkForm(ModelForm):
     class Meta:
@@ -601,7 +601,7 @@ class SourceForm(forms.ModelForm):
 
 
 class UserRegistrationForm(forms.ModelForm):
-    """Einfaches Registrierungsformular (Username, E‑Mail, Passwort, Baum‑Auswahl)."""
+    """Einfaches Registrierungsformular (Username, E-Mail, Passwort, Baum-Auswahl)."""
     password1 = forms.CharField(label='Passwort', widget=forms.PasswordInput)
     password2 = forms.CharField(label='Passwort (Wiederholung)', widget=forms.PasswordInput)
     tree = forms.ModelChoiceField(
@@ -631,6 +631,157 @@ class UserRegistrationForm(forms.ModelForm):
             TreeMembership.objects.create(
                 user=user,
                 tree=self.cleaned_data['tree'],
-                role='VIEWER'          # Standard‑Rolle, später per Admin änderbar
+                role='VIEWER'          # Standard-Rolle, später per Admin änderbar
             )
         return user
+    
+#
+# --- ADMIN
+#
+
+from django.contrib.auth import get_user_model
+
+class GedcomImportForm(forms.Form):
+    """
+    Formular für den Front-End-Import einer GEDCOM-Datei.
+    - `gedcom_file` : UploadedFile (max. 10 MB, anpassbar)
+    - `tree_name`   : Name des neuen Stammbaums, wie beim CLI-Befehl
+    """
+    gedcom_file = forms.FileField(
+        label="GEDCOM-Datei",
+        help_text="Nur .ged/.gedcom-Dateien, max. 10 MB",
+    )
+    tree_name = forms.CharField(
+        max_length=200,
+        label="Name des Stammbaums",
+        help_text="Wie soll der neue Baum heißen?"
+    )
+
+    def clean_gedcom_file(self):
+        f = self.cleaned_data["gedcom_file"]
+        # optional: MIME-Check, Dateiendung, Größengrenze
+        if not f.name.lower().endswith((".ged", ".gedcom")):
+            raise forms.ValidationError("Bitte nur GEDCOM-Dateien (*.ged, *.gedcom) hochladen.")
+        if f.size > 10 * 1024 * 1024:       # 10 MiB
+            raise forms.ValidationError("Datei ist zu groß (max. 10 MiB).")
+        return f
+
+
+class TreeUpdateForm(forms.ModelForm):
+    class Meta:
+        model = Tree
+        fields = ["name", "is_public"]
+        widgets = {
+            "name":   forms.TextInput(attrs={"class": "form-control"}),
+            "is_public": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+        labels = {
+            "name":   "Baum-Name",
+            "is_public": "Öffentlich (jeder kann sehen)",
+        }
+
+
+class TreePublicForm(forms.ModelForm):
+    """Nur das Public-Flag eines Trees ändern."""
+    class Meta:
+        model = Tree
+        fields = ["is_public"]
+        widgets = {"is_public": forms.CheckboxInput(attrs={"class": "form-check-input"})}
+        labels = {"is_public": "Öffentlich (jeder kann sehen)"}
+
+
+class TreeMembershipForm(forms.ModelForm):
+    """
+    Wird vom Admin verwendet, um **einem Nutzer** eine Rolle für einen
+    konkreten Baum zuzuweisen.
+    """
+    user = forms.ModelChoiceField(
+        queryset=User.objects.all(),
+        label="Benutzer",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    role = forms.ChoiceField(
+        choices=TreeMembership.Role.choices,
+        label="Rolle",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta:
+        model = TreeMembership
+        fields = []          # `tree` und `user` werden über das Form-Objekt gesetzt
+
+    def __init__(self, *args, **kwargs):
+        """
+        Wir erwarten:
+        - `tree`  – das Tree-Objekt, dem die Membership zugeordnet werden soll
+        - `admin_user` – der angemeldete Admin (wird nicht gespeichert,
+          sondern nur für Berechtigungs-Checks verwendet)
+        """
+        self.tree = kwargs.pop("tree")
+        self.admin_user = kwargs.pop("admin_user")
+        super().__init__(*args, **kwargs)
+
+    def clean_user(self):
+        u = self.cleaned_data["user"]
+        # Verhindern, dass derselbe Nutzer doppelt eingetragen wird
+        if TreeMembership.objects.filter(user=u, gedcom_tree=self.tree).exists():
+            raise forms.ValidationError(
+                f"{u.username} hat bereits Zugriff auf den Baum „{self.tree.name}“."
+            )
+        return u
+
+    def save(self, commit=True):
+        membership = TreeMembership(
+            user=self.cleaned_data["user"],
+            gedcom_tree=self.tree,
+            role=self.cleaned_data["role"],
+        )
+        if commit:
+            membership.save()
+        return membership  
+
+User = get_user_model()
+
+class TreeMembershipAddForm(forms.ModelForm):
+    """
+    Inline-Formular, das *innerhalb* der generischen Übersicht benutzt wird.
+    Wir übergeben beim Aufruf `tree` (der aktuelle Baum) und `admin_user`.
+    """
+    user = forms.ModelChoiceField(
+        queryset=User.objects.all(),
+        label="Benutzer",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    role = forms.ChoiceField(
+        choices=TreeMembership.Role.choices,
+        label="Rolle",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta:
+        model = TreeMembership
+        fields = []   # wir speichern manuell, weil `tree` nicht im Model-Form definiert ist
+
+    def __init__(self, *args, **kwargs):
+        self.tree = kwargs.pop("tree")          # Tree-Objekt, dem das Mitglied zugeordnet wird
+        self.admin_user = kwargs.pop("admin_user")
+        super().__init__(*args, **kwargs)
+
+    def clean_user(self):
+        u = self.cleaned_data["user"]
+        if TreeMembership.objects.filter(user=u, gedcom_tree=self.tree).exists():
+            raise forms.ValidationError(
+                f"{u.username} hat bereits Zugriff auf den Baum „{self.tree.name}“."
+            )
+        return u
+
+    def save(self, commit=True):
+        membership = TreeMembership(
+            user=self.cleaned_data["user"],
+            gedcom_tree=self.tree,
+            role=self.cleaned_data["role"],
+        )
+        if commit:
+            membership.save()
+        return membership
+

@@ -297,7 +297,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         return person
 
     # -----------------------------------------------------------------
-    # Kontext‑Aufbereitung: Ehepartner, Kinder, Eltern
+    # Kontext-Aufbereitung: Ehepartner, Kinder, Eltern
     # -----------------------------------------------------------------
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -310,12 +310,12 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         spouse = None
         family = None
-        # Husband‑Familie → Wife ist der Ehepartner
+        # Husband-Familie → Wife ist der Ehepartner
         husband_fam = person.families_as_husband.first()
         if husband_fam and husband_fam.wife:
             spouse = husband_fam.wife
             family = husband_fam
-        # Wife‑Familie → Husband ist der Ehepartner (falls noch nicht gefunden)
+        # Wife-Familie → Husband ist der Ehepartner (falls noch nicht gefunden)
         if not spouse:
             wife_fam = person.families_as_wife.first()
             if wife_fam and wife_fam.husband:
@@ -326,21 +326,21 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         ctx["family"] = family
 
         # -------------------------------------------------------------
-        # 2️⃣ Kinder (alle ChildFamilyLink‑Objekte, über die beiden Familien)
+        # 2️⃣ Kinder (alle ChildFamilyLink-Objekte, über die beiden Familien)
         # -------------------------------------------------------------
-        children_links = []  # Liste von ChildFamilyLink‑Instanzen
-        # Husband‑Familie: ihre Children‑Links
+        children_links = []  # Liste von ChildFamilyLink-Instanzen
+        # Husband-Familie: ihre Children-Links
         if husband_fam:
             children_links.extend(list(husband_fam.children.all()))
-        # Wife‑Familie: ebenfalls Children‑Links (kann Überschneidungen geben)
+        # Wife-Familie: ebenfalls Children-Links (kann Überschneidungen geben)
         if person.families_as_wife.first():
             children_links.extend(list(person.families_as_wife.first().children.all()))
-        # Doppelte Einträge entfernen (gleiche ChildFamilyLink‑Instanz)
+        # Doppelte Einträge entfernen (gleiche ChildFamilyLink-Instanz)
         children_links = list({cl.id: cl for cl in children_links}.values())
         ctx["children_links"] = children_links
 
         # -------------------------------------------------------------
-        # 3️⃣ Eltern‑Familien (direkt über das M2M‑Through‑Model)
+        # 3️⃣ Eltern-Familien (direkt über das M2M-Through-Model)
         # -------------------------------------------------------------
         ctx["parent_families"] = list(person.parental_families.all())
         #   Jeder Familie hat bereits husband und wife via `select_related` oben.
@@ -371,7 +371,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             portrait = person.media_objects.first()
         ctx["portrait"] = portrait
 
-        # Alle übrigen Bilder (ausgenommen das Portrait‑Bild)
+        # Alle übrigen Bilder (ausgenommen das Portrait-Bild)
         ctx["gallery_images"] = (
             person.media_objects.exclude(pk=portrait.pk)
             if portrait
@@ -775,7 +775,7 @@ class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return ctx
 
     # ------------------------------------------------------------------
-    # QuerySet filtern – case‑insensitive, mehrere Felder
+    # QuerySet filtern – case-insensitive, mehrere Felder
     # ------------------------------------------------------------------
     def get_queryset(self):
         qs = super().get_queryset()
@@ -823,7 +823,7 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
 
     def render_to_response(self, context, **response_kwargs):
         """
-        Rückgabe eines JSON‑Objektes:
+        Rückgabe eines JSON-Objektes:
         {
             "table":    "<tbody>…</tbody>",
             "pager":    "<nav>…</nav>"
@@ -920,11 +920,11 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
 
 class FamilyDetailView(TreeAccessMixin, DetailView):
     """
-    Detail‑Ansicht einer Familie.
+    Detail-Ansicht einer Familie.
     - `husband` und `wife` werden bereits über `select_related` geladen.
     - Kinder über ein Prefetch, das das `relationship_type` mitliefert.
-    - Events und Media‑Objects werden ebenfalls vorgeholt, damit im Template
-      keine extra DB‑Queries entstehen.
+    - Events und Media-Objects werden ebenfalls vorgeholt, damit im Template
+      keine extra DB-Queries entstehen.
     """
 
     model = Family
@@ -935,7 +935,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         return (
             Family.objects.select_related("husband", "wife")
             .prefetch_related(
-                # Kinder‑Links inkl. zugehörigem Child‑Individual
+                # Kinder-Links inkl. zugehörigem Child-Individual
                 Prefetch(
                     "children",
                     queryset=ChildFamilyLink.objects.select_related("child"),
@@ -947,7 +947,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                     queryset=Event.objects.filter(event_type__tag='MARR'),
                     to_attr="marriage_events",  # .marriage_events[0] ist das Event
                 ),
-                # Medien‑Objekte, die an die Familie gebunden sind
+                # Medien-Objekte, die an die Familie gebunden sind
                 Prefetch("media_objects", queryset=MediaObject.objects.all()),
             )
             .order_by("-id")
@@ -1038,7 +1038,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
 
 # ----------------------------------------------------------------------
-#  4️⃣ Kind‑zu‑Familie‑Link – hinzufügen / bearbeiten
+#  4️⃣ Kind-zu-Familie-Link – hinzufügen / bearbeiten
 # ----------------------------------------------------------------------
 
 class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
@@ -1910,7 +1910,7 @@ class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     
 
 class RegisterView(CreateView):
-    """Registrierung + automatisches Anlegen einer Tree‑Membership."""
+    """Registrierung + automatisches Anlegen einer Tree-Membership."""
     template_name = 'registration/register.html'
     form_class = UserRegistrationForm
     success_url = reverse_lazy('choose_tree')   # nach der Registrierung Baum wählen
@@ -2043,3 +2043,82 @@ class PlaceSearchAPIView(GenericSelect2APIView):
     
     def get_display_text(self, obj):
         return obj.name
+
+
+#
+# --- ADMIN
+#
+
+import tempfile
+from django.core.management import call_command
+from .forms import GedcomImportForm
+
+class GedcomImportView(LoginRequiredMixin, FormView):
+    """
+    Front-End-Ersatz für `python manage.py import_gedcom`.
+    1. User wählt Datei + Namen → POST
+    2. Wir speichern die Datei kurzzeitig in einem TemporaryFile
+    3. `call_command('import_gedcom', <temp-path>, '--tree-name', <name>)`
+    4. Bei Erfolg: Success-Message + Weiterleitung zur Baum-Detail-Seite
+    5. Bei Fehler: Fehlermeldung im Formular anzeigen
+    """
+    template_name = "genview/gedcom_import.html"
+    form_class = GedcomImportForm
+    success_url = reverse_lazy("tree-list")   # ggf. an deine Ansicht anpassen
+
+    # -----------------------------------------------------------------
+    # Optional: Wenn du das Edit-Mixin nicht nutzt, überschreibe `test_func`
+    # -----------------------------------------------------------------
+    # def test_func(self):
+    #     # Beispiel: jeder eingeloggte User darf importieren
+    #     return self.request.user.is_authenticated
+
+    def form_valid(self, form):
+        gedcom_file = form.cleaned_data["gedcom_file"]
+        tree_name   = form.cleaned_data["tree_name"]
+
+        # 1️⃣ Temporäre Datei erzeugen (wird automatisch gelöscht)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            for chunk in gedcom_file.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+
+        # 2️⃣ Management-Command ausführen
+        try:
+            # Das gleiche CLI-Interface wie im Terminal:
+            call_command(
+                "import_gedcom",
+                tmp_path,
+                "--tree-name",
+                tree_name,
+                stdout=self._capture_stdout(),   # fängt das Command-Output ab (optional)
+                stderr=self._capture_stderr(),
+            )
+        except Exception as exc:                 # catch any DB-/Import-Fehler
+            messages.error(self.request,
+                f"Import fehlgeschlagen: {exc}")
+            # Aufräumen, dann zum Formular zurück
+            os.remove(tmp_path)
+            return self.form_invalid(form)
+
+        # 3️⃣ Aufräumen (Temp-File löschen)
+        os.remove(tmp_path)
+
+        # 4️⃣ Erfolgsmeldung
+        messages.success(self.request,
+            f"GEDCOM-Datei erfolgreich importiert – Stammbaum „{tree_name}“ angelegt.")
+        return super().form_valid(form)
+
+    # -----------------------------------------------------------------
+    # Hilfs-Methoden, um das Command-Output ggf. zu loggen
+    # -----------------------------------------------------------------
+    def _capture_stdout(self):
+        from io import StringIO
+        self._stdout_buf = StringIO()
+        return self._stdout_buf
+
+    def _capture_stderr(self):
+        from io import StringIO
+        self._stderr_buf = StringIO()
+        return self._stderr_buf
+

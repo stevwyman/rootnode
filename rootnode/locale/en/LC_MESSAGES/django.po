@@ -27,7 +27,7 @@ msgid "Ereignisse, mit denen dieses Medium verknüpft ist"
 msgstr ""
 
 #: genview/models.py:846
-msgid "Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt."
+msgid "Dieses Bild wird als Portrait auf der Personen-Detail-Seite angezeigt."
 msgstr ""
 
 #: genview/templates/genview/tree_list.html:4

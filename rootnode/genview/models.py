@@ -37,7 +37,10 @@ class Tree(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    is_public = models.BooleanField(default=False)
+    is_public = models.BooleanField(
+        default=False,
+        help_text="Wenn aktiviert, kann jeder den Baum sehen, ohne Membership."
+    )
 
     def __str__(self):
         return self.name
@@ -46,17 +49,16 @@ class Tree(models.Model):
 class TreeMembership(models.Model):
     """Maps a User to a Tree and defines what they can do."""
 
-    ROLE_CHOICES = [
-        ("VIEWER", "Can only view data"),
-        ("EDITOR", "Can edit individuals and families"),
-        ("ADMIN", "Can edit data, import GEDCOMs, and invite users"),
-    ]
+    class Role(models.TextChoices):
+        VIEWER = "VIEWER", "Can only view data"
+        EDITOR = "EDITOR", "Can edit individuals and families"
+        ADMIN  = "ADMIN",  "Can edit data, import GEDCOMs, and invite user"
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
     gedcom_tree = models.ForeignKey(
         Tree, on_delete=models.CASCADE, related_name="memberships"
     )
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="VIEWER")
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.VIEWER)
 
     class Meta:
         # A user can only have one permission level per tree
@@ -67,12 +69,12 @@ class TreeMembership(models.Model):
 
 
 # ----------------------------------------------------------------------
-# 1️⃣ Helper‑Mixin – überall wo ein GEDCOM‑ID‑Feld nötig ist
+# 1️⃣ Helper-Mixin – überall wo ein GEDCOM-ID-Feld nötig ist
 # ----------------------------------------------------------------------
 class GedcomIdMixin(models.Model):
     """
-    Gemeinsames Feld für alle GEDCOM‑Objekte, die eine externe
-    GEDCOM‑Referenz besitzen (z. B. @I1@, @F2@, @S3@ …).
+    Gemeinsames Feld für alle GEDCOM-Objekte, die eine externe
+    GEDCOM-Referenz besitzen (z. B. @I1@, @F2@, @S3@ …).
     """
 
     gedcom_id = models.CharField(
@@ -153,7 +155,7 @@ class Source(GedcomIdMixin):
 # 3️⃣ INDIVIDUAL (Person) GEDCOM:INDI
 # ----------------------------------------------------------------------
 class Individual(GedcomIdMixin):
-    """GEDCOM‑Person (INDI)."""
+    """GEDCOM-Person (INDI)."""
     gedcom_prefix = "I"  # Ergibt z.B. I-M102
 
     class Sex(models.TextChoices):
@@ -164,10 +166,10 @@ class Individual(GedcomIdMixin):
     given_name = models.CharField(max_length=150, blank=True)
     surname = models.CharField(max_length=150, blank=True)
     name_prefix = models.CharField(
-        max_length=50, blank=True, help_text="z. B. Dr., Sir"
+        max_length=50, blank=True, help_text="z. B. Dr., Sir"
     )
     name_suffix = models.CharField(
-        max_length=50, blank=True, help_text="z. B. Jr., III"
+        max_length=50, blank=True, help_text="z. B. Jr., III"
     )
     sex = models.CharField(max_length=1, choices=Sex.choices, default=Sex.UNKNOWN)
 
@@ -192,13 +194,13 @@ class Individual(GedcomIdMixin):
         ]
 
     # ------------------------------------------------------------------
-    # Helper‑Methoden
+    # Helper-Methoden
     # ------------------------------------------------------------------
     def __str__(self) -> str:
         return f"{self.full_name()} ({self.gedcom_id})"
 
     def full_name(self) -> str:
-        """Vollständiger Name inkl. Prä‑ und Suffix, leere Teile werden weggelassen."""
+        """Vollständiger Name inkl. Prä- und Suffix, leere Teile werden weggelassen."""
         parts = [self.name_prefix, self.given_name, self.surname, self.name_suffix]
         return " ".join(p for p in parts if p).strip() or "Unnamed"
 
@@ -209,7 +211,7 @@ class Individual(GedcomIdMixin):
         )
 
     # --------------------------------------------------------------
-    # ★★ Neu: Convenience‑Properties für Geburts‑ und Sterbedatum ★★
+    # ★★ Neu: Convenience-Properties für Geburts- und Sterbedatum ★★
     # --------------------------------------------------------------
     @property
     def short_given_name(self):
@@ -237,9 +239,9 @@ class Individual(GedcomIdMixin):
     @property
     def birth_event(self) -> Optional["Event"]:
         """
-        Liefert das zugehörige ``BIRT``‑Event (oder ``None``).
+        Liefert das zugehörige ``BIRT``-Event (oder ``None``).
         Wir nutzen das bereits vorgefertigte ``related_name='events'``
-        des ``Event``‑Modells.
+        des ``Event``-Modells.
         """
         # `events` ist ein RelatedManager; ``filter`` gibt ein QuerySet zurück.
         # Wir holen das **erste** passende Event (es sollte nur eines geben).
@@ -247,7 +249,7 @@ class Individual(GedcomIdMixin):
 
     @property
     def death_event(self) -> Optional["Event"]:
-        """Liefert das zugehörige ``DEAT``‑Event (oder ``None``)."""
+        """Liefert das zugehörige ``DEAT``-Event (oder ``None``)."""
         return self.events.filter(event_type__tag='DEAT').first()
 
     @property
@@ -269,20 +271,20 @@ class Individual(GedcomIdMixin):
 
     @property
     def is_deceased(self) -> bool:
-        """True, wenn ein ``DEAT``‑Event vorhanden ist."""
+        """True, wenn ein ``DEAT``-Event vorhanden ist."""
         return self.death_event is not None
 
     @property
     def age(self) -> Optional[int]:
         """
         Berechnet das aktuelle Alter (oder das Alter zum Tod) anhand
-        der vorhandenen Geburts‑ und Sterbedaten.
+        der vorhandenen Geburts- und Sterbedaten.
         Gibt ``None`` zurück, wenn kein Geburtsdatum vorhanden ist.
         """
         if not self.birth_date:
             return None
 
-        # Wenn ein Sterbedatum existiert, verwenden wir das als End‑Datum,
+        # Wenn ein Sterbedatum existiert, verwenden wir das als End-Datum,
         # sonst das heutige Datum.
         end = self.death_date or date.today()
 
@@ -294,17 +296,17 @@ class Individual(GedcomIdMixin):
         return years
 
     # --------------------------------------------------------------
-    # Optional: Hilfsmethoden, um das Roh‑Datum ebenfalls leicht zu holen
+    # Optional: Hilfsmethoden, um das Roh-Datum ebenfalls leicht zu holen
     # --------------------------------------------------------------
     @property
     def birth_date_raw(self) -> Optional[str]:
-        """Der ungeparste GEDCOM‑Datums‑String vom BIRT‑Event."""
+        """Der ungeparste GEDCOM-Datums-String vom BIRT-Event."""
         ev = self.birth_event
         return ev.raw_date if ev else None
 
     @property
     def death_date_raw(self) -> Optional[str]:
-        """Der ungeparste GEDCOM‑Datums‑String vom DEAT‑Event."""
+        """Der ungeparste GEDCOM-Datums-String vom DEAT-Event."""
         ev = self.death_event
         return ev.raw_date if ev else None
     
@@ -405,10 +407,10 @@ class Individual(GedcomIdMixin):
         return True
 
 # ----------------------------------------------------------------------
-# 4️⃣ FAMILY – MPTT‑Baumstruktur GEDCOM:FAM
+# 4️⃣ FAMILY – MPTT-Baumstruktur GEDCOM:FAM
 # ----------------------------------------------------------------------
 class Family(MPTTModel, GedcomIdMixin):
-    """Familie (FAM). Durch MPTT kann eine Familie Unter‑Familien besitzen."""
+    """Familie (FAM). Durch MPTT kann eine Familie Unter-Familien besitzen."""
     gedcom_prefix = "F"  # Ergibt z.B. F-M102
 
     class Meta(GedcomIdMixin.Meta):
@@ -432,7 +434,7 @@ class Family(MPTTModel, GedcomIdMixin):
     )
     notes = models.TextField(blank=True)
 
-    # MPTT‑Hierarchie (z. B. Adoptiv‑/Stief‑Familien)
+    # MPTT-Hierarchie (z. B. Adoptiv-/Stief-Familien)
     parent = TreeForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -456,7 +458,7 @@ class Family(MPTTModel, GedcomIdMixin):
     def __str__(self) -> str:
         husb = self.husband.surname if self.husband else "?"
         wife = self.wife.surname if self.wife else "?"
-        return f"Family {husb} / {wife} ({self.gedcom_id})"
+        return f"Family {husb} / {wife} ({self.gedcom_id})"
 
     def get_absolute_url(self):
         return reverse(
@@ -465,23 +467,23 @@ class Family(MPTTModel, GedcomIdMixin):
         )
 
     # ------------------------------------------------------------------
-    # Convenience‑Methode – liefert ein QuerySet aller Kinder‑Individuals
+    # Convenience-Methode – liefert ein QuerySet aller Kinder-Individuals
     # ------------------------------------------------------------------
     def children_links(self) -> models.QuerySet["Individual"]:
         """
-        Alle Kinder, die über das Through‑Model ``ChildFamilyLink`` dieser Familie
+        Alle Kinder, die über das Through-Model ``ChildFamilyLink`` dieser Familie
         verknüpft sind. (Kurzschreibweise: ``family.children().all()``)
         """
         return Individual.objects.filter(parental_families__family=self)
 
     # ------------------------------------------------------------------
-    #  Helfer‑Property: das zugehörige MARR‑Event (falls vorhanden)
+    #  Helfer-Property: das zugehörige MARR-Event (falls vorhanden)
     # ------------------------------------------------------------------
     @property
     def marriage_event(self) -> Optional["Event"]:
         """
         Gibt das erste Event vom Typ MARR (Marriage) zurück
-        oder ``None`` wenn die Familie kein Heirats‑Eintrag hat.
+        oder ``None`` wenn die Familie kein Heirats-Eintrag hat.
         """
         return self.events.filter(event_type__tag='MARR').first()
 
@@ -530,7 +532,7 @@ class Family(MPTTModel, GedcomIdMixin):
     
 
 # ----------------------------------------------------------------------
-# 5️⃣ THROUGH‑MODEL: Kind‑zu‑Familie (CHIL / FAMC)
+# 5️⃣ THROUGH-MODEL: Kind-zu-Familie (CHIL / FAMC)
 # ----------------------------------------------------------------------
 class ChildFamilyLink(models.Model):
     """
@@ -548,14 +550,14 @@ class ChildFamilyLink(models.Model):
     child = models.ForeignKey(
         Individual,
         on_delete=models.CASCADE,
-        related_name="parental_families",  # <‑‑ Families, in denen das Kind vorkommt
+        related_name="parental_families",  # <-- Families, in denen das Kind vorkommt
     )
 
     # --- 2️⃣ Die Familie, zu der das Kind gehört ----
     family = models.ForeignKey(
         Family,
         on_delete=models.CASCADE,
-        related_name="children",  # <‑‑ **WICHTIG:** das ist das Feld, das wir prefetchen
+        related_name="children",  # <-- **WICHTIG:** das ist das Feld, das wir prefetchen
     )
 
     relationship_type = models.CharField(
@@ -653,7 +655,7 @@ class EventType(models.Model):
 # 8️⃣ EVENTS – können einer Person ODER einer Familie zugeordnet sein
 # ----------------------------------------------------------------------
 class Event(models.Model):
-    """Einzel‑Event (z. B. BIRT, DEAT, MARR, DIV …)."""
+    """Einzel-Event (z. B. BIRT, DEAT, MARR, DIV …)."""
 
     event_type = models.ForeignKey(
         EventType, 
@@ -685,7 +687,7 @@ class Event(models.Model):
     raw_date = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Original GEDCOM‑Datum‑String, z. B. 'ABT 1900'",
+        help_text="Original GEDCOM-Datum-String, z. B. 'ABT 1900'",
     )
 
     parsed_date = models.DateField(
@@ -782,7 +784,7 @@ class Event(models.Model):
 
 
 # ----------------------------------------------------------------------
-# 9️⃣ MEDIA OBJECT – Bilder, PDF‑Dokumente, Links etc.
+# 9️⃣ MEDIA OBJECT – Bilder, PDF-Dokumente, Links etc.
 # ----------------------------------------------------------------------
 class MediaObject(GedcomIdMixin):
     gedcom_prefix = "M"  # Ergibt z.B. M-M102
@@ -791,7 +793,7 @@ class MediaObject(GedcomIdMixin):
         PHOTO = 'PHOTO', 'Foto / Portrait'
         DOCUMENT = 'DOCUMENT', 'Dokument / Urkunde'
 
-    """Multimedia‑Objekt (OBJE)."""
+    """Multimedia-Objekt (OBJE)."""
 
     title = models.CharField(max_length=255, blank=True)
 
@@ -843,7 +845,7 @@ class MediaObject(GedcomIdMixin):
 
     is_portrait = models.BooleanField(
         default=False,
-        help_text=_("Dieses Bild wird als Portrait auf der Personen‑Detail‑Seite angezeigt."),
+        help_text=_("Dieses Bild wird als Portrait auf der Personen-Detail-Seite angezeigt."),
         db_index=True,
     )
 
@@ -852,7 +854,7 @@ class MediaObject(GedcomIdMixin):
     )
 
     class Meta(GedcomIdMixin.Meta):
-        ordering = ["-is_portrait", "title"]  # Portrait‑Bilder zuerst
+        ordering = ["-is_portrait", "title"]  # Portrait-Bilder zuerst
 
     def __str__(self) -> str:
         return self.title or f"Media {self.id}"

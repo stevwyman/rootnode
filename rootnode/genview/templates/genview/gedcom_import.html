@@ -1,0 +1,44 @@
+{# templates/gedcom/gedcom_import.html #}
+{% extends "genview/base.html" %}
+
+{% block title %}GEDCOM-Datei importieren{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h2 class="mb-4">GEDCOM-Datei hochladen</h2>
+
+    {# Django-Messages (Erfolg/Fehler) #}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+        {% csrf_token %}
+
+        <div class="mb-3">
+            <label class="form-label" for="{{ form.gedcom_file.id_for_label }}">
+                {{ form.gedcom_file.label }}
+            </label>
+            {{ form.gedcom_file }}
+            <div class="form-text">{{ form.gedcom_file.help_text }}</div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="{{ form.tree_name.id_for_label }}">
+                {{ form.tree_name.label }}
+            </label>
+            {{ form.tree_name }}
+            <div class="form-text">{{ form.tree_name.help_text }}</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Import starten</button>
+        <a href="{% url 'tree-list' %}" class="btn btn-outline-secondary ms-2">Abbrechen</a>
+    </form>
+
+</div>
+{% endblock %}

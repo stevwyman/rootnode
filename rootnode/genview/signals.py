@@ -8,7 +8,7 @@ from .models import MediaObject, Individual
 def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
     """
     Wird ausgelöst, wenn Personen zu einem MediaObject hinzugefügt/entfernt werden.
-    Wenn `instance.is_portrait` True ist, entfernen wir das Portrait‑Flag
+    Wenn `instance.is_portrait` True ist, entfernen wir das Portrait-Flag
     von allen anderen MediaObjects dieser Personen.
     """
     if action == "post_add" and instance.is_portrait:
@@ -22,7 +22,7 @@ def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
 @receiver(post_save, sender=MediaObject)
 def portrait_cleanup_on_save(sender, instance, created, **kwargs):
     """
-    Falls das Portrait‑Flag manuell (z. B. im Admin) gesetzt wird,
+    Falls das Portrait-Flag manuell (z. B. im Admin) gesetzt wird,
     stellen wir sicher, dass kein zweites Portrait für dieselbe Person existiert.
     """
     if instance.is_portrait:

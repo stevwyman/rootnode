@@ -144,7 +144,7 @@ USE_TZ = True
 # ---- Static files -------------------------------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'          # für collectstatic (Produktiv)
-STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs‑Ordner
+STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs-Ordner
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -96,7 +96,7 @@ urlpatterns = [
         name='event-create-family'
     ),
     # ----------------------------------------------
-    # ---- Child‑Family‑Link 
+    # ---- Child-Family-Link 
     # ----------------------------------------------
     path(
         "tree/<int:tree_id>/links/add/",
@@ -211,4 +211,10 @@ urlpatterns = [
     path('tree/<int:tree_id>/api/search/families/', views.FamilySearchAPIView.as_view(), name='api-search-families'),
     path('tree/<int:tree_id>/api/search/events/', views.EventSearchAPIView.as_view(), name='api-search-events'),
     path('tree/<int:tree_id>/api/search/media/', views.MediaSearchAPIView.as_view(), name='api-search-media'),
+
+    # ADMIN
+    path('gedcom/import/', views.GedcomImportView.as_view(), name='gedcom-import'),
+    # Baum bearbeiten (Name + public-Flag)
+    
+
 ]

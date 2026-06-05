@@ -6,5 +6,5 @@ class GenviewConfig(AppConfig):
     name = "genview"
 
     def ready(self):
-        # Importiert das signals‑Modul, damit die Signal‑Handler registriert werden
+        # Importiert das signals-Modul, damit die Signal-Handler registriert werden
         import genview.signals
