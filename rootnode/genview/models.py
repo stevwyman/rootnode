@@ -406,6 +406,17 @@ class Individual(GedcomIdMixin):
         # Die Person hat KEINEN Tod, KEINE Geburt und KEINE Heirat.
         # Im Zweifel gehen wir davon aus, dass die Person lebt oder frisch angelegt wurde.
         return True
+    
+    @property
+    def profile_image(self):
+        """
+        Holt bevorzugt das als Portrait markierte Bild. 
+        Gibt es keins, wird das erstbeste Bild genommen.
+        Gibt es gar keine Bilder, gibt .first() automatisch 'None' zurück.
+        """
+        # '-is_portrait' sortiert True vor False. 
+        # 'id' (oder '-id') dient als Tie-Breaker, falls es versehentlich zwei Portraits gibt.
+        return self.mediaobject_set.order_by('-is_portrait', 'id').first()
 
 # ----------------------------------------------------------------------
 # 4️⃣ FAMILY – MPTT-Baumstruktur GEDCOM:FAM

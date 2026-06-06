@@ -738,6 +738,21 @@
                         
                         <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
                             <div>
+
+                                <div class="me-3">
+                                    {% if relative.profile_image and relative.profile_image.file %}
+                                        <img src="{{ relative.profile_image.file.url }}" 
+                                            alt="{{ relative.given_name }}" 
+                                            class="rounded-circle shadow-sm" 
+                                            style="width: 45px; height: 45px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm" 
+                                            style="width: 45px; height: 45px; font-weight: bold; font-size: 1.2rem;">
+                                            {{ relative.given_name|first|default:"?" }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
                                 <span class="me-3 fs-5">👨</span>
                                 {% if fam.family.husband %}
                                     {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
