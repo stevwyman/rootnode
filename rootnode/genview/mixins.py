@@ -4,67 +4,143 @@ from django.shortcuts import get_object_or_404
 
 from .models import TreeMembership, Tree
 
-
-class TreeAccessMixin(UserPassesTestMixin):
-    """
-    Prüft, ob der Nutzer Leserechte für den Baum hat.
-    Setzt 'can_edit' für das Frontend-Template.
-    """
-    # Eine leere Variable, um die Mitgliedschaft für diesen Request zwischenzuspeichern
-    membership = None
+class SuperuserRequiredMixin(UserPassesTestMixin):
+    """Sicherheits-Mixin: Lässt nur globale Superuser durch."""
 
     def test_func(self):
-        tree_id = self.kwargs.get("tree_id")
-        self.tree_obj = get_object_or_404(Tree, pk=tree_id)
+        return self.request.user.is_authenticated and self.request.user.is_superuser # type: ignore
+    
 
-        # 1. SCHRITT: Ist der Benutzer überhaupt eingeloggt?
+class TreeAccessMixin(UserPassesTestMixin):
+
+    def get_apply_privacy(self):
+        """Ermittelt, ob der Datenschutz für den aktuellen Aufruf gilt."""
+        
+        # 1. Superuser haben immer vollen Durchblick
+        if self.request.user.is_superuser:
+            return False
+            
+        # 2. Prüfen, ob der User eine Mitgliedschaft in diesem Baum hat
         if self.request.user.is_authenticated:
-            # Wenn ja, prüfen wir, ob er eine explizite Rolle/Mitgliedschaft hat
+            tree_id = self.kwargs.get('tree_id')
+            from genview.models import TreeMembership
+            
             try:
-                self.membership = TreeMembership.objects.get(
+                membership = TreeMembership.objects.get(
                     user=self.request.user, 
                     gedcom_tree_id=tree_id
                 )
-                return True # Eingeloggt + Mitglied -> Zugriff erlaubt!
+                
+                # Voller Durchblick für alle Mitglieder (VIEWER, EDITOR, ADMIN): 
+                # Datenschutz aushebeln!
+                if membership.role in [
+                    TreeMembership.Role.VIEWER, 
+                    TreeMembership.Role.EDITOR, 
+                    TreeMembership.Role.ADMIN
+                ]:
+                    return False
+                    
             except TreeMembership.DoesNotExist:
-                # Eingeloggt, aber kein Mitglied -> Wir prüfen im nächsten Schritt, ob der Baum öffentlich ist
-                pass 
-
-        # 2. SCHRITT: Wenn der User nicht eingeloggt ist ODER kein Mitglied ist:
-        # Zugriff wird NUR gewährt, wenn der Baum explizit als öffentlich markiert wurde!
-        return self.tree_obj.is_public
-    
-    # 1. NEU: Die reine Berechnungs-Logik bekommt eine eigene Methode im Mixin
-    def get_apply_privacy(self):
-        """Ermittelt, ob der Datenschutz für den aktuellen Aufruf gilt."""
-        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe)
-        if getattr(self, "membership", None):
-            if self.membership.role in ["VIEWER", "EDITOR", "ADMIN"]:
-                # Voller Durchblick: Datenschutz aushebeln!
-                return False
+                pass
+                
+        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe ohne Mitgliedschaft)
         return True
+
+    def dispatch(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get('tree_id')
+        tree = get_object_or_404(Tree, pk=tree_id)
+
+        # 1. Superuser dürfen immer
+        if request.user.is_superuser:
+            return super().dispatch(request, *args, **kwargs)
+
+        # 🔥 2. NEU: Wenn der Baum öffentlich ist, darf ihn jeder (lesen)!
+        if tree.is_public:
+            return super().dispatch(request, *args, **kwargs)
+
+        # 3. Wenn privat, prüfen wir die Mitgliedschaft (wie bisher)
+        if request.user.is_authenticated:
+            is_member = TreeMembership.objects.filter(
+                user=request.user, gedcom_tree=tree
+            ).exists()
+            if is_member:
+                return super().dispatch(request, *args, **kwargs)
+
+        # Wenn nichts zutrifft: Zugriff verweigern
+        return self.handle_no_permission()
     
+    def test_func(self):
+        tree_id = self.kwargs.get('tree_id')
+        tree = get_object_or_404(Tree, pk=tree_id)
+
+        # 1. Superuser dürfen immer
+        if self.request.user.is_superuser:
+            return True
+
+        # 2. Wenn der Baum öffentlich ist, darf ihn jeder sehen
+        if tree.is_public:
+            return True
+
+        # 3. Wenn privat, prüfen wir die Mitgliedschaft
+        if self.request.user.is_authenticated:
+            return TreeMembership.objects.filter(
+                user=self.request.user, 
+                gedcom_tree=tree
+            ).exists()
+
+        # Wenn nichts zutrifft: Zugriff verweigern
+        return False
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        tree_id = self.kwargs.get('tree_id')
+        tree = get_object_or_404(Tree, pk=tree_id)
         
-        context['tree_id'] = self.tree_obj.pk
-        context['can_edit'] = False
-        
-        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe)
-        # Nutzt die neue Helfermethode:
-        context["apply_privacy"] = self.get_apply_privacy()
+        # 🔥 DER FIX: Wir müssen dem Template die ID (und am besten gleich 
+        # das ganze Baum-Objekt) wieder zur Verfügung stellen!
+        context['tree_id'] = tree_id
+        context['tree'] = tree
 
-        # Wenn der Nutzer eine Mitgliedschaft hat, prüfen wir die Rolle
-        if getattr(self, 'membership', None):
-            if self.membership.role in ['VIEWER', 'EDITOR', 'ADMIN']:
-                # Voller Durchblick: Datenschutz aushebeln!
-                context['apply_privacy'] = False
+        user = self.request.user
+
+        context['is_tree_admin'] = False
+        context['is_tree_editor'] = False
+        context['is_tree_viewer'] = False
+
+        if user.is_superuser:
+            context['is_tree_admin'] = context['is_tree_editor'] = context['is_tree_viewer'] = True
+        elif user.is_authenticated:
+            try:
+                membership = TreeMembership.objects.get(user=user, gedcom_tree_id=tree_id)
+                context['is_tree_viewer'] = True 
+                if membership.role in [TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN]:
+                    context['is_tree_editor'] = True
+                if membership.role == TreeMembership.Role.ADMIN:
+                    context['is_tree_admin'] = True
+            except TreeMembership.DoesNotExist:
+                pass
+
+        if tree.is_public:
+            context['is_tree_viewer'] = True
+
+        # ==========================================
+        # 🔥 DER PRIVACY-FIX
+        # ==========================================
+        
+        # Variante A: Wenn du deine eigene Methode `get_apply_privacy()` weiter nutzen willst:
+        if hasattr(self, 'get_apply_privacy'):
+            context['apply_privacy'] = self.get_apply_privacy()
             
-            if self.membership.role in ['EDITOR', 'ADMIN']:
-                context['can_edit'] = True
-                
-        return context
+        # Variante B: Die moderne, automatische Methode über unsere neuen Rollen!
+        # (Falls du get_apply_privacy in Zukunft nicht mehr manuell berechnen willst):
+        else:
+            # Regel: Wer Editor oder Admin ist, darf alles unzensiert sehen (Privacy = False).
+            # Wer nur Viewer ist (oder unregistriert auf einem öffentlichen Baum), 
+            # bekommt die Zensur aktiviert (Privacy = True).
+            context['apply_privacy'] = not context.get('is_tree_editor', False)
 
+        return context
+    
 
 class TreeEditAccessMixin(TreeAccessMixin):
     """
@@ -72,15 +148,20 @@ class TreeEditAccessMixin(TreeAccessMixin):
     eingeloggt sein muss UND eine passende Rolle (EDITOR/ADMIN) benötigt.
     """
     def test_func(self):
-        # Ruft die test_func von oben auf
-        has_access = super().test_func()
-        
-        # Wenn der Baum zwar öffentlich ist (has_access=True), der User aber nicht 
-        # eingeloggt ist (keine membership), wird der Zugriff hier blockiert!
-        if has_access and self.membership and self.membership.role in ['EDITOR', 'ADMIN']:
+        if self.request.user.is_superuser:
             return True
-            
-        return False # Blockiert anonyme User und reine VIEWER beim Editieren knallhart
+
+        tree_id = self.kwargs.get('tree_id')
+        
+        if self.request.user.is_authenticated:
+            return TreeMembership.objects.filter(
+                user=self.request.user, 
+                gedcom_tree_id=tree_id,
+                # Nur Editoren und Admins dürfen bearbeiten
+                role__in=[TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN]
+            ).exists()
+
+        return False
 
 
 class SortableListViewMixin:

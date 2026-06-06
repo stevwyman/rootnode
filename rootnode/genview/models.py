@@ -39,6 +39,7 @@ class Tree(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(
         default=False,
+        verbose_name="Öffentlicher Stammbaum",
         help_text="Wenn aktiviert, kann jeder den Baum sehen, ohne Membership."
     )
 

@@ -52,13 +52,16 @@
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
                                     {% if user.is_authenticated and tree_id %}
-                                    <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:manage-event-types' tree_id %}">📅 event types</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:manage-event-types' tree_id %}">📅 event types</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ manage tree</a></li>
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 import gedcom</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:tree-membership-management' %}">⚙️ manage memberships</a></li>
-                                    <li><hr class="dropdown-divider"></li>
+                                    {% if user.is_superuser %}
+                                        <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 import gedcom</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:user-management-list' %}">🧑‍💼 users</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                    {% endif %}
                                     <li>
                                         <form method="post" action="{% url 'logout' %}" class="m-0 p-0 d-inline">
                                             {% csrf_token %}

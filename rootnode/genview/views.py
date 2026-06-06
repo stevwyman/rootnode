@@ -5,12 +5,13 @@ import os
 from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.forms import modelformset_factory
-from django.http import JsonResponse, FileResponse, Http404, HttpResponseRedirect
+from django.http import JsonResponse, FileResponse, Http404
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView, FormView
@@ -47,7 +48,6 @@ from .forms import (
     EventTypeForm,
     SourceForm,
     PlaceForm,
-    UserRegistrationForm,
 )
 from .mixins import UserPassesTestMixin, TreeAccessMixin, TreeEditAccessMixin, SortableListViewMixin, FilterableListViewMixin
 
@@ -71,21 +71,41 @@ class TreeListView(ListView):
     context_object_name = "trees"
 
     def get_queryset(self):
-        # 1. Fall: Der Besucher ist NICHT eingeloggt (Anonymer Nutzer)
-        if not self.request.user.is_authenticated:
-            # Zeige ausschließlich Bäume an, die explizit öffentlich sind
-            return self.model.objects.filter(is_public=True).order_by('-id')
+        user = self.request.user
 
-        # 2. Fall: Der Nutzer IST eingeloggt
-        # Zuerst ermitteln wir alle IDs, für die er eine Mitgliedschaft hat
-        allowed_tree_ids = TreeMembership.objects.filter(
-            user=self.request.user
-        ).values_list("gedcom_tree_id", flat=True)
+        # ==========================================
+        # 1. FILTERN: Was darf überhaupt gesehen werden?
+        # ==========================================
+        if user.is_superuser:
+            # Szenario A: Der Boss sieht immer alle Bäume
+            qs = Tree.objects.all()
+            
+        elif user.is_authenticated:
+            # Szenario B: Normaler, eingeloggter User
+            # Sieht Bäume, die öffentlich sind ODER wo er in der Membership-Tabelle steht
+            qs = Tree.objects.filter(
+                Q(is_public=True) | Q(memberships__user=user)
+            ).distinct() # distinct() verhindert doppelte Zeilen, falls sich Datenbank-Joins überschneiden
+            
+        else:
+            # Szenario C: Nicht eingeloggter Gast (Anonym)
+            # Sieht ausnahmslos NUR Bäume, die explizit auf öffentlich stehen
+            qs = Tree.objects.filter(is_public=True)
 
-        # Dann filtern wir: Baum-ID ist in seiner Liste ODER der Baum ist öffentlich
-        return self.model.objects.filter(
-            Q(id__in=allowed_tree_ids) | Q(is_public=True)
-        ).distinct().order_by('-id')
+
+        # ==========================================
+        # 2. ANNOTIEREN: Die Rolle für die Buttons anhängen
+        # ==========================================
+        if user.is_authenticated and not user.is_superuser:
+            membership_role = TreeMembership.objects.filter(
+                user=user,
+                gedcom_tree=OuterRef('pk')
+            ).values('role')[:1]
+
+            qs = qs.annotate(user_role=Subquery(membership_role))
+
+        # Neueste Bäume zuerst anzeigen
+        return qs.order_by('-id')
 
 
 class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
@@ -1909,18 +1929,6 @@ class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
     
 
-class RegisterView(CreateView):
-    """Registrierung + automatisches Anlegen einer Tree-Membership."""
-    template_name = 'registration/register.html'
-    form_class = UserRegistrationForm
-    success_url = reverse_lazy('choose_tree')   # nach der Registrierung Baum wählen
-
-    def form_valid(self, form):
-        response = super().form_valid(form)          # speichert User + Membership
-        # Automatisch anmelden – das macht die UX leichter
-        login(self.request, self.object)
-        return response
-
 # --------------------------------------------------------------
 # Search API
 # --------------------------------------------------------------
@@ -2045,13 +2053,102 @@ class PlaceSearchAPIView(GenericSelect2APIView):
         return obj.name
 
 
+class UserSearchAPIView(View):
+    """
+    AJAX-Endpoint für Select2, um Benutzer nach Username, 
+    E-Mail oder Vor-/Nachname im gesamten System zu suchen.
+    """
+    def get(self, request, *args, **kwargs):
+        query = request.GET.get('q', '').strip()
+        
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+            
+        # Suche nach Username, E-Mail, Vorname oder Nachname
+        users = User.objects.filter(
+            Q(username__icontains=query) |
+            Q(email__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query)
+        ).exclude(is_superuser=True)[:20] # Superadmins müssen meist nicht verwaltet werden
+        
+        results = []
+        for u in users:
+            display = f"{u.username} ({u.get_full_name() or u.email})"
+            results.append({'id': u.id, 'text': display})
+            
+        return JsonResponse({'results': results})
+
 #
 # --- ADMIN
 #
 
+import os
+from io import StringIO
 import tempfile
 from django.core.management import call_command
-from .forms import GedcomImportForm
+from .forms import GedcomImportForm, TreeMembershipForm, UserRegisterForm
+from .mixins import SuperuserRequiredMixin
+
+class RegisterView(CreateView):
+    form_class = UserRegisterForm
+    template_name = 'registration/register.html'
+    success_url = reverse_lazy('login') # Nach Erfolg zurück zum Login
+
+    def dispatch(self, request, *args, **kwargs):
+        # Wenn ein bereits eingeloggter User versucht sich zu registrieren,
+        # leiten wir ihn einfach auf das Dashboard weiter.
+        if request.user.is_authenticated:
+            return redirect('genview:tree-list') # Passe das an deine Startseite an
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        # Formular validieren, aber noch nicht final in die DB schreiben
+        user = form.save(commit=False)
+        
+        # 🔥 DER SICHERHEITS-SCHLÜSSEL: 
+        # Account ist inaktiv, bis der Superadmin ihn freischaltet!
+        user.is_active = False 
+        user.save()
+
+        # Dem User eine freundliche Nachricht anzeigen
+        messages.info(
+            self.request, 
+            f"Registrierung für „{user.username}“ erfolgreich! Dein Account ist aktuell noch inaktiv. "
+            f"Ein Administrator prüft deine Anmeldung und schaltet dich in Kürze frei."
+        )
+        return redirect(self.success_url)
+
+
+# --- 1. Die Listenansicht aller Benutzer ---
+class UserManagementListView(SuperuserRequiredMixin, ListView):
+    model = User
+    template_name = "genview/user_management.html"
+    context_object_name = "users"
+
+    def get_queryset(self):
+        # Wir listen alle User auf, außer den Superuser selbst (damit man sich nicht aus Versehen löscht)
+        return User.objects.exclude(is_superuser=True).order_by('-date_joined')
+
+
+# --- 2. Die Action-View für Aktivierung und Löschen ---
+class UserManagementActionView(SuperuserRequiredMixin, View):
+    def post(self, request, user_id, action):
+        user = get_object_or_404(User, pk=user_id)
+        
+        if action == "toggle_active":
+            user.is_active = not user.is_active
+            user.save()
+            status = "aktiviert" if user.is_active else "deaktiviert"
+            messages.success(request, f"Benutzer {user.username} wurde erfolgreich {status}.")
+            
+        elif action == "delete":
+            username = user.username
+            user.delete()
+            messages.success(request, f"Benutzer {username} wurde dauerhaft gelöscht.")
+            
+        return redirect('genview:user-management-list')
+    
 
 class GedcomImportView(LoginRequiredMixin, FormView):
     """
@@ -2077,6 +2174,9 @@ class GedcomImportView(LoginRequiredMixin, FormView):
         gedcom_file = form.cleaned_data["gedcom_file"]
         tree_name   = form.cleaned_data["tree_name"]
 
+        out_stream = StringIO()
+        err_stream = StringIO()
+
         # 1️⃣ Temporäre Datei erzeugen (wird automatisch gelöscht)
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             for chunk in gedcom_file.chunks():
@@ -2091,9 +2191,33 @@ class GedcomImportView(LoginRequiredMixin, FormView):
                 tmp_path,
                 "--tree-name",
                 tree_name,
-                stdout=self._capture_stdout(),   # fängt das Command-Output ab (optional)
-                stderr=self._capture_stderr(),
+                stdout=out_stream, # Fängt self.stdout.write() ab
+                stderr=err_stream, # Fängt self.stderr.write() ab
             )
+
+            # 🔥 HIER IST DER TRICK: Die Texte aus dem Puffer extrahieren!
+            import_log = out_stream.getvalue()
+            error_log = err_stream.getvalue()
+            
+            # (Optional für dich als Entwickler: Den Text trotzdem ins Server-Terminal drucken)
+            print("--- GEDCOM IMPORT PROTOKOLL ---")
+            print(import_log)
+            if error_log:
+                print("--- FEHLER ---")
+                print(error_log)
+
+            # 🔥 NEU: Den gerade erstellten Baum holen und die ADMIN-Rolle vergeben 🔥
+            # (order_by('-id') garantiert, dass wir den allerneuesten Baum erwischen, 
+            # falls jemand zufällig exakt denselben Namen nochmal verwendet)
+            new_tree = Tree.objects.filter(name=tree_name).order_by('-id').first()
+            
+            if new_tree:
+                TreeMembership.objects.get_or_create(
+                    user=self.request.user,
+                    gedcom_tree=new_tree,
+                    defaults={'role': TreeMembership.Role.ADMIN}
+                )
+
         except Exception as exc:                 # catch any DB-/Import-Fehler
             messages.error(self.request,
                 f"Import fehlgeschlagen: {exc}")
@@ -2122,3 +2246,70 @@ class GedcomImportView(LoginRequiredMixin, FormView):
         self._stderr_buf = StringIO()
         return self._stderr_buf
 
+
+class TreeMembershipManageView(View): # Nutze hier dein passendes Mixin (z.B. TreeAdminAccessMixin)
+    template_name = "genview/tree_membership_manage.html"
+
+    def get_formset(self, tree, post_data=None):
+        """Erstellt das Formset für die bestehenden Mitglieder dieses Baums."""
+        MembershipFormSet = modelformset_factory(
+            TreeMembership,
+            form=TreeMembershipForm,
+            extra=0,
+            can_delete=True # Aktiviert Djangos interne Löschlogik im Formset
+        )
+        queryset = TreeMembership.objects.filter(gedcom_tree=tree).select_related('user')
+        return MembershipFormSet(data=post_data, queryset=queryset)
+
+    def get(self, request, tree_id):
+        tree = get_object_or_404(Tree, pk=tree_id)
+        formset = self.get_formset(tree)
+        return render(request, self.template_name, {
+            'tree': tree,
+            'formset': formset,
+            'tree_id': tree_id,
+        })
+
+    def post(self, request, tree_id):
+        tree = get_object_or_404(Tree, pk=tree_id)
+
+        # 🔥 NEU: Prüfen, ob der Sichtbarkeits-Schalter geklickt wurde
+        if 'toggle_public' in request.POST:
+            tree.is_public = not tree.is_public
+            tree.save()
+            status = "öffentlich zugänglich" if tree.is_public else "privat und geschützt"
+            messages.info(request, f"Der Stammbaum ist jetzt {status}.")
+            return redirect('genview:manage-memberships', tree_id=tree.id)
+        
+
+        formset = self.get_formset(tree, request.POST)
+        
+        # 1. Workflow: NEUEN USER HINZUFÜGEN
+        new_user_id = request.POST.get('new_user')
+        new_user_role = request.POST.get('new_user_role')
+        
+        if new_user_id and new_user_role:
+            new_user = get_object_or_404(User, pk=new_user_id)
+            # unique_together absichern mit get_or_create
+            membership, created = TreeMembership.objects.get_or_create(
+                gedcom_tree=tree,
+                user=new_user,
+                defaults={'role': new_user_role}
+            )
+            if created:
+                messages.success(request, f"Benutzer {new_user.username} wurde erfolgreich hinzugefügt.")
+            else:
+                messages.warning(request, f"{new_user.username} ist bereits Mitglied in diesem Stammbaum.")
+            return redirect('genview:manage-memberships', tree_id=tree.id)
+
+        # 2. Workflow: BESTEHENDE ROLLER ÄNDERN / LÖSCHEN
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, "Mitgliederlisten und Rollen erfolgreich aktualisiert.")
+            return redirect('genview:manage-memberships', tree_id=tree.id)
+            
+        return render(request, self.template_name, {
+            'tree': tree,
+            'formset': formset,
+        })
+    

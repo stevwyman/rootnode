@@ -213,8 +213,12 @@ urlpatterns = [
     path('tree/<int:tree_id>/api/search/media/', views.MediaSearchAPIView.as_view(), name='api-search-media'),
 
     # ADMIN
+    path('accounts/register/', views.RegisterView.as_view(), name='register'),
+    path('admin/users/', views.UserManagementListView.as_view(), name='user-management-list'),
+    path('admin/users/<int:user_id>/<str:action>/', views.UserManagementActionView.as_view(), name='user-management-action'),
     path('gedcom/import/', views.GedcomImportView.as_view(), name='gedcom-import'),
     # Baum bearbeiten (Name + public-Flag)
-    
+    path('api/search/users/', views.UserSearchAPIView.as_view(), name='api-search-users'),
+    path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),
 
 ]

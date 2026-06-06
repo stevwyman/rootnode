@@ -1,0 +1,81 @@
+{% extends "genview/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">⚙️ Globale Benutzerverwaltung (Superadmin)</h4>
+            <span class="badge bg-secondary">Eingeloggt als: {{ request.user.username }}</span>
+        </div>
+        <div class="card-body">
+            
+            <p class="text-muted">
+                Hier siehst du alle registrierten Benutzer des Systems. Neue Benutzer sind nach der Registrierung 
+                automatisch <strong>inaktiv</strong> und müssen von dir aktiviert werden, bevor sie sich einloggen können.
+            </p>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Benutzername</th>
+                            <th>Name / E-Mail</th>
+                            <th>Registriert am</th>
+                            <th>Status</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                            <tr class="{% if not u.is_active %}table-danger{% endif %}">
+                                <td>
+                                    <strong>{{ u.username }}</strong>
+                                </td>
+                                <td>
+                                    {{ u.get_full_name|default:"Kein Name hinterlegt" }}
+                                    <small class="text-muted d-block">{{ u.email }}</small>
+                                </td>
+                                <td><small class="text-muted">{{ u.date_joined|date:"d.m.Y H:i" }}</small></td>
+                                <td>
+                                    {% if u.is_active %}
+                                        <span class="badge bg-success">🟢 Aktiv</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">🔴 Inaktiv (Wartet)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex gap-2">
+                                        
+                                        <form method="post" action="{% url 'genview:user-management-action' user_id=u.id action='toggle_active' %}">
+                                            {% csrf_token %}
+                                            {% if u.is_active %}
+                                                <button type="submit" class="btn btn-sm btn-outline-warning">Deaktivieren</button>
+                                            {% else %}
+                                                <button type="submit" class="btn btn-sm btn-success">✅ Aktivieren</button>
+                                            {% endif %}
+                                        </form>
+
+                                        <form method="post" action="{% url 'genview:user-management-action' user_id=u.id action='delete' %}" 
+                                              onsubmit="return confirm('Möchtest du den Benutzer {{ u.username }} wirklich unwiderruflich löschen?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-danger">🗑️ Löschen</button>
+                                        </form>
+
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    Es sind noch keine weiteren Benutzer im System registriert.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

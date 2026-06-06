@@ -2,7 +2,7 @@
 from django import forms
 from django.forms import ModelForm, CheckboxSelectMultiple, DateInput
 from django.contrib.auth.models import User
-from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, Tree, TreeMembership
+from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, TreeMembership
 
 
 # ----------------------------------------------------------------------
@@ -600,46 +600,29 @@ class SourceForm(forms.ModelForm):
         }
 
 
-class UserRegistrationForm(forms.ModelForm):
-    """Einfaches Registrierungsformular (Username, E-Mail, Passwort, Baum-Auswahl)."""
-    password1 = forms.CharField(label='Passwort', widget=forms.PasswordInput)
-    password2 = forms.CharField(label='Passwort (Wiederholung)', widget=forms.PasswordInput)
-    tree = forms.ModelChoiceField(
-        queryset=Tree.objects.all(),
-        label='Welchen Stammbaum möchtest du sehen?',
-        required=True,
-        empty_label="Bitte auswählen"
-    )
-
-    class Meta:
-        model = User
-        fields = ('username', 'email')
-
-    def clean_password2(self):
-        p1 = self.cleaned_data.get('password1')
-        p2 = self.cleaned_data.get('password2')
-        if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Die beiden Passwörter stimmen nicht überein.")
-        return p2
-
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password1'])
-        if commit:
-            user.save()
-            # Nach dem Anlegen des Users gleich die Membership erzeugen
-            TreeMembership.objects.create(
-                user=user,
-                tree=self.cleaned_data['tree'],
-                role='VIEWER'          # Standard-Rolle, später per Admin änderbar
-            )
-        return user
-    
+   
 #
 # --- ADMIN
 #
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
+
+class UserRegisterForm(UserCreationForm):
+    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={'class': 'form-control'}))
+    first_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    last_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+
+    class Meta:
+        model = User
+        # Die Felder, die im Formular angezeigt werden sollen
+        fields = ['username', 'email', 'first_name', 'last_name']
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dem standardmäßigen Username-Feld ebenfalls die Bootstrap-Klasse geben
+        self.fields['username'].widget.attrs.update({'class': 'form-control'})
+ 
 
 class GedcomImportForm(forms.Form):
     """
@@ -667,121 +650,13 @@ class GedcomImportForm(forms.Form):
         return f
 
 
-class TreeUpdateForm(forms.ModelForm):
-    class Meta:
-        model = Tree
-        fields = ["name", "is_public"]
-        widgets = {
-            "name":   forms.TextInput(attrs={"class": "form-control"}),
-            "is_public": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-        }
-        labels = {
-            "name":   "Baum-Name",
-            "is_public": "Öffentlich (jeder kann sehen)",
-        }
-
-
-class TreePublicForm(forms.ModelForm):
-    """Nur das Public-Flag eines Trees ändern."""
-    class Meta:
-        model = Tree
-        fields = ["is_public"]
-        widgets = {"is_public": forms.CheckboxInput(attrs={"class": "form-check-input"})}
-        labels = {"is_public": "Öffentlich (jeder kann sehen)"}
-
-
 class TreeMembershipForm(forms.ModelForm):
-    """
-    Wird vom Admin verwendet, um **einem Nutzer** eine Rolle für einen
-    konkreten Baum zuzuweisen.
-    """
-    user = forms.ModelChoiceField(
-        queryset=User.objects.all(),
-        label="Benutzer",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    role = forms.ChoiceField(
-        choices=TreeMembership.Role.choices,
-        label="Rolle",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
+    # Ein unsichtbares Feld, um das Löschen per Checkbox im Formset abzufangen
+    DELETE = forms.BooleanField(required=False, widget=forms.HiddenInput(attrs={'class': 'delete-flag'}))
 
     class Meta:
         model = TreeMembership
-        fields = []          # `tree` und `user` werden über das Form-Objekt gesetzt
-
-    def __init__(self, *args, **kwargs):
-        """
-        Wir erwarten:
-        - `tree`  – das Tree-Objekt, dem die Membership zugeordnet werden soll
-        - `admin_user` – der angemeldete Admin (wird nicht gespeichert,
-          sondern nur für Berechtigungs-Checks verwendet)
-        """
-        self.tree = kwargs.pop("tree")
-        self.admin_user = kwargs.pop("admin_user")
-        super().__init__(*args, **kwargs)
-
-    def clean_user(self):
-        u = self.cleaned_data["user"]
-        # Verhindern, dass derselbe Nutzer doppelt eingetragen wird
-        if TreeMembership.objects.filter(user=u, gedcom_tree=self.tree).exists():
-            raise forms.ValidationError(
-                f"{u.username} hat bereits Zugriff auf den Baum „{self.tree.name}“."
-            )
-        return u
-
-    def save(self, commit=True):
-        membership = TreeMembership(
-            user=self.cleaned_data["user"],
-            gedcom_tree=self.tree,
-            role=self.cleaned_data["role"],
-        )
-        if commit:
-            membership.save()
-        return membership  
-
-User = get_user_model()
-
-class TreeMembershipAddForm(forms.ModelForm):
-    """
-    Inline-Formular, das *innerhalb* der generischen Übersicht benutzt wird.
-    Wir übergeben beim Aufruf `tree` (der aktuelle Baum) und `admin_user`.
-    """
-    user = forms.ModelChoiceField(
-        queryset=User.objects.all(),
-        label="Benutzer",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    role = forms.ChoiceField(
-        choices=TreeMembership.Role.choices,
-        label="Rolle",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    class Meta:
-        model = TreeMembership
-        fields = []   # wir speichern manuell, weil `tree` nicht im Model-Form definiert ist
-
-    def __init__(self, *args, **kwargs):
-        self.tree = kwargs.pop("tree")          # Tree-Objekt, dem das Mitglied zugeordnet wird
-        self.admin_user = kwargs.pop("admin_user")
-        super().__init__(*args, **kwargs)
-
-    def clean_user(self):
-        u = self.cleaned_data["user"]
-        if TreeMembership.objects.filter(user=u, gedcom_tree=self.tree).exists():
-            raise forms.ValidationError(
-                f"{u.username} hat bereits Zugriff auf den Baum „{self.tree.name}“."
-            )
-        return u
-
-    def save(self, commit=True):
-        membership = TreeMembership(
-            user=self.cleaned_data["user"],
-            gedcom_tree=self.tree,
-            role=self.cleaned_data["role"],
-        )
-        if commit:
-            membership.save()
-        return membership
-
+        fields = ['role']
+        widgets = {
+            'role': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        }

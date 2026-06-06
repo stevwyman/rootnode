@@ -365,8 +365,26 @@ class Command(BaseCommand):
             tag = parts[1] if len(parts) > 1 else ""
             value = parts[2].strip() if len(parts) > 2 else ""
 
+            # ==========================================
+            # 🔥 DER FIX: Ganz früh abfangen & reparieren
+            # ==========================================
+            # Wir prüfen jetzt auch auf _NOTE oder Varianten, die NOTE enthalten
+            if tag and 'NOTE' in tag.upper():
+                
+                # Wenn da noch Text dranhängt (z.B. tag="NOTE<p>")
+                if len(tag) > 4 and tag.upper().startswith('NOTE'):
+                    swallowed_text = tag[4:].strip() 
+                    value = f"{swallowed_text} {value}".strip()
+                elif len(tag) > 5 and tag.upper().startswith('_NOTE'):
+                    swallowed_text = tag[5:].strip()
+                    value = f"{swallowed_text} {value}".strip()
+                
+                # Den Tag gnadenlos auf den Standard zurücksetzen
+                tag = 'NOTE'
+
             # --- LEVEL 1: Ein neues Ereignis / Attribut beginnt ---
             if level == '1':
+
                 # Wenn es ein Tag ist, der NICHT auf der Blacklist steht, behandeln wir ihn als Event
                 if tag and tag not in structural_tags:
                     
