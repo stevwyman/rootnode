@@ -1,8 +1,8 @@
 {% extends "genview/base_detail.html" %}
-{% load l10n %}
 {% load i18n %}
+{% load l10n %}
 
-{% block title %}{{ source.title }} - Quelle{% endblock %}
+{% block title %}{{ source.title }} - {% trans "Quelle" %}{% endblock %}
 
     {% block detail-head %}
         <h2>📚 {{ source.title }}</h2>
@@ -133,7 +133,6 @@
     {% endblock%}
 
     {% block sys-info-right%}
-        <div class="mb-2"><strong>{% trans "Erstellt am" %}:</strong> {{ source.created_at|localize }}</div>
-        <div><strong>{% trans "Zuletzt geändert" %}:</strong> {{ source.updated_at|localize }}</div>
+        {% include "genview/_basic_system_information.html" with object=source %}
     {% endblock%}
 

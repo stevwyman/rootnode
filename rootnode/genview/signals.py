@@ -1,7 +1,7 @@
 # genview/signals.py
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
-from .models import MediaObject, Individual
+from .models import MediaObject
 
 
 @receiver(m2m_changed, sender=MediaObject.individuals.through)

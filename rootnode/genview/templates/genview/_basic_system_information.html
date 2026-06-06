@@ -1,0 +1,7 @@
+{% load l10n %}
+{% load i18n %}
+<div class="card bg-light border-secondary border-opacity-25 w-100 p-3 text-muted small">
+    <h6 class="fw-bold text-dark mb-3">System-Informationen</h6>
+    <div class="mb-2"><strong>{% trans "Erstellt am" %}:</strong> {{ object.created_at|localize }}</div>
+    <div><strong>{% trans "Zuletzt geändert" %}:</strong> {{ object.updated_at|localize }}</div>
+</div>

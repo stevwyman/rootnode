@@ -218,11 +218,6 @@
                                     {% endif %}
                                 </div>
                                 
-                                {% if object.death_event and object.death_event.place %}
-                                    <div class="small text-muted">
-                                        📍 {{ object.death_event.place.short_name }}
-                                    </div>
-                                {% endif %}
                             </div>
                             
                             <div class="col-md-2">
@@ -234,6 +229,15 @@
                                         -
                                     {% endif %}
                                 </div>
+                                {% if object.sex %}
+                                    <div class="small text-muted">
+                                        {% if object.sex == "F" %}
+                                        ♀️
+                                        {% elif object.sex == "M" %}
+                                        ♂️
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
                             </div>
 
                         </div>
@@ -736,32 +740,7 @@
                             <div>
                                 <span class="me-3 fs-5">👨</span>
                                 {% if fam.family.husband %}
-                                    {% if apply_privacy and fam.family.husband.is_confidential %}
-                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                    {% else %}
-                                        <a href="{{ fam.family.husband.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                            {{ fam.family.husband.short_given_name }} {{ fam.family.husband.surname }}
-                                        </a>
-
-                                        
-
-                                        {% if fam.family.husband.birth_date %}
-                                            <small class="text-muted ms-2">* {{ fam.family.husband.birth_date|date:"Y" }}</small>
-                                        {% elif fam.family.husband.birth_date_raw %}
-                                            <span class="badge bg-secondary">{{ fam.family.husband.birth_date_raw }}</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                        
-                                        {% if fam.family.husband.death_date %}
-                                            <small class="text-muted ms-2">+ {{ fam.family.husband.death_date|date:"Y" }}</small>
-                                        {% elif fam.family.husband.death_date_raw %}
-                                            <span class="badge bg-secondary">{{ fam.family.husband.death_date_raw }}</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-
-                                    {% endif %}
+                                    {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
                                 {% else %}
                                     <span class="text-muted fst-italic">Vater unbekannt</span>
                                 {% endif %}
@@ -780,16 +759,7 @@
                             <div>
                                 <span class="me-3 fs-5">👩</span>
                                 {% if fam.family.wife %}
-                                    {% if apply_privacy and fam.family.wife.is_confidential %}
-                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                    {% else %}
-                                        <a href="{{ fam.family.wife.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                            {{ fam.family.wife.full_name }}
-                                        </a>
-                                        {% if fam.family.wife.birth_date_raw %}
-                                            <small class="text-muted ms-2">* {{ fam.family.wife.birth_date_raw }}</small>
-                                        {% endif %}
-                                    {% endif %}
+                                    {% include "genview/_individual_mini.html" with individual=fam.family.wife %}
                                 {% else %}
                                     <span class="text-muted fst-italic">Mutter unbekannt</span>
                                 {% endif %}
@@ -855,19 +825,9 @@
                                     {% if apply_privacy and sibling.is_confidential %}
                                         <span class="text-muted fst-italic">🔒 vertraulich</span>
                                     {% else %}
-                                        <a href="{{ sibling.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                            {{ sibling.full_name }}
-                                        </a>
+                                        {% include "genview/_individual_mini.html" with individual=sibling %}
                                     {% endif %}
                                 </div>
-                                
-                                {% if sibling.birth_date_raw %}
-                                    {% if apply_privacy and sibling.is_confidential %}
-                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                    {% else %}
-                                        <small class="text-muted">* {{ sibling.birth_date_raw }}</small>
-                                    {% endif %}
-                                {% endif %}
                             </li>
                         {% endfor %}
                     </ul>
@@ -933,14 +893,8 @@
                                             <span class="me-2">
                                                 {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
                                             </span>
-                                            <a href="{{ link.child.get_absolute_url }}" class="text-decoration-none text-dark fw-medium">
-                                                {{ link.child.full_name }}
-                                            </a>
+                                            {% include "genview/_individual_mini.html" with individual=link.child %}
                                         </div>
-                                        
-                                        {% if link.child.birth_date_raw %}
-                                            <small class="text-muted">* {{ link.child.birth_date_raw }}</small>
-                                        {% endif %}
                                     </li>
                                 {% endif %}
                             {% endfor %}

@@ -11,6 +11,7 @@
         <div class="row">
             <div class="col-md-8">
                 {% block left %}
+                
                 {% endblock%}
             </div>
             <div class="col-md-4">
@@ -31,12 +32,9 @@
                     {% endblock%}
                 </div>
 
-                <div class="card bg-light border-secondary border-opacity-25 w-100 p-3 text-muted small">
-                    <h6 class="fw-bold text-dark mb-3">System-Informationen</h6>
-                    {% block sys-info-right%}
+                {% block sys-info-right%}
                     
-                    {% endblock%}
-                </div>
+                {% endblock%}
             </div>
         </div>
     </div>
