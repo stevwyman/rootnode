@@ -139,6 +139,13 @@ class TreeAccessMixin(UserPassesTestMixin):
             # bekommt die Zensur aktiviert (Privacy = True).
             context['apply_privacy'] = not context.get('is_tree_editor', False)
 
+        # ==========================================
+        # 🔥 DER FIX FÜR DEINE TEMPLATES
+        # ==========================================
+        # Wir stellen sicher, dass deine alten {% if can_edit %} Abfragen 
+        # exakt denselben Wert bekommen wie die neue Editor-Rolle.
+        context['can_edit'] = context.get('is_tree_editor', False)
+
         return context
     
 
