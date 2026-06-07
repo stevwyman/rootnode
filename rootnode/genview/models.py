@@ -416,7 +416,7 @@ class Individual(GedcomIdMixin):
         """
         # '-is_portrait' sortiert True vor False. 
         # 'id' (oder '-id') dient als Tie-Breaker, falls es versehentlich zwei Portraits gibt.
-        return self.mediaobject_set.order_by('-is_portrait', 'id').first()
+        return self.media_objects.order_by('-is_portrait', 'id').first()
 
 # ----------------------------------------------------------------------
 # 4️⃣ FAMILY – MPTT-Baumstruktur GEDCOM:FAM

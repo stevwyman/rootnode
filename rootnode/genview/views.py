@@ -432,7 +432,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             # Bedingung 6: Das Medium hängt an einer Quelle eines individuellen Events
             Q(sources__events__individual=person)
             
-        ).distinct() # Verhindert Duplikate in der Anzeige
+        ).distinct().prefetch_related('individuals', 'families', 'events') # Verhindert Duplikate in der Anzeige
 
         # 2. Die Medien in zwei Listen für das Template aufteilen
         ctx['gallery_photos'] = all_gallery_media.filter(category=MediaObject.Category.PHOTO)

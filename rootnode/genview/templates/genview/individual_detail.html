@@ -737,30 +737,9 @@
                     <ul class="list-group list-group-flush">
                         
                         <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
-                            <div>
-
-                                <div class="me-3">
-                                    {% if relative.profile_image and relative.profile_image.file %}
-                                        <img src="{{ relative.profile_image.file.url }}" 
-                                            alt="{{ relative.given_name }}" 
-                                            class="rounded-circle shadow-sm" 
-                                            style="width: 45px; height: 45px; object-fit: cover;">
-                                    {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm" 
-                                            style="width: 45px; height: 45px; font-weight: bold; font-size: 1.2rem;">
-                                            {{ relative.given_name|first|default:"?" }}
-                                        </div>
-                                    {% endif %}
-                                </div>
-
-                                <span class="me-3 fs-5">👨</span>
-                                {% if fam.family.husband %}
-                                    {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
-                                {% else %}
-                                    <span class="text-muted fst-italic">Vater unbekannt</span>
-                                {% endif %}
-                            </div>
                             
+                            {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
+
                             {% if not fam.family.husband %}
                                 {% if can_edit %}
                                 <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ fam.family.pk }}&role=husband" class="btn btn-sm btn-outline-primary">
@@ -771,14 +750,7 @@
                         </li>
                         
                         <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
-                            <div>
-                                <span class="me-3 fs-5">👩</span>
-                                {% if fam.family.wife %}
-                                    {% include "genview/_individual_mini.html" with individual=fam.family.wife %}
-                                {% else %}
-                                    <span class="text-muted fst-italic">Mutter unbekannt</span>
-                                {% endif %}
-                            </div>
+                            {% include "genview/_individual_mini.html" with individual=fam.family.wife %}
                             
                             {% if not fam.family.wife %}
                                 {% if can_edit %}
@@ -833,16 +805,7 @@
                     <ul class="list-group list-group-flush">
                         {% for sibling in object.siblings %}
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                <div>
-                                    <span class="me-2">
-                                        {% if sibling.sex == 'M' %}👦{% elif sibling.sex == 'F' %}👧{% else %}👶{% endif %}
-                                    </span>
-                                    {% if apply_privacy and sibling.is_confidential %}
-                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                    {% else %}
-                                        {% include "genview/_individual_mini.html" with individual=sibling %}
-                                    {% endif %}
-                                </div>
+                                {% include "genview/_individual_mini.html" with individual=sibling %}
                             </li>
                         {% endfor %}
                     </ul>
@@ -870,14 +833,14 @@
                             {% if apply_privacy and family.wife.is_confidential %}
                                 <span class="text-muted fst-italic">🔒 vertraulich</span>
                             {% else %}
-                                <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.given_name }} {{ family.wife.surname }}</a>
+                                <a href="{{ family.wife.get_absolute_url }}" class="text-decoration-none text-danger">{{ family.wife.short_given_name }} {{ family.wife.surname }}</a>
                             {% endif %}
                         {% elif family.wife == object and family.husband %}
                             Partner: 
                             {% if apply_privacy and family.husband.is_confidential %}
                                 <span class="text-muted fst-italic">🔒 vertraulich</span>
                             {% else %}
-                                <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.given_name }} {{ family.husband.surname }}</a>
+                                <a href="{{ family.husband.get_absolute_url }}" class="text-decoration-none text-primary">{{ family.husband.short_given_name }} {{ family.husband.surname }}</a>
                             {% endif %}
                         {% else %}
                             <span class="text-muted fst-italic">Unbekannter Partner</span>
@@ -904,12 +867,7 @@
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
                                     <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                        <div>
-                                            <span class="me-2">
-                                                {% if link.child.sex == 'M' %}👦{% elif link.child.sex == 'F' %}👧{% else %}👶{% endif %}
-                                            </span>
-                                            {% include "genview/_individual_mini.html" with individual=link.child %}
-                                        </div>
+                                        {% include "genview/_individual_mini.html" with individual=link.child %}
                                     </li>
                                 {% endif %}
                             {% endfor %}

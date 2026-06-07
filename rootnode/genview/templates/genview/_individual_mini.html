@@ -1,27 +1,52 @@
 {% load l10n %}
 {% load i18n %}
 
-{% if apply_privacy and individual.is_confidential %}
-    <span class="text-muted fst-italic">🔒 {% trans "vertraulich" %}</span>
-{% else %}
-    <a href="{{ individual.get_absolute_url }}" class="text-decoration-none text-dark">
-        {{ individual.short_given_name }} <span class="fw-semibold">{{ individual.surname }}</span>
-    </a>
-
-    {% if individual.birth_date %}
-        <small class="text-muted ms-2">* {{ individual.birth_date|date:"Y" }}</small>
-    {% elif individual.birth_date_raw %}
-        <span class="badge bg-secondary">{{ individual.birth_date_raw }}</span>
+<div class="col-2">
+    {% if individual.profile_image and individual.profile_image.file %}
+        <img src="{{ individual.profile_image.file.url }}" 
+            alt="{{ individual.given_name }}" 
+            class="rounded-circle shadow-sm" 
+            style="width: 45px; height: 45px; object-fit: cover;">
     {% else %}
-        <span class="text-muted">-</span>
+        <span class="me-3 fs-5">{% if individual.sex == 'M' %}👦{% elif individual.sex == 'F' %}👧{% else %}👶{% endif %}</span>
     {% endif %}
-    
-    {% if individual.death_date %}
-        <small class="text-muted ms-2">+ {{ individual.death_date|date:"Y" }}</small>
-    {% elif individual.death_date_raw %}
-        <span class="badge bg-secondary">{{ individual.death_date_raw }}</span>
-    {% else %}
-        <span class="text-muted">-</span>
-    {% endif %}
+</div>
+<div class="col-10">
+    {% if individual %}
+        <div>
+            {% if apply_privacy and individual.is_confidential %}
+                <span class="text-muted fst-italic">🔒 {% trans "vertraulich" %}</span>
+            {% else %}
+                <div>
+                <a href="{{ individual.get_absolute_url }}" class="text-decoration-none text-dark" title="{{ individual.full_name }}">
+                    {{ individual.short_given_name }} <span class="fw-semibold">{{ individual.surname }}</span>
+                </a>
+                </div>
+                <div>
+                {% if individual.birth_date %}
+                    <small class="text-muted ms-2">* {{ individual.birth_date|date:"Y" }}</small>
+                {% elif individual.birth_date_raw %}
+                    <span class="badge bg-secondary">{{ individual.birth_date_raw }}</span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+                
+                {% if individual.death_date %}
+                    <small class="text-muted ms-2">+ {{ individual.death_date|date:"Y" }}</small>
+                {% elif individual.death_date_raw %}
+                    <span class="badge bg-secondary">{{ individual.death_date_raw }}</span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+                </div>
 
-{% endif %}
+            {% endif %}
+            </div>
+    {% else %}
+        <span class="text-muted fst-italic">{% if individual.sex == 'M' %}Vater{% elif individual.sex == 'F' %}Mutter{% else %}{% endif %} unbekannt</span>
+    {% endif %}
+</div>
+
+
+
+
