@@ -1,172 +1,342 @@
 {% extends "genview/base.html" %}
 {% load django_bootstrap5 %}
+
 {% block title %}Familie {{ family.gedcom_id }}{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Familie {{ family.gedcom_id }}</h2>
 
-<div class="row">
-    <!-- linke Spalte: Ehepartner -->
-    <div class="col-md-6">
-        <h4>Ehepartner</h4>
-        <ul class="list-group mb-3">
-            <li class="list-group-item">
-                <strong>Vater / Husband:</strong><br>
-                {% if family.husband %}
-                    <a href="{% url 'genview:individual-detail' tree_id family.husband.pk %}">
-                        {{ family.husband.full_name }}
-                    </a> ({{ family.husband.get_sex_display }})
-                {% else %}
-                    <span class="text-muted">nicht angegeben</span>
-                {% endif %}
-            </li>
-            <li class="list-group-item">
-                <strong>Mutter / Wife:</strong><br>
-                {% if family.wife %}
-                    <a href="{% url 'genview:individual-detail' tree_id family.wife.pk %}">
-                        {{ family.wife.full_name }}
-                    </a> ({{ family.wife.get_sex_display }})
-                {% else %}
-                    <span class="text-muted">nicht angegeben</span>
-                {% endif %}
-            </li>
-        </ul>
-    </div>
+<!-- Custom CSS für den Mini-Stammbaum (am besten später in eine eigene .css Datei verschieben) -->
+<style>
+    .avatar-lg { width: 90px; height: 90px; object-fit: cover; }
+    .avatar-md { width: 70px; height: 70px; object-fit: cover; }
+    .avatar-sm { width: 50px; height: 50px; object-fit: cover; font-size: 1.2rem; }
+    
+    .tree-node { width: 120px; text-align: center; }
+    .tree-node-sm { width: 85px; text-align: center; }
+    
+    .family-connector { height: 2px; background-color: #adb5bd; width: 40px; margin-top: 45px; }
+    .vertical-connector { width: 2px; background-color: #adb5bd; margin: 0 auto; }
+    .children-connector-top { border-top: 2px solid #adb5bd; margin: 0 auto; }
+    .grandparent-line { border-top: 2px solid #adb5bd; position: absolute; top: 25px; left: 25%; right: 25%; z-index: 0; }
+</style>
 
-    <!-- rechte Spalte: Kinder -->
-    <div class="col-md-6">
-        <h4>Kinder ({{ family.children.all|length }})</h4>
-        {% if family.children.all %}
-            <ul class="list-group mb-3">
-                {% for link in family.children.all %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <a href="{% url 'genview:individual-detail' tree_id link.child.pk %}">
-                            {{ link.child.full_name }}
-                        </a>
-                        <span class="badge bg-secondary">
-                            {{ link.get_relationship_type_display }}
-                        </span>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="text-muted">Keine Kinder zugeordnet.</p>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>👨‍👩‍👧‍👦 Familie <span class="text-muted fs-4">({{ family.gedcom_id }})</span></h2>
+    <div>
+        {% if can_edit %}
+            <a href="{% url 'genview:family-edit' tree_id family.pk %}" class="btn btn-outline-primary btn-sm">✏️ Bearbeiten</a>
+            <a href="{% url 'genview:family-delete' tree_id family.pk %}" class="btn btn-outline-danger btn-sm">🗑️ Löschen</a>
         {% endif %}
+        <a href="{% url 'genview:family-list' tree_id %}" class="btn btn-secondary btn-sm">Zurück zur Liste</a>
     </div>
 </div>
 
-<hr>
+<!-- ========================================== -->
+<!-- 1. DER VISUELLE MINI-STAMMBAUM -->
+<!-- ========================================== -->
+<div class="card shadow-sm mb-4 border-0 bg-light">
+    <div class="card-body py-5 overflow-auto">
+        
+        <div class="d-flex justify-content-center align-items-end gap-2 gap-md-4" style="min-width: 600px;">
+            
+            <div class="d-flex flex-column align-items-center">
+                
+                <div class="d-flex position-relative mb-2">
+                    {% if husband_father or husband_mother %}
+                        <div class="grandparent-line"></div>
+                        
+                        <div class="tree-node-sm position-relative z-1">
+                            {% if husband_father %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=husband_father.pk %}" class="text-decoration-none text-dark">
+                                    {% if husband_father.profile_image and husband_father.profile_image.file %}
+                                        <img src="{{ husband_father.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
+                                            {{ husband_father.given_name|first|default:"?" }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_father.given_name }}</div>
+                                </a>
+                            {% else %}
+                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
+                            {% endif %}
+                        </div>
 
-<dl class="row">
-    <dt class="col-sm-3">GEDCOM-ID</dt><dd class="col-sm-9">{{ family.gedcom_id }}</dd>
-
-    <dt class="col-sm-3">Ehemann</dt>
-    <dd class="col-sm-9">
-        {% if family.husband %}
-            <a href="{{ family.husband.get_absolute_url }}">{{ family.husband.full_name }}</a>
-        {% else %}<span class="text-muted">-</span>{% endif %}
-    </dd>
-
-    <dt class="col-sm-3">Ehefrau</dt>
-    <dd class="col-sm-9">
-        {% if family.wife %}
-            <a href="{{ family.wife.get_absolute_url }}">{{ family.wife.full_name }}</a>
-        {% else %}<span class="text-muted">-</span>{% endif %}
-    </dd>
-
-    {# ---------- Heirats-Datum & Ort ---------- #}
-    <dt class="col-sm-3">Heirats-Datum</dt>
-    <dd class="col-sm-9">
-        {% if family.marriage_event %}
-            {# Wenn du das geparste Datum willst: #}
-            {% if family.marriage_event.parsed_date %}
-                {{ family.marriage_event.parsed_date|date:"Y-m-d" }}
-            {% else %}
-                {{ family.marriage_event.raw_date }}   {# Roh-String fallback #}
-            {% endif %}
-        {% else %}
-            <span class="text-muted">-</span>
-        {% endif %}
-    </dd>
-
-    <dt class="col-sm-3">Heirats-Ort</dt>
-    <dd class="col-sm-9">
-        {% if family.marriage_event and family.marriage_event.place %}
-            {{ family.marriage_event.place }}
-        {% else %}
-            <span class="text-muted">-</span>
-        {% endif %}
-    </dd>
-
-    <dt class="col-sm-3">Notizen</dt><dd class="col-sm-9">{{ family.notes|linebreaksbr }}</dd>
-</dl>
-
-<!-- Familien-Events -->
-<h4 class="mt-4">Ereignisse der Familie</h4>
-{% if family.events %}
-    <ul class="list-group mb-3">
-        {% for ev in family.events.all %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ ev.event_type_name }}
-                {% if ev.parsed_date %}
-                    <span class="badge bg-primary">
-                        {{ ev.parsed_date|date:"d.m.Y" }}
-                    </span>
-                {% endif %}
-            </li>
-        {% endfor %}
-    </ul>
-{% else %}
-    <p class="text-muted">Keine Ereignisse erfasst.</p>
-{% endif %}
-
-<!-- Medien-Objekte -->
-<div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-    <h4 class="mt-4">Medien</h4>
-    {% if can_edit %}
-    <a href="{% url 'genview:media-create-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-primary">
-        + Dokument/Bild hinzufügen
-    </a>
-    {% endif %}
-</div>
-
-{% if family.media_objects %}
-    <div class="row g-3">
-        {% for media in family.media_objects.all %}
-            <div class="col-md-4">
-                <div class="card h-100">
-                    {% if media.is_image %}
-                        <img src="{{ media.file.url }}" class="card-img-top img-fluid"
-                             alt="{{ media.title|default:'Mediadatei' }}">
+                        <div class="tree-node-sm position-relative z-1">
+                            {% if husband_mother %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=husband_mother.pk %}" class="text-decoration-none text-dark">
+                                    {% if husband_mother.profile_image and husband_mother.profile_image.file %}
+                                        <img src="{{ husband_mother.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
+                                            {{ husband_mother.given_name|first|default:"?" }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_mother.given_name }}</div>
+                                </a>
+                            {% else %}
+                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
+                            {% endif %}
+                        </div>
                     {% else %}
-                        <div class="card-body d-flex align-items-center justify-content-center">
-                            <a href="{{ media.file.url }}" class="stretched-link">
-                                {{ media.title|default:"Datei" }}
-                            </a>
-                        </div>
-                    {% endif %}
-                    {% if media.title or media.description %}
-                        <div class="card-body">
-                            {% if media.title %}
-                                <h5 class="card-title">{{ media.title }}</h5>
+                        <div style="height: 70px;"></div> {% endif %}
+                </div>
+
+                {% if husband_father or husband_mother %}
+                    <div class="vertical-connector mb-2" style="height: 20px;"></div>
+                {% else %}
+                    <div style="height: 20px;" class="mb-2"></div>
+                {% endif %}
+
+                <div class="tree-node">
+                    {% if family.husband %}
+                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=family.husband.pk %}" class="text-decoration-none text-dark">
+                            {% if family.husband.profile_image and family.husband.profile_image.file %}
+                                <img src="{{ family.husband.profile_image.file.url }}" class="rounded-circle avatar-lg shadow-sm border border-2 border-white">
+                            {% else %}
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">
+                                    {{ family.husband.given_name|first|default:"?" }}
+                                </div>
                             {% endif %}
-                            {% if media.description %}
-                                <p class="card-text">{{ media.description|linebreaks }}</p>
-                            {% endif %}
-                        </div>
+                            <div class="mt-2 fw-bold text-truncate">{{ family.husband.given_name }}</div>
+                            <div class="small">{{ family.husband.surname }}</div>
+                        </a>
+                    {% else %}
+                        <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2">?</div>
+                        <div class="mt-2 text-muted small">Unbekannt</div>
                     {% endif %}
                 </div>
             </div>
-        {% endfor %}
-    </div>
-{% else %}
-    <p class="text-muted">Keine Medien verknüpft.</p>
-{% endif %}
 
-<hr>
-{% if can_edit %}
-<a href="{% url 'genview:family-edit' tree_id family.pk %}" class="btn btn-primary">Bearbeiten</a>
-<a href="{% url 'genview:family-delete' tree_id family.pk %}" class="btn btn-danger">Löschen</a>
-{% endif %}
-<a href="{% url 'genview:family-list' tree_id %}" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+            <div class="d-flex flex-column align-items-center" style="margin-bottom: 40px;">
+                <div class="d-flex align-items-center">
+                    <div class="family-connector d-none d-sm-block"></div>
+                    <div class="mx-2 mt-4 text-danger fs-5" title="Partnerschaft / Ehe">💍</div>
+                    <div class="family-connector d-none d-sm-block"></div>
+                </div>
+                {% if family.children.all %}
+                    <div class="vertical-connector mt-3" style="height: 35px; transform: translateY(15px);"></div>
+                {% endif %}
+            </div>
+
+            <div class="d-flex flex-column align-items-center">
+                
+                <div class="d-flex position-relative mb-2">
+                    {% if wife_father or wife_mother %}
+                        <div class="grandparent-line"></div>
+                        
+                        <div class="tree-node-sm position-relative z-1">
+                            {% if wife_father %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=wife_father.pk %}" class="text-decoration-none text-dark">
+                                    {% if wife_father.profile_image and wife_father.profile_image.file %}
+                                        <img src="{{ wife_father.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
+                                            {{ wife_father.given_name|first|default:"?" }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_father.given_name }}</div>
+                                </a>
+                            {% else %}
+                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="tree-node-sm position-relative z-1">
+                            {% if wife_mother %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=wife_mother.pk %}" class="text-decoration-none text-dark">
+                                    {% if wife_mother.profile_image and wife_mother.profile_image.file %}
+                                        <img src="{{ wife_mother.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                    {% else %}
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
+                                            {{ wife_mother.given_name|first|default:"?" }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_mother.given_name }}</div>
+                                </a>
+                            {% else %}
+                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div style="height: 70px;"></div>
+                    {% endif %}
+                </div>
+
+                {% if wife_father or wife_mother %}
+                    <div class="vertical-connector mb-2" style="height: 20px;"></div>
+                {% else %}
+                    <div style="height: 20px;" class="mb-2"></div>
+                {% endif %}
+
+                <div class="tree-node">
+                    {% if family.wife %}
+                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=family.wife.pk %}" class="text-decoration-none text-dark">
+                            {% if family.wife.profile_image and family.wife.profile_image.file %}
+                                <img src="{{ family.wife.profile_image.file.url }}" class="rounded-circle avatar-lg shadow-sm border border-2 border-white">
+                            {% else %}
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">
+                                    {{ family.wife.given_name|first|default:"?" }}
+                                </div>
+                            {% endif %}
+                            <div class="mt-2 fw-bold text-truncate">{{ family.wife.given_name }}</div>
+                            <div class="small">{{ family.wife.surname }}</div>
+                        </a>
+                    {% else %}
+                        <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2">?</div>
+                        <div class="mt-2 text-muted small">Unbekannt</div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        {% if family.children.all %}
+            <div class="children-connector-top" style="width: {% if family.children.all|length == 1 %}0px{% else %}60%{% endif %};"></div>
+            
+            <div class="d-flex justify-content-center flex-wrap mt-3 gap-4">
+                {% for link in family.children.all %}
+                    <div class="tree-node position-relative">
+                        <div class="vertical-connector mb-2 mx-auto" style="height: 15px;"></div>
+                        
+                        <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=link.child.pk %}" class="text-decoration-none text-dark">
+                            {% if link.child.profile_image and link.child.profile_image.file %}
+                                <img src="{{ link.child.profile_image.file.url }}" class="rounded-circle avatar-md shadow-sm border border-2 border-white">
+                            {% else %}
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-md fs-3 border border-2 border-white">
+                                    {{ link.child.given_name|first|default:"?" }}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="mt-2 fw-bold text-truncate">{{ link.child.given_name }}</div>
+                            <div class="small">{{ link.child.surname }}</div>
+                            
+                            {% if link.relationship_type != 'BIOLOGICAL' %}
+                                <span class="badge bg-info mt-1" style="font-size: 0.6rem;">{{ link.get_relationship_type_display }}</span>
+                            {% endif %}
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- ========================================== -->
+    <!-- 2. DATEN & FAKTEN -->
+    <!-- ========================================== -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100 border-0">
+            <div class="card-header bg-white fw-bold">📋 Familiendetails</div>
+            <div class="card-body">
+                <table class="table table-borderless table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted w-25">Heirat</td>
+                            <td>
+                                {% if family.marriage_event %}
+                                    {% if family.marriage_event.parsed_date %}
+                                        <strong>{{ family.marriage_event.parsed_date|date:"d.m.Y" }}</strong>
+                                    {% else %}
+                                        <strong>{{ family.marriage_event.raw_date }}</strong>
+                                    {% endif %}
+                                    
+                                    {% if family.marriage_event.place %}
+                                        <br><small class="text-muted">📍 {{ family.marriage_event.place }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Notizen</td>
+                            <td>{{ family.notes|linebreaksbr|default:"<span class='text-muted'>-</span>" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 3. WEITERE EREIGNISSE -->
+    <!-- ========================================== -->
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100 border-0">
+            <div class="card-header bg-white fw-bold">⏳ Ereignisse</div>
+            <ul class="list-group list-group-flush">
+                {% for ev in family.events.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ ev.event_type.name|default:ev.event_type.tag }}</strong>
+                            {% if ev.place %}
+                                <div class="small text-muted">{{ ev.place }}</div>
+                            {% endif %}
+                        </div>
+                        {% if ev.parsed_date %}
+                            <span class="badge bg-light text-dark border">{{ ev.parsed_date|date:"d.m.Y" }}</span>
+                        {% elif ev.raw_date %}
+                            <span class="badge bg-light text-dark border">{{ ev.raw_date }}</span>
+                        {% endif %}
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">Keine Ereignisse erfasst.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 4. MEDIEN-GALERIE -->
+<!-- ========================================== -->
+<div class="card shadow-sm border-0 mb-5">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-bold">🖼️ Medien & Dokumente</span>
+        {% if can_edit %}
+            <a href="{% url 'genview:media-create-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-primary btn-sm">
+                + Hinzufügen
+            </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if family.media_objects.all %}
+            <div class="row g-3">
+                {% for media in family.media_objects.all %}
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="card h-100 border text-center">
+                            {% if media.is_image %}
+                                <!-- Wenn es ein Bild ist, zeige es an -->
+                                <img src="{{ media.file.url }}" class="card-img-top" alt="{{ media.title }}" style="height: 150px; object-fit: cover;">
+                            {% else %}
+                                <!-- Fallback für PDFs, Dokumente etc. -->
+                                <div class="bg-light d-flex align-items-center justify-content-center" style="height: 150px;">
+                                    <span class="fs-1">📄</span>
+                                </div>
+                            {% endif %}
+                            
+                            <div class="card-body p-2">
+                                <h6 class="card-title text-truncate mb-1" title="{{ media.title|default:'Datei' }}">
+                                    <a href="{{ media.file.url }}" target="_blank" class="text-decoration-none stretched-link text-dark">
+                                        {{ media.title|default:"Datei" }}
+                                    </a>
+                                </h6>
+                                {% if media.description %}
+                                    <small class="text-muted text-truncate d-block">{{ media.description }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted mb-0 text-center py-3">Es sind noch keine Medien mit dieser Familie verknüpft.</p>
+        {% endif %}
+    </div>
+</div>
+
 {% endblock %}

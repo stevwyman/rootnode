@@ -283,59 +283,51 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         
-        # Die saubere, robuste String-Notation für den Prefetch:
+        # 🔥 OPTIMIERT: Alle Prefetches für die Profilbilder (Avatare) der Verwandten hinzugefügt!
         return Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "events__event_type",
             "events__media_objects",
-            "families_as_husband__wife",             # Holt die Ehefrauen, wenn die Person Ehemann ist
-            "families_as_husband__children__child",  # Holt die Kinder-Links + die Kinder-Personen dazu
-            "families_as_wife__husband",             # Holt die Ehemänner, wenn die Person Ehefrau ist
-            "families_as_wife__children__child",     # Holt die Kinder-Links + die Kinder-Personen dazu
-            "events__event_type"
+            
+            # Ehepartner + deren Profilbilder
+            "families_as_husband__wife__media_objects",
+            "families_as_wife__husband__media_objects",
+            
+            # Kinder-Links + Kinder-Personen + deren Profilbilder
+            "families_as_husband__children__child__media_objects",
+            "families_as_wife__children__child__media_objects",
+            
+            # Eltern-Familien + Vater/Mutter + deren Profilbilder (wichtig für Ahnentafel!)
+            "parental_families__family__husband__media_objects",
+            "parental_families__family__wife__media_objects",
         )
 
-    # -----------------------------------------------------------------
-    # Security Check for Data Privacy
-    # -----------------------------------------------------------------
     def get_object(self, queryset=None):
-        # 1. Hole die Person wie gewohnt aus der Datenbank.
-        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
-        # dass die Person überhaupt zu diesem Stammbaum gehört!)
         person = super().get_object(queryset)
-
-        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
         apply_privacy = self.get_apply_privacy()
 
-        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
         if apply_privacy and person.is_confidential:
-            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
             raise PermissionDenied(
                 "Diese Person unterliegt den Datenschutzrichtlinien. "
                 "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
             )
-
-        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
         return person
 
-    # -----------------------------------------------------------------
-    # Kontext-Aufbereitung: Ehepartner, Kinder, Eltern
-    # -----------------------------------------------------------------
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         person: Individual = self.object
+        
+        # Privacy-Flag für das Template zugänglich machen
+        apply_privacy = ctx.get('apply_privacy', False)
 
         # -------------------------------------------------------------
-        # 1️⃣ Ehepartner (falls vorhanden) – wir suchen die *anderen*
-        #     Elternteile in den Familien, in denen die Person ein
-        #     Husband bzw. Wife ist.
+        # 1️⃣ Ehepartner & Familie
         # -------------------------------------------------------------
         spouse = None
         family = None
-        # Husband-Familie → Wife ist der Ehepartner
         husband_fam = person.families_as_husband.first()
         if husband_fam and husband_fam.wife:
             spouse = husband_fam.wife
             family = husband_fam
-        # Wife-Familie → Husband ist der Ehepartner (falls noch nicht gefunden)
         if not spouse:
             wife_fam = person.families_as_wife.first()
             if wife_fam and wife_fam.husband:
@@ -346,128 +338,105 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         ctx["family"] = family
 
         # -------------------------------------------------------------
-        # 2️⃣ Kinder (alle ChildFamilyLink-Objekte, über die beiden Familien)
+        # 2️⃣ Kinder
         # -------------------------------------------------------------
-        children_links = []  # Liste von ChildFamilyLink-Instanzen
-        # Husband-Familie: ihre Children-Links
+        children_links = []
         if husband_fam:
             children_links.extend(list(husband_fam.children.all()))
-        # Wife-Familie: ebenfalls Children-Links (kann Überschneidungen geben)
         if person.families_as_wife.first():
             children_links.extend(list(person.families_as_wife.first().children.all()))
-        # Doppelte Einträge entfernen (gleiche ChildFamilyLink-Instanz)
-        children_links = list({cl.id: cl for cl in children_links}.values())
-        ctx["children_links"] = children_links
+        
+        ctx["children_links"] = list({cl.id: cl for cl in children_links}.values())
 
         # -------------------------------------------------------------
-        # 3️⃣ Eltern-Familien (direkt über das M2M-Through-Model)
+        # 3️⃣ Eltern-Familien
         # -------------------------------------------------------------
         ctx["parent_families"] = list(person.parental_families.all())
-        #   Jeder Familie hat bereits husband und wife via `select_related` oben.
 
         # -------------------------------------------------------------
-        # 4️⃣ Events
+        # 4️⃣ Ahnentafel (Pedigree)
         # -------------------------------------------------------------
-        # Fetch events where the person is the individual, OR the husband, OR the wife
+        father = person.father
+        mother = person.mother
+        ctx['pedigree'] = {
+            'father': father,
+            'mother': mother,
+            'ff': father.father if father else None,
+            'fm': father.mother if father else None,
+            'mf': mother.father if mother else None,
+            'mm': mother.mother if mother else None,
+        }
+
+        # -------------------------------------------------------------
+        # 5️⃣ Events / Timeline
+        # -------------------------------------------------------------
         combined_events = Event.objects.filter(
             Q(individual=person) | Q(family__husband=person) | Q(family__wife=person)
-        ).prefetch_related('sources').order_by(
+        ).select_related('event_type', 'place').prefetch_related('sources').order_by(
             F("parsed_date").asc(nulls_last=True)
-        )  # Sorts by date, puts None values at the end
-
+        )
         ctx["timeline_events"] = combined_events
 
-        # -------------- Portrait holen --------------
-        """
-        TODO:
-        Weil deine is_confidential-Methode über .all() auf die verknüpften Personen, Familien und Events zugreift, feuert sie für jedes einzelne Bild in einer Galerie drei Datenbankabfragen ab.
-        Wenn du später eine Seite baust, die 50 Bilder (MediaObject) gleichzeitig anzeigt, stelle sicher, dass die View dazu diese Daten vorab lädt:
-        MediaObject.objects.filter(...).prefetch_related('individuals', 'families', 'events')
-        Damit bleibt dein Galerie-Rendering blitzschnell!
-        """
-        portrait = person.media_objects.filter(is_portrait=True).first()
-        # Falls kein explizites Portrait gesetzt ist, nimm das erste Bild:
-        if not portrait:
-            portrait = person.media_objects.first()
+        # -------------------------------------------------------------
+        # 6️⃣ MEDIEN & GALERIE (Zusammengeführt & optimiert)
+        # -------------------------------------------------------------
+        
+        # 🔥 Unser neues Property nutzen (keine extra Abfrage nötig!)
+        portrait = person.profile_image
         ctx["portrait"] = portrait
 
-        # Alle übrigen Bilder (ausgenommen das Portrait-Bild)
-        ctx["gallery_images"] = (
-            person.media_objects.exclude(pk=portrait.pk)
-            if portrait
-            else person.media_objects.all()
-        )
+        # Wenn die Person datengeschützt ist, zeigen wir keine Galerie
+        if apply_privacy and person.is_confidential:
+            ctx['gallery_photos'] = []
+            ctx['gallery_documents'] = []
+        else:
+            # Die intelligente Galerie-Abfrage
+            tree_id = person.gedcom_tree_id
+            birth_family_ids = ChildFamilyLink.objects.filter(
+                child=person
+            ).values_list('family_id', flat=True)
 
-        #
-        # unsere neue intelligente Gallery
-        #
+            all_gallery_media = MediaObject.objects.filter(
+                gedcom_tree_id=tree_id
+            ).filter(
+                Q(individuals=person) | 
+                Q(events__individual=person) |
+                Q(events__family__husband=person) |
+                Q(events__family__wife=person) |
+                Q(families__husband=person) |
+                Q(families__wife=person) |
+                Q(families__in=birth_family_ids) |
+                Q(sources__events__individual=person)
+            ).distinct().prefetch_related('individuals', 'families', 'events')
 
-        # 🔥 Die magische ODER-Abfrage für die Galerie
-        tree_id = person.gedcom_tree_id
-        birth_family_ids = ChildFamilyLink.objects.filter(
-            child=person
-        ).values_list('family_id', flat=True)
+            # Portrait-Bild aus den Fotos ausschließen, falls vorhanden
+            photos = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
+            if portrait:
+                photos = photos.exclude(pk=portrait.pk)
+                
+            ctx['gallery_photos'] = photos
+            ctx['gallery_documents'] = all_gallery_media.filter(category=MediaObject.Category.DOCUMENT)
 
-        all_gallery_media = MediaObject.objects.filter(
-            gedcom_tree_id=tree_id
-        ).filter(
-            # Bedingung 1: Das Medium hängt direkt an der Person
-            Q(individuals=person) | 
-            
-            # Bedingung 2: Das Medium hängt an einem individuellen Ereignis (z.B. Geburt)
-            Q(events__individual=person) |
-            
-            # Bedingung 3: Das Medium hängt an einem Familien-Ereignis (z.B. Heirat)
-            Q(events__family__husband=person) |
-            Q(events__family__wife=person) |
-            
-            # Bedingung 4: Das Medium hängt direkt an der Familie, wo die Person Vater/Mutter ist
-            Q(families__husband=person) |
-            Q(families__wife=person) |
-            
-            # 🔥 HIER IST DER ERSATZ: 
-            # Das Medium hängt an einer Familie, in der die Person ein Kind ist (nutzt die IDs von oben)
-            Q(families__in=birth_family_ids) |
-            
-            # Bedingung 6: Das Medium hängt an einer Quelle eines individuellen Events
-            Q(sources__events__individual=person)
-            
-        ).distinct().prefetch_related('individuals', 'families', 'events') # Verhindert Duplikate in der Anzeige
 
-        # 2. Die Medien in zwei Listen für das Template aufteilen
-        ctx['gallery_photos'] = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
-        ctx['gallery_documents'] = all_gallery_media.filter(category=MediaObject.Category.DOCUMENT)
-
-        #
-        # for tree view
-        #
-
-        # Helper function to format a person for dTree
+        # -------------------------------------------------------------
+        # 7️⃣ Stammbaum JSON für dTree
+        # -------------------------------------------------------------
         def format_person(p):
-            if not p:
-                return None
-
+            if not p: return None
             birth_date = ""
             death_date = ""
 
-            # Check the person's events to find birth and death dates
-            # We use .all() and loop to avoid hitting the database multiple times per person
             for event in p.events.all():
                 if event.event_type and event.event_type.tag == 'BIRT' and not birth_date:
                     birth_date = event.raw_date
                 elif event.event_type and event.event_type.tag == 'DEAT' and not death_date:
                     death_date = event.raw_date
 
-            # Format the date string nicely
             date_str = ""
             if birth_date or death_date:
                 b_str = birth_date if birth_date else "?"
                 d_str = death_date if death_date else "Present"
-
-                if not death_date:
-                    date_str = f"b. {b_str}"
-                else:
-                    date_str = f"{b_str} - {d_str}"
+                date_str = f"b. {b_str}" if not death_date else f"{b_str} - {d_str}"
 
             return {
                 "name": f"{p.given_name} {p.surname}",
@@ -480,12 +449,10 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 },
             }
 
-        # helper to build the marriage string
         def get_marriage_str(fam):
-            if not fam:
-                return ""
-            m_date = fam.marriage_date_raw
-            m_place = fam.marriage_place
+            if not fam: return ""
+            m_date = getattr(fam, 'marriage_date_raw', None) # Sicherheitshalber getattr nutzen
+            m_place = getattr(fam, 'marriage_place', None)
             parts = [p for p in (m_date, m_place) if p]
             return "⚭ " + ", ".join(parts) if parts else ""
 
@@ -493,115 +460,54 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         parent_link = person.parental_families.first()
 
         if parent_link and (parent_link.family.husband or parent_link.family.wife):
-            family = parent_link.family
-            root_person = family.husband if family.husband else family.wife
-            spouse_person = family.wife if family.husband else None
+            fam = parent_link.family
+            root_person = fam.husband if fam.husband else fam.wife
+            spouse_person = fam.wife if fam.husband else None
 
             root_node = format_person(root_person)
             target_node = format_person(person)
             target_node["marriages"] = []
 
-            # --- TARGET'S MARRIAGES ---
-            spouse_families = list(person.families_as_husband.all()) + list(
-                person.families_as_wife.all()
-            )
+            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
 
-            for fam in spouse_families:
-                partner = fam.wife if fam.husband == person else fam.husband
-                # Ensure we always have a dictionary, even for unknown partners
-                spouse_node = (
-                    format_person(partner)
-                    if partner
-                    else {"name": "Unknown Partner", "class": "node", "extra": {}}
-                )
-
-                # Inject marriage info
-                m_str = get_marriage_str(fam)
+            for sp_fam in spouse_families:
+                partner = sp_fam.wife if sp_fam.husband == person else sp_fam.husband
+                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
+                m_str = get_marriage_str(sp_fam)
                 if m_str and "extra" in spouse_node:
                     spouse_node["extra"]["marriage_info"] = m_str
 
-                marriage_data = {
+                target_node["marriages"].append({
                     "spouse": spouse_node,
-                    "children": [format_person(c.child) for c in fam.children.all()],
-                }
-                target_node["marriages"].append(marriage_data)
+                    "children": [format_person(c.child) for c in sp_fam.children.all()],
+                })
 
-            # --- PARENTS' MARRIAGE ---
-            spouse_node = (
-                format_person(spouse_person)
-                if spouse_person
-                else {"name": "Unknown Partner", "class": "node", "extra": {}}
-            )
-            m_str = get_marriage_str(family)
+            spouse_node = format_person(spouse_person) if spouse_person else {"name": "Unknown Partner", "class": "node", "extra": {}}
+            m_str = get_marriage_str(fam)
             if m_str and "extra" in spouse_node:
                 spouse_node["extra"]["marriage_info"] = m_str
 
-            root_node["marriages"] = [
-                {"spouse": spouse_node, "children": [target_node]}
-            ]
-
+            root_node["marriages"] = [{"spouse": spouse_node, "children": [target_node]}]
             tree_data.append(root_node)
-
         else:
-            # If no parents, target node is the root
             target_node = format_person(person)
             target_node["marriages"] = []
-
-            spouse_families = list(person.families_as_husband.all()) + list(
-                person.families_as_wife.all()
-            )
-            for fam in spouse_families:
-                partner = fam.wife if fam.husband == person else fam.husband
-                spouse_node = (
-                    format_person(partner)
-                    if partner
-                    else {"name": "Unknown Partner", "class": "node", "extra": {}}
-                )
-
-                # Inject marriage info
-                m_str = get_marriage_str(fam)
+            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
+            
+            for sp_fam in spouse_families:
+                partner = sp_fam.wife if sp_fam.husband == person else sp_fam.husband
+                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
+                m_str = get_marriage_str(sp_fam)
                 if m_str and "extra" in spouse_node:
                     spouse_node["extra"]["marriage_info"] = m_str
 
-                marriage_data = {
+                target_node["marriages"].append({
                     "spouse": spouse_node,
-                    "children": [format_person(c.child) for c in fam.children.all()],
-                }
-                target_node["marriages"].append(marriage_data)
-
+                    "children": [format_person(c.child) for c in sp_fam.children.all()],
+                })
             tree_data.append(target_node)
 
-        # Convert the Python dictionary to a JSON string for the template
         ctx["tree_json"] = json.dumps(tree_data)
-
-        # pedigree / table view of ancestors
-        person = self.object
-
-        # 1. Eltern laden
-        father = person.father
-        mother = person.mother
-
-        # 2. Ein flaches Dictionary für die 3-Generationen-Tabelle packen
-        ctx['pedigree'] = {
-            'father': father,
-            'mother': mother,
-            # Großeltern väterlicherseits (ff = father's father, fm = father's mother)
-            'ff': father.father if father else None,
-            'fm': father.mother if father else None,
-            # Großeltern mütterlicherseits (mf = mother's father, mm = mother's mother)
-            'mf': mother.father if mother else None,
-            'mm': mother.mother if mother else None,
-        }
-
-    
-        # Wenn der Datenschutz greift UND die Person vertraulich ist:
-        if ctx.get('apply_privacy') and self.object.is_confidential:
-            ctx['photos'] = []
-            ctx['documents'] = []
-        else:
-            all_media = self.object.media_objects.all()
-            ctx['photos'] = all_media.filter(category='PHOTO')
-            ctx['documents'] = all_media.filter(category='DOCUMENT')
 
         return ctx
 
@@ -955,20 +861,38 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         return (
             Family.objects.select_related("husband", "wife")
             .prefetch_related(
-                # Kinder-Links inkl. zugehörigem Child-Individual
+                # 1. Kinder-Links inkl. zugehörigem Child-Individual
+                # 🔥 UPDATE: Wir hängen hier direkt .prefetch_related("child__media_objects") an, 
+                # damit Django für alle gefundenen Kinder sofort auch deren Bilder lädt!
                 Prefetch(
                     "children",
-                    queryset=ChildFamilyLink.objects.select_related("child"),
+                    queryset=ChildFamilyLink.objects.select_related("child").prefetch_related("child__media_objects"),
                 ),
-                # Alle Events (MARR, DIV, …) der Familie
-                # Prefetch("events", queryset=Event.objects.all()),
+                
+                # 2. Alle Events (MARR, DIV, …) der Familie
                 Prefetch(
                     "events",
                     queryset=Event.objects.filter(event_type__tag='MARR'),
                     to_attr="marriage_events",  # .marriage_events[0] ist das Event
                 ),
-                # Medien-Objekte, die an die Familie gebunden sind
+                
+                # 3. Medien-Objekte, die an die Familie selbst gebunden sind
                 Prefetch("media_objects", queryset=MediaObject.objects.all()),
+                
+                # ==========================================
+                # 🔥 NEU: 4. Bilder für Vater und Mutter vorab laden!
+                # Da husband und wife oben per select_related geladen werden, 
+                # reicht hier der einfache String-Pfad.
+                # ==========================================
+                "husband__media_objects",
+                "wife__media_objects",
+                # ==========================================
+                # 🔥 NEU: Großeltern und deren Profilbilder vorab laden!
+                # ==========================================
+                "husband__parental_families__family__husband__media_objects",
+                "husband__parental_families__family__wife__media_objects",
+                "wife__parental_families__family__husband__media_objects",
+                "wife__parental_families__family__wife__media_objects",
             )
             .order_by("-id")
         )
@@ -1000,6 +924,18 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["tree_id"] = self.kwargs.get("tree_id")
+        
+        family = self.object
+
+        # ==========================================
+        # 🔥 NEU: Großeltern-Variablen für das Template vorbereiten
+        # ==========================================
+        ctx['husband_father'] = family.husband.father if family.husband else None
+        ctx['husband_mother'] = family.husband.mother if family.husband else None
+        
+        ctx['wife_father'] = family.wife.father if family.wife else None
+        ctx['wife_mother'] = family.wife.mother if family.wife else None
+
         return ctx
 
 
