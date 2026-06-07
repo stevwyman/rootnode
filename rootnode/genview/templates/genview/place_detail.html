@@ -61,8 +61,8 @@
     
 
     {% block edit-right %}
-        <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-primary">✎ {% trans "Ort bearbeiten" %}</a>
-        <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" class="btn btn-sm btn-outline-danger">🗑 {% trans "Ort löschen" %}</a>
+        <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" class="btn btn-primary w-100">✏️ {% trans "Ort bearbeiten" %}</a>
+        <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" class="btn btn-outline-danger w-100">🗑 {% trans "Ort löschen" %}</a>
     {% endblock%}
 
     {% block details-right%}

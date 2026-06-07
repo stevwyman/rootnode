@@ -31,7 +31,7 @@
     {% endblock%}
 
     {% block edit-right %}
-        <a href="{% url 'genview:media-edit' tree_id=tree_id pk=media.pk %}" class="btn btn-primary w-100">✎ {% trans "Datei bearbeiten" %}</a>
+        <a href="{% url 'genview:media-edit' tree_id=tree_id pk=media.pk %}" class="btn btn-primary w-100">✏️ {% trans "Datei bearbeiten" %}</a>
         <a href="{% url 'genview:media-delete' tree_id=tree_id pk=media.pk %}" class="btn btn-outline-danger w-100">🗑 {% trans "Datei löschen" %}</a>
     {% endblock%}
 
