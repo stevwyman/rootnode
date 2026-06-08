@@ -225,68 +225,92 @@
 </div>
 
 <div class="row g-4 mb-4">
-    <!-- ========================================== -->
-    <!-- 2. DATEN & FAKTEN -->
-    <!-- ========================================== -->
-    <div class="col-md-6">
+    <div class="col-md-5">
         <div class="card shadow-sm h-100 border-0">
-            <div class="card-header bg-white fw-bold">📋 Familiendetails</div>
+            <div class="card-header bg-white fw-bold">ℹ️ Partnerschafts-Info</div>
             <div class="card-body">
-                <table class="table table-borderless table-sm mb-0">
-                    <tbody>
-                        <tr>
-                            <td class="text-muted w-25">Heirat</td>
-                            <td>
-                                {% if family.marriage_event %}
-                                    {% if family.marriage_event.parsed_date %}
-                                        <strong>{{ family.marriage_event.parsed_date|date:"d.m.Y" }}</strong>
-                                    {% else %}
-                                        <strong>{{ family.marriage_event.raw_date }}</strong>
-                                    {% endif %}
-                                    
-                                    {% if family.marriage_event.place %}
-                                        <br><small class="text-muted">📍 {{ family.marriage_event.place }}</small>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Notizen</td>
-                            <td>{{ family.notes|linebreaksbr|default:"<span class='text-muted'>-</span>" }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                
+                <div class="mb-3">
+                    <span class="text-muted d-block small">GEDCOM Familien-ID</span>
+                    <span class="font-monospace bg-light px-2 py-1 rounded">{{ family.gedcom_id }}</span>
+                </div>
+
+                <div class="mb-3">
+                    <span class="text-muted d-block small">Nachkommen</span>
+                    <span><strong>{{ family.children.all|length }}</strong> verknüpfte Kinder</span>
+                </div>
+
+                {% if family.notes %}
+                <div class="mb-3">
+                    <span class="text-muted d-block small">Allgemeine Familien-Notizen</span>
+                    <div class="bg-light p-3 rounded small">
+                        {{ family.notes|linebreaksbr }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if family.sources.all %}
+                <div>
+                    <span class="text-muted d-block small mb-1">Quellenbelege</span>
+                    <ul class="list-unstyled small">
+                        {% for source in family.sources.all %}
+                            <li>📄 <a href="{{ source.get_absolute_url }}">{{ source.title }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
             </div>
         </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- 3. WEITERE EREIGNISSE -->
-    <!-- ========================================== -->
-    <div class="col-md-6">
+    <div class="col-md-7">
         <div class="card shadow-sm h-100 border-0">
-            <div class="card-header bg-white fw-bold">⏳ Ereignisse</div>
-            <ul class="list-group list-group-flush">
-                {% for ev in family.events.all %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ ev.event_type.name|default:ev.event_type.tag }}</strong>
-                            {% if ev.place %}
-                                <div class="small text-muted">{{ ev.place }}</div>
-                            {% endif %}
-                        </div>
-                        {% if ev.parsed_date %}
-                            <span class="badge bg-light text-dark border">{{ ev.parsed_date|date:"d.m.Y" }}</span>
-                        {% elif ev.raw_date %}
-                            <span class="badge bg-light text-dark border">{{ ev.raw_date }}</span>
-                        {% endif %}
-                    </li>
-                {% empty %}
-                    <li class="list-group-item text-muted">Keine Ereignisse erfasst.</li>
-                {% endfor %}
-            </ul>
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span>⏳ Familien-Chronik</span>
+                <span class="badge bg-secondary rounded-pill">{{ family.events.count }} Einträge</span>
+            </div>
+            
+            <div class="card-body p-0">
+                {% if family.events.all %}
+                    <div class="list-group list-group-flush">
+                        {% for ev in family.events.all %}
+                            <div class="list-group-item p-3">
+                                <div class="d-flex w-100 justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">
+                                            {% if ev.event_type.tag == 'MARR' %}💍 {% endif %}
+                                            {% if ev.event_type.tag == 'DIV' %}💔 {% endif %}
+                                            {% if ev.event_type.tag == 'CENS' %}📝 {% endif %}
+                                            {{ ev.event_type.name|default:ev.event_type.tag }}
+                                        </h6>
+                                        
+                                        {% if ev.place %}
+                                            <p class="mb-1 small text-muted">📍 {{ ev.place }}</p>
+                                        {% endif %}
+                                        
+                                        {% if ev.description %}
+                                            <p class="mb-0 small bg-light p-2 rounded mt-2">{{ ev.description }}</p>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="text-end ms-3" style="min-width: 90px;">
+                                        {% if ev.parsed_date %}
+                                            <span class="badge bg-light text-dark border w-100">{{ ev.parsed_date|date:"d.m.Y" }}</span>
+                                        {% elif ev.raw_date %}
+                                            <span class="badge bg-light text-dark border w-100">{{ ev.raw_date }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-0">Keine gemeinsamen Ereignisse (wie Heirat oder Volkszählungen) erfasst.</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
