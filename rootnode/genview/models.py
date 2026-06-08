@@ -215,6 +215,29 @@ class Individual(GedcomIdMixin):
     # ★★ Neu: Convenience-Properties für Geburts- und Sterbedatum ★★
     # --------------------------------------------------------------
     @property
+    def birth_year(self):
+        """Holt das Geburtsjahr für kompakte Stammbaum-Ansichten."""
+        if self.birth_date:
+            return self.birth_date.year
+        # Fallback auf das rohe Datum, falls es nicht geparst werden konnte (z.B. "ABT 1890")
+        if self.birth_date_raw:
+            import re
+            match = re.search(r'\d{4}', self.birth_date_raw)
+            return match.group() if match else ""
+        return ""
+
+    @property
+    def death_year(self):
+        """Holt das Sterbejahr für kompakte Stammbaum-Ansichten."""
+        if self.death_date:
+            return self.death_date.year
+        if self.death_date_raw:
+            import re
+            match = re.search(r'\d{4}', self.death_date_raw)
+            return match.group() if match else ""
+        return ""
+    
+    @property
     def short_given_name(self):
         """
         Kürzt lange Vornamen für Listenansichten.

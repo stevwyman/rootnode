@@ -277,6 +277,13 @@
                             🗺️ Lebensstationen
                         </button>
                     </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dtree-tab" data-bs-toggle="tab" data-bs-target="#dtree-pane" type="button" role="tab">
+                            🌳 Interaktiver Baum
+                        </button>
+                    </li>
+                    {% endif %}
                 </ul>
 
                 <!-- tab content -->
@@ -720,6 +727,13 @@
                         
                         <div id="lifecycle-map" class="rounded border shadow-sm" style="height: 450px; width: 100%;"></div>
                     </div>
+
+                    {% if user.is_authenticated %}
+                    <div class="tab-pane fade" id="dtree-pane" role="tabpanel" aria-labelledby="dtree-tab">
+                            <h5 class="mb-3">Interaktiver Familienstammbaum</h5>
+                            <div id="graph" class="rounded border shadow-sm bg-white" style="height: 550px; width: 100%; overflow: hidden;"></div>
+                    </div>
+                    {% endif %}
                 </div>
                 
             </div>
@@ -922,61 +936,78 @@
     </div>
 </div>
 
-<!-- row for interactive tree view -->
- {% if user.is_authenticated %}
-<div class="row">
-    <div class="col">
-        <h3>Interactive Family Tree</h3>
-        <div id="graph"></div>
-    </div>
-</div>
 
 <!-- js for interactive tree  -->
 <script>
-    const treeData = {{ tree_json|safe }};
+    document.addEventListener("DOMContentLoaded", function() {
+        let dTreeRendered = false;
+        const treeData = {{ tree_json|safe }};
+        const dtreeTabButton = document.getElementById('dtree-tab');
 
-    dTree.init(treeData, {
-        target: "#graph",
-        debug: false,
-        height: 500,
-        width: 800,
-        // We can adjust the node size here to give the text more room to breathe
-        nodeWidth: 150, 
-        nodeHeight: 75,
-        callbacks: {
-            // This tells dTree to draw our custom HTML instead of basic text
-            nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
-                
-                // Check if we have dates to display
-                let datesHtml = '';
-                if (extra && extra.dates) {
-                    datesHtml = `<div style="font-size: 11px; color: #666; margin-top: 4px;">${extra.dates}</div>`;
-                }
+        if (dtreeTabButton) {
+            dtreeTabButton.addEventListener('shown.bs.tab', function () {
+                // Nur einmal rendern, um doppelte Bäume zu vermeiden!
+                if (!dTreeRendered) {
+                    dTree.init(treeData, {
+                        target: "#graph",
+                        debug: false,
+                        height: 550,
+                        width: document.getElementById('graph').clientWidth,
+                        
+                        // 🔥 DIE NEUEN MAßE: Viel kleiner und kompakter!
+                        nodeWidth: 150, 
+                        nodeHeight: 60,
+                        
+                        callbacks: {
+                            nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
+                                
+                                // Platzhalter oder echtes Bild?
+                                let avatarHtml = extra && extra.avatar 
+                                    ? `<img src="${extra.avatar}" style="width: 100%; height: 100%; object-fit: cover;">`
+                                    : `<span style="color: #6c757d; font-size: 18px;">👤</span>`;
+                                
+                                // Hochzeitsdatum (falls vorhanden)
+                                let marriageHtml = extra && extra.marriage_info
+                                    ? `<div style="font-size: 9px; color: #d97706; font-style: italic; line-height: 1;">${extra.marriage_info}</div>`
+                                    : '';
 
-                // NEW: Check for marriage info
-                let marriageHtml = '';
-                if (extra && extra.marriage_info) {
-                    // Added an italic style and distinct color to separate it from birth/death dates
-                    marriageHtml = `<div style="font-size: 11px; color: #d97706; margin-top: 2px; font-style: italic;">
-                                        ${extra.marriage_info}
-                                    </div>`;
-                }
+                                // Das neue, smarte Visitenkarten-Design per Flexbox
+                                return `
+                                <div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 6px; padding: 4px; box-sizing: border-box; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                    
+                                    <div style="flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; margin-right: 8px; border: 1px solid #dee2e6;">
+                                        ${avatarHtml}
+                                    </div>
 
-                // Return standard HTML. dTree automatically converts this into an SVG foreignObject!
-                return `<div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 5px; box-sizing: border-box; cursor: pointer;">
-                            <div style="font-weight: bold; font-size: 14px; text-align: center; line-height: 1.2;">${name}</div>
-                            ${datesHtml}
-                            ${marriageHtml}
-                        </div>`;
-            },
-            nodeClick: function(name, extra) {
-                if (extra && extra.id) {
-                    window.location.href = extra.url;
+                                    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; text-align: left;">
+                                        <div style="font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">
+                                            ${name}
+                                        </div>
+                                        <div style="font-size: 9px; color: #6c757d; line-height: 1.2; margin-top: 2px;">
+                                            * ${extra?.b_year || '?'} &nbsp;† ${extra?.d_year || '?'}
+                                        </div>
+                                        ${marriageHtml}
+                                    </div>
+
+                                </div>`;
+                            },
+                            nodeClick: function(name, extra) {
+                                if (extra && extra.id) {
+                                    // 🔥 DER FIX: Wir hängen den Tab-Namen als URL-Parameter an!
+                                    // Aus "/de/genview/tree/3/individual/14/" 
+                                    // wird "/de/genview/tree/3/individual/14/?tab=dtree-pane"
+                                    window.location.href = extra.url + "?tab=dtree";
+                                }
+                            }
+                        }
+                    });
+                    dTreeRendered = true;
                 }
-            }
+            });
         }
     });
 </script>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         
@@ -1013,6 +1044,7 @@
         
     });
 </script>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         var map = null;
@@ -1108,5 +1140,5 @@
     });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-{% endif %}
+
 {% endblock %}

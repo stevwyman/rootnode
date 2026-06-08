@@ -38,7 +38,7 @@
 <div class="card shadow-sm mb-4 border-0 bg-light">
     <div class="card-body py-5 overflow-auto">
         
-        <div class="d-flex justify-content-center align-items-end gap-2 gap-md-4" style="min-width: 600px;">
+        <div class="d-flex justify-content-center align-items-end gap-2 gap-md-4" style="min-width: 650px;">
             
             <div class="d-flex flex-column align-items-center">
                 
@@ -52,14 +52,13 @@
                                     {% if husband_father.profile_image and husband_father.profile_image.file %}
                                         <img src="{{ husband_father.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
-                                            {{ husband_father.given_name|first|default:"?" }}
-                                        </div>
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ husband_father.given_name|first|default:"?" }}</div>
                                     {% endif %}
-                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_father.given_name }}</div>
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_father.short_given_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.6rem;">
+                                        * {{ husband_father.birth_year|default:"?" }} &nbsp;† {{ husband_father.death_year|default:"?" }}
+                                    </div>
                                 </a>
-                            {% else %}
-                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
                             {% endif %}
                         </div>
 
@@ -69,25 +68,21 @@
                                     {% if husband_mother.profile_image and husband_mother.profile_image.file %}
                                         <img src="{{ husband_mother.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
-                                            {{ husband_mother.given_name|first|default:"?" }}
-                                        </div>
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ husband_mother.given_name|first|default:"?" }}</div>
                                     {% endif %}
-                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_mother.given_name }}</div>
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ husband_mother.short_given_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.6rem;">
+                                        * {{ husband_mother.birth_year|default:"?" }} &nbsp;† {{ husband_mother.death_year|default:"?" }}
+                                    </div>
                                 </a>
-                            {% else %}
-                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
                             {% endif %}
                         </div>
                     {% else %}
-                        <div style="height: 70px;"></div> {% endif %}
+                        <div style="height: 80px;"></div>
+                    {% endif %}
                 </div>
 
-                {% if husband_father or husband_mother %}
-                    <div class="vertical-connector mb-2" style="height: 20px;"></div>
-                {% else %}
-                    <div style="height: 20px;" class="mb-2"></div>
-                {% endif %}
+                {% if husband_father or husband_mother %}<div class="vertical-connector mb-2" style="height: 20px;"></div>{% else %}<div style="height: 20px;" class="mb-2"></div>{% endif %}
 
                 <div class="tree-node">
                     {% if family.husband %}
@@ -95,12 +90,13 @@
                             {% if family.husband.profile_image and family.husband.profile_image.file %}
                                 <img src="{{ family.husband.profile_image.file.url }}" class="rounded-circle avatar-lg shadow-sm border border-2 border-white">
                             {% else %}
-                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">
-                                    {{ family.husband.given_name|first|default:"?" }}
-                                </div>
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">{{ family.husband.given_name|first|default:"?" }}</div>
                             {% endif %}
                             <div class="mt-2 fw-bold text-truncate">{{ family.husband.given_name }}</div>
                             <div class="small">{{ family.husband.surname }}</div>
+                            <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                                * {{ family.husband.birth_year|default:"?" }} &nbsp;&nbsp;† {{ family.husband.death_year|default:"?" }}
+                            </div>
                         </a>
                     {% else %}
                         <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2">?</div>
@@ -112,11 +108,20 @@
             <div class="d-flex flex-column align-items-center" style="margin-bottom: 40px;">
                 <div class="d-flex align-items-center">
                     <div class="family-connector d-none d-sm-block"></div>
-                    <div class="mx-2 mt-4 text-danger fs-5" title="Partnerschaft / Ehe">💍</div>
+                    <div class="d-flex flex-column align-items-center mx-2 mt-4">
+                        <div class="text-danger fs-5" title="Partnerschaft / Ehe">💍</div>
+                        
+                        {% if family.marriage_date_parsed or family.marriage_date_raw %}
+                            <div class="badge bg-white text-secondary border mt-1" style="font-size: 0.65rem;" title="Heiratsdatum">
+                                ⚭ {% if family.marriage_date_parsed %}{{ family.marriage_date_parsed|date:"Y" }}{% else %}{{ family.marriage_date_raw|truncatechars:10 }}{% endif %}
+                            </div>
+                        {% endif %}
+                        
+                    </div>
                     <div class="family-connector d-none d-sm-block"></div>
                 </div>
                 {% if family.children.all %}
-                    <div class="vertical-connector mt-3" style="height: 35px; transform: translateY(15px);"></div>
+                    <div class="vertical-connector mt-2" style="height: 35px; transform: translateY(5px);"></div>
                 {% endif %}
             </div>
 
@@ -132,14 +137,13 @@
                                     {% if wife_father.profile_image and wife_father.profile_image.file %}
                                         <img src="{{ wife_father.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
-                                            {{ wife_father.given_name|first|default:"?" }}
-                                        </div>
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ wife_father.given_name|first|default:"?" }}</div>
                                     {% endif %}
-                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_father.given_name }}</div>
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_father.short_given_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.6rem;">
+                                        * {{ wife_father.birth_year|default:"?" }} &nbsp;† {{ wife_father.death_year|default:"?" }}
+                                    </div>
                                 </a>
-                            {% else %}
-                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
                             {% endif %}
                         </div>
 
@@ -149,26 +153,21 @@
                                     {% if wife_mother.profile_image and wife_mother.profile_image.file %}
                                         <img src="{{ wife_mother.profile_image.file.url }}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
-                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">
-                                            {{ wife_mother.given_name|first|default:"?" }}
-                                        </div>
+                                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ wife_mother.given_name|first|default:"?" }}</div>
                                     {% endif %}
-                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_mother.given_name }}</div>
+                                    <div class="mt-1 fw-bold text-truncate" style="font-size: 0.75rem;">{{ wife_mother.short_given_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.6rem;">
+                                        * {{ wife_mother.birth_year|default:"?" }} &nbsp;† {{ wife_mother.death_year|default:"?" }}
+                                    </div>
                                 </a>
-                            {% else %}
-                                <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm">?</div>
                             {% endif %}
                         </div>
                     {% else %}
-                        <div style="height: 70px;"></div>
+                        <div style="height: 80px;"></div>
                     {% endif %}
                 </div>
 
-                {% if wife_father or wife_mother %}
-                    <div class="vertical-connector mb-2" style="height: 20px;"></div>
-                {% else %}
-                    <div style="height: 20px;" class="mb-2"></div>
-                {% endif %}
+                {% if wife_father or wife_mother %}<div class="vertical-connector mb-2" style="height: 20px;"></div>{% else %}<div style="height: 20px;" class="mb-2"></div>{% endif %}
 
                 <div class="tree-node">
                     {% if family.wife %}
@@ -176,12 +175,13 @@
                             {% if family.wife.profile_image and family.wife.profile_image.file %}
                                 <img src="{{ family.wife.profile_image.file.url }}" class="rounded-circle avatar-lg shadow-sm border border-2 border-white">
                             {% else %}
-                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">
-                                    {{ family.wife.given_name|first|default:"?" }}
-                                </div>
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2 border border-2 border-white">{{ family.wife.given_name|first|default:"?" }}</div>
                             {% endif %}
                             <div class="mt-2 fw-bold text-truncate">{{ family.wife.given_name }}</div>
                             <div class="small">{{ family.wife.surname }}</div>
+                            <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                                * {{ family.wife.birth_year|default:"?" }} &nbsp;&nbsp;† {{ family.wife.death_year|default:"?" }}
+                            </div>
                         </a>
                     {% else %}
                         <div class="rounded-circle bg-light border border-secondary text-secondary d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-lg fs-2">?</div>
@@ -204,13 +204,14 @@
                             {% if link.child.profile_image and link.child.profile_image.file %}
                                 <img src="{{ link.child.profile_image.file.url }}" class="rounded-circle avatar-md shadow-sm border border-2 border-white">
                             {% else %}
-                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-md fs-3 border border-2 border-white">
-                                    {{ link.child.given_name|first|default:"?" }}
-                                </div>
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-md fs-3 border border-2 border-white">{{ link.child.given_name|first|default:"?" }}</div>
                             {% endif %}
                             
                             <div class="mt-2 fw-bold text-truncate">{{ link.child.given_name }}</div>
                             <div class="small">{{ link.child.surname }}</div>
+                            <div class="text-muted mt-1" style="font-size: 0.65rem;">
+                                * {{ link.child.birth_year|default:"?" }} &nbsp;† {{ link.child.death_year|default:"?" }}
+                            </div>
                             
                             {% if link.relationship_type != 'BIOLOGICAL' %}
                                 <span class="badge bg-info mt-1" style="font-size: 0.6rem;">{{ link.get_relationship_type_display }}</span>

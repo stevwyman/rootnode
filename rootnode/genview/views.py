@@ -421,40 +421,43 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         # 7️⃣ Stammbaum JSON für dTree
         # -------------------------------------------------------------
+        # -------------------------------------------------------------
+        # 7️⃣ Stammbaum JSON für dTree (Kompakte Foto-Version)
+        # -------------------------------------------------------------
         def format_person(p):
             if not p: return None
-            birth_date = ""
-            death_date = ""
 
-            for event in p.events.all():
-                if event.event_type and event.event_type.tag == 'BIRT' and not birth_date:
-                    birth_date = event.raw_date
-                elif event.event_type and event.event_type.tag == 'DEAT' and not death_date:
-                    death_date = event.raw_date
+            # Avatar-URL holen (falls vorhanden)
+            avatar_url = ""
+            if p.profile_image and p.profile_image.file:
+                avatar_url = p.profile_image.file.url
 
-            date_str = ""
-            if birth_date or death_date:
-                b_str = birth_date if birth_date else "?"
-                d_str = death_date if death_date else "Present"
-                date_str = f"b. {b_str}" if not death_date else f"{b_str} - {d_str}"
-
+            # Wir übergeben den Namen und das JSON für die kleinen Knoten
             return {
                 "name": f"{p.given_name} {p.surname}",
                 "class": "node",
                 "extra": {
                     "id": p.pk,
-                    "gedcom_id": p.gedcom_id,
-                    "dates": date_str,
                     "url": p.get_absolute_url(),
+                    "avatar": avatar_url,
+                    "b_year": p.birth_year, # Nutzt unsere neuen Properties!
+                    "d_year": p.death_year,
                 },
             }
 
         def get_marriage_str(fam):
             if not fam: return ""
-            m_date = getattr(fam, 'marriage_date_raw', None) # Sicherheitshalber getattr nutzen
-            m_place = getattr(fam, 'marriage_place', None)
-            parts = [p for p in (m_date, m_place) if p]
-            return "⚭ " + ", ".join(parts) if parts else ""
+            
+            m_year = ""
+            if getattr(fam, 'marriage_date_parsed', None):
+                m_year = fam.marriage_date_parsed.year
+            elif getattr(fam, 'marriage_date_raw', None):
+                import re
+                match = re.search(r'\d{4}', fam.marriage_date_raw)
+                m_year = match.group() if match else ""
+                
+            return f"⚭ {m_year}" if m_year else ""
+        
 
         tree_data = []
         parent_link = person.parental_families.first()
