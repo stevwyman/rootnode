@@ -4,6 +4,7 @@ from . import views
 app_name = "genview"
 
 urlpatterns = [
+    #path("media", views.customhandler404, name="tree-list"),
     # 1. The Dashboard: Lists all trees the user has access to
     path("", views.TreeListView.as_view(), name="tree-list"),
     # 2. Tree-Specific Views:

@@ -3,7 +3,7 @@
 
 <div class="col-2">
     {% if individual.profile_image and individual.profile_image.file %}
-        <img src="{{ individual.profile_image.file.url }}" 
+        <img src="{% url 'genview:media-file' tree_id=tree_id pk=individual.profile_image.pk %}" 
             alt="{{ individual.given_name }}" 
             class="rounded-circle shadow-sm" 
             style="width: 45px; height: 45px; object-fit: cover;">

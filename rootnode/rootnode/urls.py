@@ -58,5 +58,5 @@ urlpatterns += i18n_patterns(
 ) + debug_toolbar_urls()
 
 # This line is CRITICAL for viewing uploaded images in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+#if settings.DEBUG:
+#   urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -60,6 +60,10 @@ def home(request):
     return render(request, "genview/home.html")
 
 
+def customhandler404(request):
+    from django.http import HttpResponseNotFound
+    return HttpResponseNotFound("404")    
+
 # ----------------------------------------------------------------------
 # 1️⃣ Trees
 # ----------------------------------------------------------------------
