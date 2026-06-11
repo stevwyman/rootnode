@@ -85,7 +85,7 @@
                     {% with portrait=object.media_objects.first %}
                         {% if portrait.file and portrait.file.name %}
                             {% if portrait and portrait.is_image %}
-                                <img src="{% url 'genview:media-file' tree_id=tree_id pk=object.pk %}" 
+                                <img src="{% url 'genview:media-file' tree_id=tree_id pk=portrait.pk %}" 
                                     alt="Portrait von {{ object.full_name }}" 
                                     class="img-fluid rounded-circle shadow-sm object-fit-cover" 
                                     style="width: 160px; height: 160px; border: 4px solid white;">

@@ -382,19 +382,28 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         ctx["timeline_events"] = combined_events
 
         # -------------------------------------------------------------
-        # 6️⃣ MEDIEN & GALERIE (Zusammengeführt & optimiert)
+        # 6️⃣ MEDIEN, GALERIE & ALBUM
         # -------------------------------------------------------------
         
-        # 🔥 Unser neues Property nutzen (keine extra Abfrage nötig!)
         portrait = person.profile_image
         ctx["portrait"] = portrait
 
-        # Wenn die Person datengeschützt ist, zeigen wir keine Galerie
+        # Wenn die Person datengeschützt ist, zeigen wir gar keine Medien
         if apply_privacy and person.is_confidential:
+            ctx['photos'] = []
+            ctx['documents'] = []
             ctx['gallery_photos'] = []
             ctx['gallery_documents'] = []
         else:
-            # Die intelligente Galerie-Abfrage
+            # --- TEIL A: Direkt verknüpfte Medien (Für den Tab "Galerie") ---
+            # Das sind nur die Bilder, die hart mit dieser Person verknüpft sind.
+            direct_media = person.media_objects.all()
+            ctx['photos'] = direct_media.filter(category=MediaObject.Category.PHOTO)
+            ctx['documents'] = direct_media.filter(category=MediaObject.Category.DOCUMENT)
+
+
+            # --- TEIL B: Die intelligente Album-Abfrage (Für den Tab "Album") ---
+            # Zieht auch Bilder aus Events, Hochzeiten und Kinder-Familien an.
             tree_id = person.gedcom_tree_id
             birth_family_ids = ChildFamilyLink.objects.filter(
                 child=person
@@ -413,18 +422,14 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 Q(sources__events__individual=person)
             ).distinct().prefetch_related('individuals', 'families', 'events')
 
-            # Portrait-Bild aus den Fotos ausschließen, falls vorhanden
-            photos = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
+            # Portrait-Bild aus dem erweiterten Album ausschließen (optional)
+            g_photos = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
             if portrait:
-                photos = photos.exclude(pk=portrait.pk)
+                g_photos = g_photos.exclude(pk=portrait.pk)
                 
-            ctx['gallery_photos'] = photos
+            ctx['gallery_photos'] = g_photos
             ctx['gallery_documents'] = all_gallery_media.filter(category=MediaObject.Category.DOCUMENT)
 
-
-        # -------------------------------------------------------------
-        # 7️⃣ Stammbaum JSON für dTree
-        # -------------------------------------------------------------
         # -------------------------------------------------------------
         # 7️⃣ Stammbaum JSON für dTree (Kompakte Foto-Version)
         # -------------------------------------------------------------
