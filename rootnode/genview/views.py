@@ -786,6 +786,39 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return JsonResponse({"table": table_html, "pager": pager_html})
 
 
+class IndividualAddExistingMediaView(TreeAccessMixin, FormView):
+    template_name = "genview/add_existing_media.html"
+    form_class = AddExistingMediaForm
+
+    def dispatch(self, request, *args, **kwargs):
+        # Wir laden die Familie direkt am Anfang, damit wir sie in allen Methoden griffbereit haben
+        self.tree_id = self.kwargs.get("tree_id")
+        self.individual = get_object_or_404(Individual, pk=self.kwargs.get("person_pk"), gedcom_tree_id=self.tree_id)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        tree_id = self.kwargs.get("tree_id")
+        kwargs['tree'] = get_object_or_404(Tree, pk=tree_id)
+        kwargs['target_obj'] = self.individual  # Übergibt die Person
+        return kwargs
+
+    def form_valid(self, form):
+        # Die ausgewählten Medien holen
+        selected_media = form.cleaned_data['media_objects']
+        
+        # Die Medien mit der Person verknüpfen
+        self.individual.media_objects.add(*selected_media)
+        
+        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Person verknüpft.")
+        
+        # 🔥 WICHTIG: Die FormView erwartet als Return das super(), 
+        # welches dann automatisch zu get_success_url() weiterleitet.
+        return super().form_valid(form)
+    def get_success_url(self) -> str:
+        # Zurück zur Personen-Detailseite
+        return reverse('genview:individual-detail', kwargs={'tree_id': self.kwargs['tree_id'], 'pk': self.individual.pk})
+
 # ----------------------------------------------------------------------
 # 3️⃣ Families
 # ----------------------------------------------------------------------
@@ -1005,6 +1038,41 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:family-list", kwargs={"tree_id": tree_id})
 
 
+class FamilyAddExistingMediaView(TreeAccessMixin, FormView):
+    template_name = "genview/add_existing_media.html"
+    form_class = AddExistingMediaForm
+
+    def dispatch(self, request, *args, **kwargs):
+        # Wir laden die Familie direkt am Anfang, damit wir sie in allen Methoden griffbereit haben
+        self.tree_id = self.kwargs.get("tree_id")
+        self.family = get_object_or_404(Family, pk=self.kwargs.get("family_pk"), gedcom_tree_id=self.tree_id)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['tree'] = get_object_or_404(Tree, pk=self.tree_id)
+        
+        # 🔥 HIER WICHTIG: Wir übergeben die Familie an das Formular, 
+        # damit bereits verknüpfte Bilder im Dropdown ausgeblendet werden!
+        kwargs['target_obj'] = self.family 
+        return kwargs
+
+    def form_valid(self, form):
+        # Die ausgewählten Medien holen
+        selected_media = form.cleaned_data['media_objects']
+        
+        # Die Medien mit der Familie verknüpfen
+        self.family.media_objects.add(*selected_media)
+        
+        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Familie verknüpft.")
+        
+        # 🔥 WICHTIG: Die FormView erwartet als Return das super(), 
+        # welches dann automatisch zu get_success_url() weiterleitet.
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        # Der saubere Redirect zurück zur Familien-Detailseite
+        return reverse('genview:family-detail', kwargs={'tree_id': self.tree_id, 'pk': self.family.pk})
 # ----------------------------------------------------------------------
 #  4️⃣ Kind-zu-Familie-Link – hinzufügen / bearbeiten
 # ----------------------------------------------------------------------
@@ -1131,18 +1199,44 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         return media
 
     
-class MediaObjectListView(TreeAccessMixin, ListView):
+class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):
     model = MediaObject
     template_name = "genview/mediaobject_list.html"
     context_object_name = "media"
-    paginate_by = 20
+    paginate_by = 24
+
+    # --- Konfiguration für SortableListViewMixin ---
+    sortable_fields = ['title', 'category', 'is_portrait', 'id']
+    default_sort_field = 'title'
+    default_sort_dir = 'asc'
+
+    # --- Konfiguration für FilterableListViewMixin ---
+    search_fields = ['title', 'description', 'individuals__given_name', 'individuals__surname']
+    exact_filter_fields = ['category']
 
     def get_queryset(self):
-        # 1. Grab the tree ID from the URL
-        tree_id = self.kwargs.get("tree_id")
+        # 1. Nur Medien des aktuellen Baums holen
+        qs = super().get_queryset().filter(gedcom_tree_id=self.kwargs['tree_id'])
+        
+        # 2. Die Filter (Suche & Kategorie) aus dem Mixin anwenden
+        qs = qs.filter(self.get_queryset_filters())
 
-        # 2. SECURITY FIX: Return ONLY media belonging to this specific tree
-        return MediaObject.objects.filter(gedcom_tree_id=tree_id).order_by("title")
+        qs = qs.distinct()
+        
+        # 3. Die Sortierung aus dem Mixin anwenden
+        qs = qs.order_by(self.get_ordering())
+        
+        # 4. Performance-Boost: Falls du in der Liste anzeigst, mit wem das Bild verknüpft ist
+        return qs.prefetch_related('individuals', 'families', 'events')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['tree_id'] = self.kwargs['tree_id']
+        
+        # Damit das Dropdown im Template die echten Kategorien kennt (Foto, Dokument)
+        context['category_choices'] = MediaObject.Category.choices
+        
+        return context
 
 
 class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):

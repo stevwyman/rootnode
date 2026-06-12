@@ -11,6 +11,11 @@ def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
     Wenn `instance.is_portrait` True ist, entfernen wir das Portrait-Flag
     von allen anderen MediaObjects dieser Personen.
     """
+    # 🔥 NEU: Wenn das Signal von der Person aus getriggert wird (reverse=True), 
+    # brechen wir ab. 'instance' ist hier nämlich die Person, nicht das Bild!
+    if kwargs.get('reverse', False):
+        return
+    
     if action == "post_add" and instance.is_portrait:
         # Für jede neu verknüpfte Person das Flag bei anderen MediaObjects zurücksetzen
         for person_id in pk_set:

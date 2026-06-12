@@ -474,12 +474,21 @@ class AddExistingMediaForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.tree = kwargs.pop('tree', None)
+        self.target_obj = kwargs.pop('target_obj', None) # 🔥 NEU: Nimmt Person oder Familie entgegen
         super().__init__(*args, **kwargs)
         
         if self.tree:
-            self.fields['media_objects'].queryset = MediaObject.objects.filter(
-                gedcom_tree=self.tree
-            )
+            qs = MediaObject.objects.filter(gedcom_tree=self.tree)
+            
+            # 🔥 Dynamischer Ausschluss: Wir filtern bereits verknüpfte Medien heraus!
+            if self.target_obj:
+                if isinstance(self.target_obj, Individual):
+                    qs = qs.exclude(individuals=self.target_obj)
+                elif isinstance(self.target_obj, Family):
+                    qs = qs.exclude(families=self.target_obj)
+
+            self.fields['media_objects'].queryset = qs
+            
             # 🔥 Der Performance-Hack: Wir leeren die HTML-Auswahlliste!
             self.fields['media_objects'].widget.choices = []
             

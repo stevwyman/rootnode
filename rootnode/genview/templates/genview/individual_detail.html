@@ -412,6 +412,9 @@
                         <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-outline-success shadow-sm">
                             📎 Datei hochladen
                         </a>
+                        <a href="{% url 'genview:add-existing-media-to-person' tree_id=tree_id person_pk=person.pk %}" class="btn btn-outline-primary btn-sm shadow-sm">
+                            🔗 Bestehendes verknüpfen
+                        </a>
                         {% endif %}
                         </div>
                         

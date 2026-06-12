@@ -66,7 +66,7 @@
                             {% if husband_mother %}
                                 <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=husband_mother.pk %}" class="text-decoration-none text-dark">
                                     {% if husband_mother.profile_image and husband_mother.profile_image.file %}
-                                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=husband_mother.profile_image.file.pk %}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=husband_mother.profile_image.pk %}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
                                         <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ husband_mother.given_name|first|default:"?" }}</div>
                                     {% endif %}
@@ -323,9 +323,14 @@
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <span class="fw-bold">🖼️ Medien & Dokumente</span>
         {% if can_edit %}
-            <a href="{% url 'genview:media-create-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-primary btn-sm">
-                + Hinzufügen
-            </a>
+            <div class="btn-group">
+                <a href="{% url 'genview:media-create-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-primary btn-sm">
+                    + Neu hochladen
+                </a>
+                <a href="{% url 'genview:add-existing-media-to-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-outline-primary btn-sm border-start-0">
+                    🔗 Bestehendes verknüpfen
+                </a>
+            </div>
         {% endif %}
     </div>
     <div class="card-body">

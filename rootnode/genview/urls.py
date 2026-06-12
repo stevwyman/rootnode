@@ -58,6 +58,11 @@ urlpatterns = [
         views.EventCreateView.as_view(),
         name="event-add-for-person",
     ),
+    path(
+        'tree/<int:tree_id>/people/<int:person_pk>/add-existing-media/', 
+        views.IndividualAddExistingMediaView.as_view(), 
+        name='add-existing-media-to-person'
+    ),
     # ----------------------------------------------
     # --- families
     # ----------------------------------------------
@@ -95,6 +100,11 @@ urlpatterns = [
         'tree/<int:tree_id>/family/<int:family_pk>/event/add/', 
         views.EventCreateView.as_view(), 
         name='event-create-family'
+    ),
+    path(
+        'tree/<int:tree_id>/family/<int:family_pk>/add-existing-media/', 
+        views.FamilyAddExistingMediaView.as_view(), 
+        name='add-existing-media-to-family'
     ),
     # ----------------------------------------------
     # ---- Child-Family-Link 

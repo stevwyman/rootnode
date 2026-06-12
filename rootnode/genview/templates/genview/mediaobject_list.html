@@ -13,6 +13,54 @@
         {% endif %}
     </div>
 
+    <div class="card mb-4 shadow-sm border-0 bg-light">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-center">
+                
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="dir" value="{{ current_dir }}">
+
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text">🔍</span>
+                        <input type="text" name="q" class="form-control" placeholder="Titel, Beschriebung ..." value="{{ current_search }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <select name="event_type" class="form-select">
+                        <option value="">Alle Kategorien</option>
+                        {% for cat_value, cat_label in category_choices %}
+                            <option value="{{ cat_value }}" {% if current_filter_category == cat_value %}selected{% endif %}>
+                                {{ cat_label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+
+                </div>
+
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
+                    <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
+                </div>
+                
+            </form>
+        </div>
+    </div>
+
+
+    <div class="d-flex gap-3 mb-3 small text-muted">
+        <strong>Sortieren nach:</strong>
+        
+        <a href="?q={{ current_search }}&category={{ current_filter_category }}&sort=title&dir={% if current_sort == 'title' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'title' %}fw-bold text-primary{% else %}text-muted{% endif %}">
+            Titel {% if current_sort == 'title' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+        </a>
+
+        <a href="?q={{ current_search }}&category={{ current_filter_category }}&sort=category&dir={% if current_sort == 'category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'category' %}fw-bold text-primary{% else %}text-muted{% endif %}">
+            Kategorie {% if current_sort == 'category' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+        </a>
+    </div>
+
     <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
         {% for item in media %}
             {% if apply_privacy and item.is_confidential or apply_privacy and item.is_private %}
