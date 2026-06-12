@@ -1131,15 +1131,35 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         return media
 
     
-class MediaObjectListView(TreeAccessMixin, ListView):
+class MediaObjectListView(TreeAccessMixin, FilterableListViewMixin, ListView):
     model = MediaObject
     template_name = "genview/mediaobject_list.html"
     context_object_name = "media"
     paginate_by = 20
 
+    # --- Filter ---
+    search_fields = [
+        'individuals__given_name', 'individuals__surname',
+        #'families__husband__given_name', 'family__husband__surname',
+        #'family__wife__given_name', 'family__wife__surname',
+        'title', 'description'
+    ]
+    # Filtert jetzt automatisch auf die ID des EventTypes im ForeignKey
+    exact_filter_fields = ['category'] 
+
     def get_queryset(self):
         # 1. Grab the tree ID from the URL
         tree_id = self.kwargs.get("tree_id")
+
+        qs = MediaObject.objects.filter(gedcom_tree_id=tree_id)
+
+        filters = self.get_queryset_filters()
+        if filters:
+            qs = qs.filter(filters)
+
+        return qs
+
+
 
         # 2. SECURITY FIX: Return ONLY media belonging to this specific tree
         return MediaObject.objects.filter(gedcom_tree_id=tree_id).order_by("title")
