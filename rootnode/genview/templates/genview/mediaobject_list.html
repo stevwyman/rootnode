@@ -11,6 +11,41 @@
             + Neues Medium hochladen
         </a>
         {% endif %}
+
+    </div>
+
+    <!-- filter and search -->
+    <div class="card mb-4 shadow-sm border-0 bg-light">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-center">
+                
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="dir" value="{{ current_dir }}">
+
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text">🔍</span>
+                        <input type="text" name="q" class="form-control" placeholder="Vor- oder Nachname..." value="{{ current_search }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <select name="category" class="form-select">
+                        <option value="">Kategorie</option>
+                        {% for type in category %}
+                            <option value="{{ type.id }}">{{ type.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                </div>
+
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
+                    <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
+                </div>
+                
+            </form>
+        </div>
     </div>
 
     <div class="card mb-4 shadow-sm border-0 bg-light">
