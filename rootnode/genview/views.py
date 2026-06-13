@@ -18,8 +18,6 @@ from django.views.generic.edit import UpdateView, FormView
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
-from django.utils.safestring import mark_safe
-from typing import Set, List, Tuple
 
 from logging import getLogger
 
@@ -60,9 +58,20 @@ def home(request):
     return render(request, "genview/home.html")
 
 
-def customhandler404(request):
+def handle_404(request, exception):
     from django.http import HttpResponseNotFound
-    return HttpResponseNotFound("404")    
+    logger.error(request, "404 thrown, potential exception %s", exception)
+    return HttpResponseNotFound("/")    
+
+def handle_403(request, exception):
+    from django.http import HttpResponsePermanentRedirect
+    logger.info("403‑Handler aufgerufen")
+    # .error nimmt die format‑String‑Syntax
+    logger.error("403 thrown, potential exception %s", exception)
+
+    # optional – falls du den kompletten Trace sehen willst:
+    logger.exception("403‑Exception aufgetreten", exc_info=exception)
+    return HttpResponsePermanentRedirect("/")
 
 # ----------------------------------------------------------------------
 # 1️⃣ Trees
@@ -439,7 +448,8 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             # Avatar-URL holen (falls vorhanden)
             avatar_url = ""
             if p.profile_image and p.profile_image.file:
-                avatar_url = p.profile_image.file.url
+                avatar_url = reverse("genview:media-file", kwargs={"tree_id": tree_id, "pk": p.id})
+                #avatar_url = p.profile_image.file.url
 
             # Wir übergeben den Namen und das JSON für die kleinen Knoten
             return {
@@ -523,6 +533,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
 
         return ctx
 
+    
 
 class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Individual
@@ -2125,7 +2136,6 @@ class UserSearchAPIView(View):
 # --- ADMIN
 #
 
-import os
 from io import StringIO
 import tempfile
 from django.core.management import call_command
@@ -2134,8 +2144,8 @@ from .mixins import SuperuserRequiredMixin
 
 class RegisterView(CreateView):
     form_class = UserRegisterForm
-    template_name = 'registration/register.html'
-    success_url = reverse_lazy('login') # Nach Erfolg zurück zum Login
+    template_name = 'genview/register.html'
+    success_url = reverse_lazy('two_factor:login') # Nach Erfolg zurück zum Login
 
     def dispatch(self, request, *args, **kwargs):
         # Wenn ein bereits eingeloggter User versucht sich zu registrieren,

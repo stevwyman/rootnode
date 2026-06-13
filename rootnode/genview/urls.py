@@ -1,15 +1,24 @@
+from django.contrib.auth import views as auth_views
 from django.urls import path
 from . import views
 
 app_name = "genview"
 
 urlpatterns = [
-    #path("media", views.customhandler404, name="tree-list"),
+    # ----------------------------------------------
+    # --- Trees 
+    # ----------------------------------------------
+    
     # 1. The Dashboard: Lists all trees the user has access to
     path("", views.TreeListView.as_view(), name="tree-list"),
-    # 2. Tree-Specific Views:
+    # 2. import trees
+    path('gedcom/import/', views.GedcomImportView.as_view(), name='gedcom-import'),
+    # 3. Tree-Specific Views:
     path('tree/<int:tree_id>/search/', views.GlobalSearchView.as_view(), name='global-search'),
     path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
+    # 4. match users to trees and enable/disable public flag 
+    path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),
+
     # ----------------------------------------------
     # --- persons / individuals
     # ----------------------------------------------
@@ -222,14 +231,23 @@ urlpatterns = [
     path('tree/<int:tree_id>/api/search/families/', views.FamilySearchAPIView.as_view(), name='api-search-families'),
     path('tree/<int:tree_id>/api/search/events/', views.EventSearchAPIView.as_view(), name='api-search-events'),
     path('tree/<int:tree_id>/api/search/media/', views.MediaSearchAPIView.as_view(), name='api-search-media'),
+    path('api/search/users/', views.UserSearchAPIView.as_view(), name='api-search-users'),
 
-    # ADMIN
+    # ----------------------------------------------
+    # --- User Management
+    # ----------------------------------------------
+
     path('accounts/register/', views.RegisterView.as_view(), name='register'),
     path('admin/users/', views.UserManagementListView.as_view(), name='user-management-list'),
     path('admin/users/<int:user_id>/<str:action>/', views.UserManagementActionView.as_view(), name='user-management-action'),
-    path('gedcom/import/', views.GedcomImportView.as_view(), name='gedcom-import'),
-    # Baum bearbeiten (Name + public-Flag)
-    path('api/search/users/', views.UserSearchAPIView.as_view(), name='api-search-users'),
-    path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),
+    
+    # ----------------------------------------------
+    # --- ADMIN
+    # ----------------------------------------------
 
+    # Logout
+    path('logout/', auth_views.LogoutView.as_view(),name='logout'),
+
+    # Registrierung
+    path('register/', views.RegisterView.as_view(), name='register'),
 ]

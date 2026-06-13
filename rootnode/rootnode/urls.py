@@ -14,49 +14,36 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.i18n import i18n_patterns
-from django.conf.urls.static import static
-from django.contrib.auth import views as auth_views
 from genview import views as genview_views
+from two_factor.urls import urlpatterns as tf_urls
 
 from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+
+    # 2FA‑Routen (vor allen anderen geschützten Routen)
+    path('', include(tf_urls)),
+
     path('i18n/', include('django.conf.urls.i18n')),
     # api also goes here
 ]
 
+handler404 = 'genview.views.handle_404'   # 404‑Handler
+handler403 = 'genview.views.handle_403'   # 403‑Handler
+
 urlpatterns += i18n_patterns(
-    path('login/', auth_views.LoginView.as_view(
-        template_name='registration/login.html',
-        next_page='genview:tree-list'
-        ), 
-        name='login'),
 
-    # Logout
-    path('logout/', auth_views.LogoutView.as_view(
-            template_name='registration/logout.html',
-            next_page='login'
-        ),
-        name='logout'),
-
-    # Registrierung
-    path('register/', genview_views.RegisterView.as_view(), name='register'),
-
-
-    
-    #path('accounts/', include('django.contrib.auth.urls')),
     # ------------------ Home / Startseite ------------------
-    #path('', genview_views.home, name='home'),   
     path('', genview_views.TreeListView.as_view(), name='tree-list'),
     # ------------------ App-bezogene URLs -----------------
     path('genview/', include('genview.urls'))
-) + debug_toolbar_urls()
+) 
 
-# This line is CRITICAL for viewing uploaded images in development
-#if settings.DEBUG:
-#   urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# -------------------------------------------------
+# DEBUG‑Toolbar nur aktivieren, wenn DEBUG=True
+if settings.DEBUG:
+    urlpatterns += debug_toolbar_urls()
+

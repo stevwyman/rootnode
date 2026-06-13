@@ -13,11 +13,14 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 
 from django.utils.translation import gettext_lazy as _
+from dotenv import load_dotenv
 from pathlib import Path
 
 from logging import getLogger
 
 logger = getLogger(__name__)
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,12 +30,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-u&zzp&ve$be0i^2ie*y!=3y_k3j_zd9q&yn!)b@g3j1rzy3pa('
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
 INTERNAL_IPS = [
     # ...
@@ -43,6 +46,7 @@ INTERNAL_IPS = [
 # Application definition
 
 INSTALLED_APPS = [
+    'core',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -52,6 +56,12 @@ INSTALLED_APPS = [
     'debug_toolbar',                    # TODO remove later
     'django_bootstrap5',
     'genview',
+    'django_otp',
+    'django_otp.plugins.otp_totp',          # TOTP (Google‑Authenticator)
+    'django_otp.plugins.otp_static',        # Backup‑Tokens
+    'django_otp.plugins.otp_email',
+    'two_factor',  
+    'two_factor.plugins.email',
 ]
 
 MIDDLEWARE = [
@@ -63,8 +73,12 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_otp.middleware.OTPMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware', # TODO remove later
 ]
+
+# Schalte die automatische Anlage nur in den gewünschten Umgebungen an:
+CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev‑settings.py
 
 ROOT_URLCONF = 'rootnode.urls'
 
@@ -151,7 +165,13 @@ STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs-Ordne
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_REDIRECT_URL = '/'
+LOGIN_URL = 'two_factor:login'              # Name der 2FA‑Login‑View
+LOGIN_REDIRECT_URL = 'genview:tree-list'   # Ziel nach erfolgreichem Login            
+LOGOUT_REDIRECT_URL = 'two_factor:login'
+
+# Sicherheitsempfehlung
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 Tage (oder nach Bedarf)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 # The URL path where files will be accessible in the browser
 MEDIA_URL = '/media/'
@@ -186,10 +206,4 @@ LOGGING = {
         "handlers": ["console"],
         "level": "DEBUG",
     },
-    "loggers": {
-        "pymongo": {
-            "handlers": ["console"],
-            "level": "ERROR",
-        }
-    } 
 }

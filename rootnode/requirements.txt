@@ -3,5 +3,8 @@ django-bootstrap5
 django-debug-toolbar
 python-dateutil
 django-mptt
+django-two-factor-auth
 pytest
+python-dotenv
 python-gedcom
+qrcode

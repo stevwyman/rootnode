@@ -63,7 +63,10 @@
                                         <li><hr class="dropdown-divider"></li>
                                     {% endif %}
                                     <li>
-                                        <form method="post" action="{% url 'logout' %}" class="m-0 p-0 d-inline">
+                                        <li><a class="dropdown-item" href="{% url 'two_factor:profile' %}">🪪 Account Sicherheit</a></li>
+                                    </li>
+                                    <li>
+                                        <form method="post" action="{% url 'genview:logout' %}" class="m-0 p-0 d-inline">
                                             {% csrf_token %}
                                             <button type="submit" class="dropdown-item text-danger">
                                                 🚪 Logout
@@ -74,10 +77,10 @@
                             </li>
                             {% else %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'login' %}">Log In</a>
+                                <a class="nav-link" href="{% url 'two_factor:login' %}">Log In</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'register' %}">Register</a>
+                                <a class="nav-link" href="{% url 'genview:register' %}">Register</a>
                             </li>
                             {% endif %}
                             {% if tree_id %}
