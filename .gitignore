@@ -210,4 +210,4 @@ __marimo__/
 data/
 media/
 .DS_Store
-rootnode/static/bootstrap5/
+static/bootstrap5/
