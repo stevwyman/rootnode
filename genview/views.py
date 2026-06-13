@@ -448,7 +448,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             # Avatar-URL holen (falls vorhanden)
             avatar_url = ""
             if p.profile_image and p.profile_image.file:
-                avatar_url = reverse("genview:media-file", kwargs={"tree_id": tree_id, "pk": p.id})
+                avatar_url = reverse("genview:media-file", kwargs={"tree_id": tree_id, "pk": p.profile_image.id})
                 #avatar_url = p.profile_image.file.url
 
             # Wir übergeben den Namen und das JSON für die kleinen Knoten

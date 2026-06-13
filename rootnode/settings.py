@@ -33,7 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG')
+DEBUG = os.getenv('DEBUG', False)
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
@@ -104,10 +104,16 @@ WSGI_APPLICATION = 'rootnode.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+if os.path.exists('/data/genview'):
+    GENVIEW = Path('/data/genview')
+else:
+    # Safe fallback for local development outside of Docker
+    GENVIEW = BASE_DIR
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': GENVIEW / 'db.sqlite3',
     }
 }
 
@@ -177,7 +183,9 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 MEDIA_URL = '/media/'
 
 # The absolute folder path on your computer where Django will save the files
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = GENVIEW / 'media'
+
 
 LOGGING = {
     "version": 1,

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-04 06:46+0000\n"
+"POT-Creation-Date: 2026-06-13 11:19+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,16 +18,99 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: genview/models.py:800
+#: genview/models.py:838
 msgid "Datei/Bild"
 msgstr "file/picture"
 
-#: genview/models.py:841
+#: genview/models.py:879
 msgid "Ereignisse, mit denen dieses Medium verknüpft ist"
 msgstr ""
 
-#: genview/models.py:846
+#: genview/models.py:884
 msgid "Dieses Bild wird als Portrait auf der Personen-Detail-Seite angezeigt."
+msgstr ""
+
+#: genview/templates/genview/_basic_system_information.html:5
+#, fuzzy
+#| msgid "Erstellt"
+msgid "Erstellt am"
+msgstr "created"
+
+#: genview/templates/genview/_basic_system_information.html:6
+msgid "Zuletzt geändert"
+msgstr ""
+
+#: genview/templates/genview/_individual_mini.html:18
+msgid "vertraulich"
+msgstr ""
+
+#: genview/templates/genview/event_detail.html:5
+msgid "Ereignis"
+msgstr ""
+
+#: genview/templates/genview/event_detail.html:25
+#: genview/templates/genview/mediaobject_detail.html:9
+#: genview/templates/genview/place_detail.html:9
+#: genview/templates/genview/source_detail.html:9
+msgid "Zurück zur Übersicht"
+msgstr ""
+
+#: genview/templates/genview/mediaobject_detail.html:5
+msgid "Details"
+msgstr ""
+
+#: genview/templates/genview/mediaobject_detail.html:34
+msgid "Datei bearbeiten"
+msgstr ""
+
+#: genview/templates/genview/mediaobject_detail.html:35
+#, fuzzy
+#| msgid "Baum löschen"
+msgid "Datei löschen"
+msgstr "delete tree"
+
+#: genview/templates/genview/place_detail.html:5
+#, fuzzy
+#| msgid "Orte"
+msgid "Ort"
+msgstr "places"
+
+#: genview/templates/genview/place_detail.html:64
+msgid "Ort bearbeiten"
+msgstr ""
+
+#: genview/templates/genview/place_detail.html:65
+#, fuzzy
+#| msgid "Baum löschen"
+msgid "Ort löschen"
+msgstr "delete tree"
+
+#: genview/templates/genview/source_detail.html:5
+msgid "Quelle"
+msgstr ""
+
+#: genview/templates/genview/source_detail.html:96
+msgid "Quelle bearbeiten"
+msgstr ""
+
+#: genview/templates/genview/source_detail.html:97
+#, fuzzy
+#| msgid "Baum löschen"
+msgid "Quelle löschen"
+msgstr "delete tree"
+
+#: genview/templates/genview/source_detail.html:102
+msgid "Verknüpfte Ereignisse"
+msgstr ""
+
+#: genview/templates/genview/source_detail.html:121
+#, fuzzy
+#| msgid "Familien"
+msgid "Familie"
+msgstr "families"
+
+#: genview/templates/genview/source_detail.html:128
+msgid "Diese Quelle ist noch mit keinem Ereignis verknüpft."
 msgstr ""
 
 #: genview/templates/genview/tree_list.html:4
@@ -60,17 +143,21 @@ msgid "Familien anzeigen"
 msgstr "list families"
 
 #: genview/templates/genview/tree_list.html:56
+msgid "Baum verwalten"
+msgstr ""
+
+#: genview/templates/genview/tree_list.html:59
 msgid "Baum löschen"
 msgstr "delete tree"
 
-#: genview/templates/genview/tree_list.html:68
+#: genview/templates/genview/tree_list.html:71
 msgid "Noch keine Stammbäume vorhanden"
 msgstr "no trees available"
 
-#: rootnode/settings.py:125
+#: rootnode/settings.py:140
 msgid "German"
 msgstr "deutsch"
 
-#: rootnode/settings.py:126
+#: rootnode/settings.py:141
 msgid "English"
 msgstr "englisch"

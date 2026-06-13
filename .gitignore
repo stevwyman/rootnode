@@ -211,3 +211,5 @@ data/
 media/
 .DS_Store
 static/bootstrap5/
+.dockerignore
+container-compose.yaml
