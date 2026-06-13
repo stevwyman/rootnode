@@ -1,15 +1,20 @@
-# rootnode
-simple gedcom management
+# RootNode
 
-## models.py
+![Python](https://img.shields.io/badge/Python-3.13-green.svg)
+![Django](https://img.shields.io/badge/Django-5.1.7-green.svg)
+[![Bootstrap](https://img.shields.io/badge/Bootstrap-7952B3?logo=bootstrap&logoColor=fff)]
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)]
 
-Key Design Decisions
+A simple gedcom based management for family trees based on Django framework and bootstrap. Ready to run in a container.
 
-The Event Model: Instead of hardcoding birth_date and death_date onto the Individual model, this schema uses a separate Event table. This is fully compliant with how GEDCOM works. A person can technically have multiple birth records (if sources disagree), and this schema supports that natively.
+Main features:
 
-The ChildFamilyLink Model: In a simple world, a child just has a ForeignKey to a family. However, in genealogy, a person might have a biological family, an adoptive family, and a foster family. The explicitly defined through-model handles these edge cases perfectly.
+- gedcom file import (web and cli)
+- modification of data
+- media management
+- two factor authorisation
 
-Dual Foreign Keys on Events: The Event model has optional keys to both Individual and Family. A birth is tied to an Individual, but a marriage is tied to a Family.
+## usage
 
 ```sh
 python manage.py import_gedcom pfad/zur/datei.ged --tree-name "Familie Müller"

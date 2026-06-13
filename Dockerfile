@@ -57,7 +57,7 @@ COPY . /usr/src/app
 WORKDIR /usr/src/app
 
 # ---- Volume (nur im finalen Image) ---------------------------
-VOLUME /data/export
+VOLUME /data/genview
 
 # ---- Entry‑point‑Script (muss ausführbar sein) --------------
 RUN chmod +x docker-entrypoint.sh
