@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from genview.models import Tree, TreeMembership, Individual
+from genview.models import Tree, TreeMembership, Individual, EventType
 
 class IndividualModelTests(TestCase):
     def setUp(self):
@@ -73,19 +73,21 @@ class IndividualListViewTests(TestCase):
         """Anonymous users should be redirected to the login page."""
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.url.startswith("/accounts/login/")) # Adjust if your login URL is different
+        self.assertTrue(response.url.startswith("/account/login/")) # Adjust if your login URL is different
 
     def test_access_denied_for_unauthorized_tree(self):
         """Logged-in users WITHOUT a TreeMembership should get a 403 Forbidden."""
         self.client.login(username="hacker", password="password")
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 403) # 403 means "Forbidden"
+        # yes, should be 403, but we do not want to show that to hackers
+        self.assertEqual(response.status_code, 404) # 403 means "Forbidden"
 
     def test_access_granted_for_authorized_user(self):
         """Logged-in users WITH a TreeMembership should see public data."""
         # Fix: Wir erstellen ein Sterbe-Event, damit das Property 'is_deceased' True wird!
         from genview.models import Event
-        Event.objects.create(individual=self.person, event_type=event_type__tag='DEAT', gedcom_tree=self.tree)
+        et = EventType.objects.create(tag="DEAT", name="Death")
+        Event.objects.create(individual=self.person, event_type=et, gedcom_tree=self.tree)
 
         self.client.login(username="auth_user", password="password")
         response = self.client.get(self.url)

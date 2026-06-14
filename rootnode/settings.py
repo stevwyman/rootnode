@@ -35,7 +35,27 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', False)
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS').split(',') if os.getenv('ALLOWED_HOSTS') else []
+ah_raw = os.getenv('ALLOWED_HOSTS')
+if ah_raw:
+    # split, strip Leerzeichen, entferne leere Einträge
+    ALLOWED_HOSTS = [origin.strip() for origin in ah_raw.split(',') if origin.strip()]
+else:
+    ALLOWED_HOSTS = []
+logger.info("--- Allowed Hosts ---")
+logger.info(ALLOWED_HOSTS)
+logger.info("---------------------")
+
+csrf_raw = os.getenv('CSRF_TRUSTED_ORIGINS')
+if csrf_raw:
+    # split, strip Leerzeichen, entferne leere Einträge
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_raw.split(',') if origin.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
+logger.info("--- CSRF Hosts ------")
+logger.info(CSRF_TRUSTED_ORIGINS)
+logger.info("---------------------")
+
 
 INTERNAL_IPS = [
     # ...
@@ -66,6 +86,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -161,10 +182,25 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-# ---- Static files -------------------------------------------------
+# ------------------------------------------------------------------
+# Statische Dateien
+# ------------------------------------------------------------------
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'          # für collectstatic (Produktiv)
-STATICFILES_DIRS = [BASE_DIR / 'static']       # dein lokaler Entwicklungs-Ordner
+STATIC_ROOT = GENVIEW / 'staticfiles'         # für collectstatic (Produktiv)
+STATICFILES_DIRS = [BASE_DIR / 'static']      # dein lokaler Entwicklungs-Ordner
+
+# ------------------------------------------------------------------
+# WhiteNoise (empfohlen)
+# ------------------------------------------------------------------
+# Komprimierte (gzip/br) und versionierte Dateien benutzen:
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# ------------------------------------------------------------------
+# Optional: weitere Sicherheitseinstellungen
+# ------------------------------------------------------------------
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

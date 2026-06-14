@@ -1,0 +1,14 @@
+services:
+  app:
+    image: localhost/rootnode:latest
+    container_name: genview
+    ports:
+      - 8003:8003
+    volumes:
+      - data:/data/genview:z
+    env_file:
+      - .env
+      
+volumes:
+  data:
+    name: genview_data

@@ -8,3 +8,4 @@ pytest
 python-dotenv
 python-gedcom
 qrcode
+whitenoise
