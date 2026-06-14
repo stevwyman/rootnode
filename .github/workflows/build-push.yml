@@ -29,22 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    services:
-      # (optional) Wenn du eine echte DB wie PostgreSQL brauchst,
-      # fügst du hier einen Service‑Container hinzu.
-      # postgres:
-      #   image: postgres:16-alpine
-      #   env:
-      #     POSTGRES_USER: postgres
-      #     POSTGRES_PASSWORD: postgres
-      #     POSTGRES_DB: test_db
-      #   ports: ["5432:5432"]
-      #   options: >-
-      #     --health-cmd "pg_isready -U postgres"
-      #     --health-interval 10s
-      #     --health-timeout 5s
-      #     --health-retries 5
-
     steps:
       # --------------------------------------------------------
       # Checkout
