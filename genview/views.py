@@ -60,7 +60,7 @@ def home(request):
 
 def handle_404(request, exception):
     from django.http import HttpResponseNotFound
-    logger.error(request, "404 thrown, potential exception %s", exception)
+    logger.error("404 thrown, potential exception %s", exception)
     return HttpResponseNotFound("/")    
 
 def handle_403(request, exception):
