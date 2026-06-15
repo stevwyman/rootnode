@@ -22,7 +22,7 @@
 
     <body class="bg-light">
 
-        <div class="container">
+        <div class="container-fluid">
             <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
                 <div class="container-fluid">
                     <a class="navbar-brand" href="{% url 'genview:tree-list' %}">Stammbaum</a>
@@ -118,7 +118,7 @@
             {% bootstrap_messages %}
         </div>
 
-        <div class="container">
+        <div class="container-fluid mt-4">
             <main>
                 {% block content %}
         
@@ -126,7 +126,7 @@
             </main>
         </div>
 
-        <div class="container">
+        <div class="container-fluid">
             <footer
                 class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top"
             >

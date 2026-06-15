@@ -12,10 +12,12 @@
     {% block left %}
         <div class="col text-center bg-light p-3 rounded border">
             {% if media.is_image and media.file %}
-                <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" 
-                     class="img-fluid rounded shadow-sm" 
-                     style="max-height: 70vh; object-fit: contain;" 
-                     alt="{{ media.title }}">
+                <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" target="_blank">
+                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" 
+                        class="img-fluid rounded shadow-sm" 
+                        style="max-height: 70vh; object-fit: contain;" 
+                        alt="{{ media.title }}">
+                </a>
             {% elif media.file %}
                 <div class="py-5">
                     <h1 class="display-1 text-muted">📄</h1>

@@ -118,7 +118,7 @@
                                     
                                     {% if media.is_image %}
                                         <div class="ratio ratio-4x3 bg-dark d-flex align-items-center justify-content-center overflow-hidden rounded-top">
-                                            <img src="{{ media.file.url }}" class="card-img-top object-fit-cover" alt="{{ media.title }}">
+                                            <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="card-img-top object-fit-cover" alt="{{ media.title }}">
                                         </div>
                                     {% else %}
                                         <div class="ratio ratio-4x3 bg-light d-flex align-items-center justify-content-center border-bottom">
@@ -138,7 +138,7 @@
                                             {% endif %}
                                         </div>
                                         
-                                        <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary w-100 mt-2">
+                                        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-secondary w-100 mt-2">
                                             Ansehen ↗
                                         </a>
                                     </div>
