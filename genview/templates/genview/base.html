@@ -60,6 +60,7 @@
                                     {% if user.is_superuser %}
                                         <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 import gedcom</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:user-management-list' %}">🧑‍💼 users</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:eventtype-list' %}">🗓️ event types</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                     {% endif %}
                                     <li>

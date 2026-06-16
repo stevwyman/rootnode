@@ -67,3 +67,7 @@ DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_EMAIL=admin@example.com
 DJANGO_SUPERUSER_PASSWORD=admin
 ```
+
+## ToDos
+
+- [ ] check if the editor/superuser tasks are securely protected on Mixin Level

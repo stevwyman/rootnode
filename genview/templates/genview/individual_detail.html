@@ -62,6 +62,25 @@
     <h2 class="card-title fw-bold text-dark mb-1">
         {{ object.full_name }}
     </h2>
+    {% if object.noble_titles %}
+        <div class="mt-2">
+            {% for title in object.noble_titles %}
+                <span class="badge bg-light text-dark border border-secondary fw-normal me-1 mb-1">
+                    👑 {{ title }}
+                </span>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if object.primary_title %}
+        <div class="text-primary fw-semibold fs-5 mb-2">
+            👑 {{ object.primary_title }}
+        </div>
+    {% endif %}
+    {% if object.primary_title %}
+        <div class="text-primary fw-semibold fs-5 mb-2">
+            👑 {{ object.primary_title }}
+        </div>
+    {% endif %}
     {% if object.alternative_names.all %}
     <div class="mt-1 text-muted small">
         Alternative Namen: 
@@ -282,6 +301,11 @@
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="dtree-tab" data-bs-toggle="tab" data-bs-target="#dtree-pane" type="button" role="tab">
                             🌳 Interaktiver Baum
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="fulltimeline-tab" data-bs-toggle="tab" data-bs-target="#fulltimeline-pane" type="button" role="tab">
+                            full timeline
                         </button>
                     </li>
                     {% endif %}
@@ -736,6 +760,65 @@
                     <div class="tab-pane fade" id="dtree-pane" role="tabpanel" aria-labelledby="dtree-tab">
                             <h5 class="mb-3">Interaktiver Familienstammbaum</h5>
                             <div id="graph" class="rounded border shadow-sm bg-white" style="height: 550px; width: 100%; overflow: hidden;"></div>
+                    </div>
+                    <div class="tab-pane fade" id="fulltimeline-pane" role="tabpanel" aria-labelledby="fulltimeline-tab">
+                        <div class="card shadow-sm border-0 mt-4">
+                            <div class="card-header bg-white fw-bold fs-5">
+                                ⏳ Lebenslauf & Ereignisse
+                            </div>
+                            <div class="card-body">
+                                
+                                <div class="border-start border-2 border-primary ms-3 ps-4 position-relative">
+                                    
+                                    {% for item in object.timeline_events %}
+                                        <div class="mb-4 position-relative">
+                                            
+                                            <span class="position-absolute top-0 start-0 translate-middle bg-white border border-2 border-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 35px; height: 35px; margin-left: -1.5rem;">
+                                                {{ item.icon }}
+                                            </span>
+
+                                            <div class="pt-1">
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <span class="text-muted small fw-bold">
+                                                        {{ item.date_display|default:"Datum unbekannt" }}
+                                                    </span>
+                                                    
+                                                    {% if item.age is not None %}
+                                                        {% if item.age == 0 and item.title == "Geburt" %}
+                                                            {% else %}
+                                                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill small px-2 py-0.5" style="font-size: 0.75rem;">
+                                                                Alter: {{ item.age }}
+                                                            </span>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <h6 class="mb-1 text-primary fw-bold">
+                                                    {{ item.title }}
+                                                </h6>
+                                                
+                                                {% if item.description %}
+                                                    <div class="text-dark mb-1">
+                                                        {{ item.description }}
+                                                    </div>
+                                                {% endif %}
+                                                
+                                                {% if item.place %}
+                                                    <div class="text-secondary small">
+                                                        📍 {{ item.place }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+
+                                        </div>
+                                    {% empty %}
+                                        <div class="text-muted fst-italic">Keine Lebensereignisse für diese Person hinterlegt.</div>
+                                    {% endfor %}
+
+                                </div>
+                                
+                            </div>
+                        </div>
                     </div>
                     {% endif %}
                 </div>

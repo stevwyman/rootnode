@@ -1,0 +1,116 @@
+{% extends "genview/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>GEDCOM Event-Mapping</h2>
+        <a href="{% url 'genview:eventtype-add' %}" class="btn btn-primary">+ Neuer Event-Typ</a>
+    </div>
+
+    <div class="card shadow-sm">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>GEDCOM Tag</th>
+                    <th>Anzeigename</th>
+                    <th>Kategorie</th>
+                    <th>Sichtbar?</th>
+                    <th class="text-end">Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for et in event_types %}
+                <tr>
+                    <td><span class="badge bg-secondary">{{ et.tag }}</span></td>
+                    <td class="fw-bold">{{ et.name }}</td>
+                    <td>{{ et.get_category_display }}</td>
+                    <td>
+                        <div class="form-check form-switch fs-5">
+                            <input class="form-check-input visibility-toggle" 
+                                   type="checkbox" 
+                                   role="switch" 
+                                   id="switch-{{ et.pk }}"
+                                   data-url="{% url 'genview:eventtype-toggle' et.pk %}"
+                                   {% if et.is_visible %}checked{% endif %}>
+                            <label class="form-check-label visually-hidden" for="switch-{{ et.pk }}">Sichtbarkeit umschalten</label>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'genview:eventtype-edit' et.pk %}" class="btn btn-sm btn-outline-secondary">Bearbeiten</a>
+                        <a href="{% url 'genview:eventtype-delete' et.pk %}" class="btn btn-sm btn-outline-danger">Löschen</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">Keine Event-Typen gefunden.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Hole den CSRF-Token aus den Cookies (Django-Standard)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // 2. Alle Toggle-Switches auf der Seite finden
+    const toggles = document.querySelectorAll('.visibility-toggle');
+
+    toggles.forEach(function(toggle) {
+        toggle.addEventListener('change', function(e) {
+            const url = this.getAttribute('data-url');
+            const isChecked = this.checked;
+            const switchInput = this;
+
+            // 3. Den Fetch-Request (AJAX) an Django senden
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest' // Signalisiert Django, dass es AJAX ist
+                },
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Netzwerk-Antwort war nicht ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status !== 'success') {
+                    // Falls der Server einen logischen Fehler meldet, Switch zurücksetzen
+                    switchInput.checked = !isChecked;
+                    alert("Es gab ein Problem beim Speichern.");
+                }
+                // Optional: Visuelles Feedback (z.B. kurzer Toast), aber der Switch zeigt es ja schon
+            })
+            .catch(error => {
+                console.error('Fehler:', error);
+                // Bei einem Fehler den Switch wieder in den Ursprungszustand zurückversetzen
+                switchInput.checked = !isChecked;
+                alert("Verbindungsfehler beim Speichern der Sichtbarkeit.");
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

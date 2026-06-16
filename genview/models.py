@@ -440,7 +440,113 @@ class Individual(GedcomIdMixin):
         # '-is_portrait' sortiert True vor False. 
         # 'id' (oder '-id') dient als Tie-Breaker, falls es versehentlich zwei Portraits gibt.
         return self.media_objects.order_by('-is_portrait', 'id').first()
+    
+    @property
+    def noble_titles(self) -> list[str]:
+        """Liefert alle erfassten Adelstitel der Person als Liste von Strings."""
+        # Holt alle TITL-Events, die eine Beschreibung haben
+        return [
+            ev.description 
+            for ev in self.events.filter(event_type__tag='TITL').order_by('parsed_date', 'id') 
+            if ev.description
+        ]
 
+    @property
+    def primary_title(self) -> str:
+        """Liefert den aktuellsten oder ersten Titel für die prominente Anzeige im UI."""
+        # Holt das erste (oder bei Sortierung nach Datum: das älteste/aktuellste) Titel-Event
+        ev = self.events.filter(event_type__tag='TITL').order_by('-parsed_date', '-id').first()
+        return ev.description if ev else ""
+    
+    @property
+    def timeline_events(self):
+        """
+        Sammelt persönliche Ereignisse, Familien-Ereignisse sowie die Geburten von Kindern,
+        sortiert sie chronologisch und berechnet für jeden Punkt das exakte Alter der Person.
+        """
+        timeline = []
+        birth_date_obj = self.birth_date
+
+        # 1. Persönliche Ereignisse (Geburt, Tod, Titel, Beruf, etc.)
+        for event in self.events.filter(event_type__is_visible=True):
+            tag = event.event_type.tag
+            if tag == 'BIRT': icon = '👶'
+            elif tag == 'DEAT': icon = '🪦'
+            elif tag == 'TITL': icon = '👑'
+            elif tag == 'OCCU': icon = '💼'
+            else: icon = '📌'
+
+            timeline.append({
+                'date_sort': event.parsed_date,
+                'date_display': event.raw_date,
+                'title': event.event_type.name,
+                'description': event.description,
+                'place': event.place.name if event.place else "",
+                'icon': icon,
+                'age': None  # Wird unten berechnet
+            })
+
+        # 2. Familien-Ereignisse (Heirat, Scheidung) und Kindergeburten
+        for family in self.spousal_families:
+            # --- A) Heirats- / Scheidungs-Events der Familie ---
+            for fam_event in family.events.filter(event_type__is_visible=True):
+                tag = fam_event.event_type.tag
+                if tag == 'MARR': icon = '💍'
+                elif tag == 'DIV': icon = '💔'
+                else: icon = '🔗'
+
+                partner = family.husband if family.wife == self else family.wife
+                partner_name = partner.full_name() if partner else "Unbekannt"
+
+                timeline.append({
+                    'date_sort': fam_event.parsed_date,
+                    'date_display': fam_event.raw_date,
+                    'title': fam_event.event_type.name,
+                    'description': f"mit {partner_name}",
+                    'place': fam_event.place.name if fam_event.place else "",
+                    'icon': icon,
+                    'age': None
+                })
+
+            # --- B) 🔥 NEU: Geburten der Kinder aus dieser Familie ---
+            # Wir nutzen children.all() auf dem Through-Model ChildFamilyLink
+            for child_link in family.children.all():
+                child = child_link.child
+                if child:
+                    # Wir holen das Geburts-Event des Kindes
+                    child_birth = child.birth_event
+                    if child_birth:
+                        timeline.append({
+                            'date_sort': child_birth.parsed_date,
+                            'date_display': child_birth.raw_date,
+                            'title': "Geburt eines Kindes",
+                            'description': f"Sohn/Tochter: {child.full_name()}",
+                            'place': child_birth.place.name if child_birth.place else "",
+                            'icon': "🍼",
+                            'age': None
+                        })
+
+        # 3. Sortieren (Älteste Ereignisse zuerst)
+        # Ereignisse ohne Datum landen dank date.min ganz am Anfang (z.B. unvollständige Taufen)
+        def get_sort_key(item):
+            return item['date_sort'] or date.min 
+            
+        timeline.sort(key=get_sort_key)
+
+        # 4. 🔥 NEU: Das Alter für jedes sortierte Ereignis berechnen
+        if birth_date_obj:
+            for item in timeline:
+                event_date = item['date_sort']
+                if event_date:
+                    # Mathematisch genaue Altersberechnung für den Tag des Ereignisses
+                    age_at_event = event_date.year - birth_date_obj.year
+                    if (event_date.month, event_date.day) < (birth_date_obj.month, birth_date_obj.day):
+                        age_at_event -= 1
+                    
+                    # Ein negatives Alter (z.B. bei fehlerhaften Daten) fangen wir ab
+                    item['age'] = max(0, age_at_event)
+
+        return timeline
 
 # ----------------------------------------------------------------------
 # 4️⃣ FAMILY – MPTT-Baumstruktur GEDCOM:FAM
@@ -676,6 +782,12 @@ class EventType(models.Model):
         choices=Category.choices, 
         default=Category.INDIVIDUAL,
         verbose_name="Kategorie"
+    )
+
+    is_visible = models.BooleanField(
+        default=True,
+        verbose_name="Sichtbar",
+        help_text="Wenn deaktiviert, werden Ereignisse dieses Typs im Frontend (z.B. Timeline) ausgeblendet."
     )
 
     class Meta:
@@ -928,7 +1040,7 @@ class MediaObject(GedcomIdMixin):
                     
         # 3. Hängt das Medium an vertraulichen Ereignissen?
         if hasattr(self, 'events'):
-            for event in self.events.all():
+            for event in self.events.filter(event_type__is_visible=True):
                 if event.is_confidential:
                     return True
                     

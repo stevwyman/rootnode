@@ -1880,6 +1880,38 @@ class EventTypeManageView(TreeEditAccessMixin, View):
             'tree_id': tree_id
         })
     
+#
+# 7️⃣.1️⃣ EventTypes
+# --------------------------------------------------------------
+
+
+# 1. READ: Liste aller EventTypes
+class EventTypeListView(ListView):
+    model = EventType
+    template_name = "genview/eventtype_list.html"
+    context_object_name = "event_types"
+
+# 2. CREATE: Neuen EventType anlegen
+class EventTypeCreateView(CreateView):
+    model = EventType
+    fields = ['tag', 'name', 'category', 'is_visible']
+    template_name = "genview/eventtype_form.html"
+    success_url = reverse_lazy('genview:eventtype-list')
+
+# 3. UPDATE: Bestehenden EventType bearbeiten
+class EventTypeUpdateView(UpdateView):
+    model = EventType
+    fields = ['tag', 'name', 'category', 'is_visible']
+    template_name = "genview/eventtype_form.html"
+    success_url = reverse_lazy('genview:eventtype-list')
+
+# 4. DELETE: EventType löschen (Vorsicht wegen on_delete=RESTRICT)
+class EventTypeDeleteView(DeleteView):
+    model = EventType
+    template_name = "genview/eventtype_confirm_delete.html"
+    success_url = reverse_lazy('genview:eventtype-list')
+
+
 # --------------------------------------------------------------
 # 2️⃣ Sources
 # --------------------------------------------------------------
@@ -2365,3 +2397,20 @@ class TreeMembershipManageView(View): # Nutze hier dein passendes Mixin (z.B. Tr
             'formset': formset,
         })
     
+from django.views.decorators.http import require_POST
+
+@require_POST
+def toggle_eventtype_visibility(request, pk):
+    """Schaltet die Sichtbarkeit eines EventTypes per AJAX um."""
+    event_type = get_object_or_404(EventType, pk=pk)
+    
+    # Status umkehren
+    event_type.is_visible = not event_type.is_visible
+    
+    # Aus Performance-Gründen nur dieses eine Feld speichern
+    event_type.save(update_fields=['is_visible'])
+    
+    return JsonResponse({
+        'status': 'success', 
+        'is_visible': event_type.is_visible
+    })

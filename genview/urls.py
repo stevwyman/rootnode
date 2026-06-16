@@ -205,6 +205,13 @@ urlpatterns = [
     ),
     path('tree/<int:tree_id>/event-types/manage/', views.EventTypeManageView.as_view(), name='manage-event-types'),
 
+    # EventType Administration
+    path('event-types/', views.EventTypeListView.as_view(), name='eventtype-list'),
+    path('event-types/add/', views.EventTypeCreateView.as_view(), name='eventtype-add'),
+    path('event-types/<int:pk>/edit/', views.EventTypeUpdateView.as_view(), name='eventtype-edit'),
+    path('event-types/<int:pk>/delete/', views.EventTypeDeleteView.as_view(), name='eventtype-delete'),
+    path('event-types/<int:pk>/toggle/', views.toggle_eventtype_visibility, name='eventtype-toggle'),
+
     path('tree/<int:tree_id>/sources/', views.SourceListView.as_view(), name='source-list'),
     path('tree/<int:tree_id>/sources/add/', views.SourceCreateView.as_view(), name='source-create'),
     path('tree/<int:tree_id>/sources/<int:pk>/', views.SourceDetailView.as_view(), name='source-detail'),
