@@ -26,6 +26,10 @@ Therefore we have have images that can be marked as private, but trees can be ma
 
 The above values can be of course configured.
 
+![individual view](docu/individual_view.png "individual view")
+
+![family view](docu/family_view.png "family view")
+
 ## usage
 
 ```sh
