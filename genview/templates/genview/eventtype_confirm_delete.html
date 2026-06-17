@@ -1,0 +1,35 @@
+{% extends "genview/base.html" %} {% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            
+            <div class="card shadow border-danger border-opacity-50">
+                <div class="card-header bg-danger text-white py-3 text-center">
+                    <h4 class="mb-0">⚠️ EventType löschen</h4>
+                </div>
+                
+                <div class="card-body p-4 text-center">
+                    <h5 class="mb-4">
+                        Möchtest du diesen EventType wirklich unwiderruflich löschen?
+                    </h5>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <button type="button" class="btn btn-outline-secondary px-4" onclick="history.back()">
+                                Abbrechen
+                            </button>
+                            
+                            <button type="submit" class="btn btn-danger px-4 shadow-sm">
+                                Ja, endgültig löschen
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

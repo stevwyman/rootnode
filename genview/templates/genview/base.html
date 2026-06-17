@@ -4,16 +4,14 @@
 {% get_available_languages as LANGUAGES %}
 {% get_language_info_list for LANGUAGES as languages %}
 <!doctype html>
-<html lang="de">
+<html lang="{{ LANGUAGE_CODE }}">
     <head>
         <meta charset="utf-8">
         <title>{% block title %}GEDCOM-Stammbaum{% endblock %}</title>
 
-        <!-- Bootstrap-CSS über das django_bootstrap5-Tag -->
-        {% bootstrap_css %}
+        <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
-        <link rel="stylesheet"
-            href="{% static 'my.css' %}">
+        <link rel="stylesheet" href="{% static 'my.css' %}">
 
         <link rel="stylesheet" href="{% static 'bootstrap.min.css' %}">
 
@@ -53,7 +51,6 @@
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
                                     {% if user.is_authenticated and tree_id %}
                                         <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'genview:manage-event-types' tree_id %}">📅 event types</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ manage tree</a></li>
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
@@ -166,6 +163,7 @@
 
         {% endblock %}
 
-        {% bootstrap_javascript %}
+        <script src="{% static 'bootstrap5/js/bootstrap.bundle.min.js' %}"></script>
+
     </body>
 </html>

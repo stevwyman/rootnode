@@ -43,11 +43,17 @@ from .forms import (
     MediaObjectForm,
     AddExistingMediaForm,
     EventForm,
-    EventTypeForm,
     SourceForm,
     PlaceForm,
 )
-from .mixins import UserPassesTestMixin, TreeAccessMixin, TreeEditAccessMixin, SortableListViewMixin, FilterableListViewMixin
+from .mixins import (
+    SuperuserRequiredMixin, 
+    UserPassesTestMixin, 
+    TreeAccessMixin, 
+    TreeEditAccessMixin, 
+    SortableListViewMixin, 
+    FilterableListViewMixin
+)
 
 
 def home(request):
@@ -383,7 +389,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         # 5️⃣ Events / Timeline
         # -------------------------------------------------------------
-        combined_events = Event.objects.filter(
+        combined_events = Event.objects.filter(event_type__is_visible=True).filter(
             Q(individual=person) | Q(family__husband=person) | Q(family__wife=person)
         ).select_related('event_type', 'place').prefetch_related('sources').order_by(
             F("parsed_date").asc(nulls_last=True)
@@ -1840,73 +1846,34 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         # Passe diesen Fallback an deine existierende Übersichtsseite an
         return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
 
-
-class EventTypeManageView(TreeEditAccessMixin, View):
-    template_name = "genview/event_type_manage.html"
-
-    def get_formset(self, tree_id, post_data=None):
-        """Hilfsmethode, um das Formset zu erstellen und zu befüllen."""
-        # Wir bauen eine Fabrik für EventType-Formulare
-        EventTypeFormSet = modelformset_factory(
-            EventType,
-            form=EventTypeForm,
-            extra=0  # Keine leeren, neuen Zeilen anzeigen
-        )
-        
-        # 🔥 Nur Event-Typen holen, die in DIESEM Stammbaum existieren
-        queryset = EventType.objects.filter(
-            events__gedcom_tree_id=tree_id
-        ).distinct().order_by('tag')
-        
-        return EventTypeFormSet(data=post_data, queryset=queryset)
-
-    def get(self, request, tree_id):
-        formset = self.get_formset(tree_id)
-        return render(request, self.template_name, {
-            'formset': formset,
-            'tree_id': tree_id
-        })
-
-    def post(self, request, tree_id):
-        formset = self.get_formset(tree_id, request.POST)
-        
-        if formset.is_valid():
-            formset.save()
-            messages.success(request, "Alle Event-Typen wurden erfolgreich aktualisiert!")
-            return redirect('genview:manage-event-types', tree_id=tree_id)
-            
-        return render(request, self.template_name, {
-            'formset': formset,
-            'tree_id': tree_id
-        })
-    
+   
 #
 # 7️⃣.1️⃣ EventTypes
 # --------------------------------------------------------------
 
 
 # 1. READ: Liste aller EventTypes
-class EventTypeListView(ListView):
+class EventTypeListView(SuperuserRequiredMixin, ListView):
     model = EventType
     template_name = "genview/eventtype_list.html"
     context_object_name = "event_types"
 
 # 2. CREATE: Neuen EventType anlegen
-class EventTypeCreateView(CreateView):
+class EventTypeCreateView(SuperuserRequiredMixin, CreateView):
     model = EventType
     fields = ['tag', 'name', 'category', 'is_visible']
     template_name = "genview/eventtype_form.html"
     success_url = reverse_lazy('genview:eventtype-list')
 
 # 3. UPDATE: Bestehenden EventType bearbeiten
-class EventTypeUpdateView(UpdateView):
+class EventTypeUpdateView(SuperuserRequiredMixin, UpdateView):
     model = EventType
     fields = ['tag', 'name', 'category', 'is_visible']
     template_name = "genview/eventtype_form.html"
     success_url = reverse_lazy('genview:eventtype-list')
 
 # 4. DELETE: EventType löschen (Vorsicht wegen on_delete=RESTRICT)
-class EventTypeDeleteView(DeleteView):
+class EventTypeDeleteView(SuperuserRequiredMixin, DeleteView):
     model = EventType
     template_name = "genview/eventtype_confirm_delete.html"
     success_url = reverse_lazy('genview:eventtype-list')
@@ -2172,7 +2139,7 @@ from io import StringIO
 import tempfile
 from django.core.management import call_command
 from .forms import GedcomImportForm, TreeMembershipForm, UserRegisterForm
-from .mixins import SuperuserRequiredMixin
+
 
 class RegisterView(CreateView):
     form_class = UserRegisterForm
@@ -2234,7 +2201,7 @@ class UserManagementActionView(SuperuserRequiredMixin, View):
         return redirect('genview:user-management-list')
     
 
-class GedcomImportView(LoginRequiredMixin, FormView):
+class GedcomImportView(SuperuserRequiredMixin, FormView):
     """
     Front-End-Ersatz für `python manage.py import_gedcom`.
     1. User wählt Datei + Namen → POST
@@ -2331,7 +2298,7 @@ class GedcomImportView(LoginRequiredMixin, FormView):
         return self._stderr_buf
 
 
-class TreeMembershipManageView(View): # Nutze hier dein passendes Mixin (z.B. TreeAdminAccessMixin)
+class TreeMembershipManageView(TreeEditAccessMixin, View): # Nutze hier dein passendes Mixin (z.B. TreeAdminAccessMixin)
     template_name = "genview/tree_membership_manage.html"
 
     def get_formset(self, tree, post_data=None):
@@ -2398,7 +2365,9 @@ class TreeMembershipManageView(View): # Nutze hier dein passendes Mixin (z.B. Tr
         })
     
 from django.views.decorators.http import require_POST
+from .decorators import superuser_required
 
+@superuser_required(raise_exception=False, redirect_to="/no-permission/")
 @require_POST
 def toggle_eventtype_visibility(request, pk):
     """Schaltet die Sichtbarkeit eines EventTypes per AJAX um."""

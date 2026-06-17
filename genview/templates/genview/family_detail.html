@@ -50,7 +50,7 @@
                             {% if husband_father %}
                                 <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=husband_father.pk %}" class="text-decoration-none text-dark">
                                     {% if husband_father.profile_image and husband_father.profile_image.file %}
-                                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=husband_father.profile_image.file.pk %}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
+                                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=husband_father.profile_image.pk %}" class="rounded-circle avatar-sm shadow-sm border border-2 border-white">
                                     {% else %}
                                         <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow-sm mx-auto avatar-sm border border-2 border-white">{{ husband_father.given_name|first|default:"?" }}</div>
                                     {% endif %}

@@ -203,7 +203,6 @@ urlpatterns = [
         views.AddExistingMediaToEventView.as_view(), 
         name='add-existing-media-to-event',
     ),
-    path('tree/<int:tree_id>/event-types/manage/', views.EventTypeManageView.as_view(), name='manage-event-types'),
 
     # EventType Administration
     path('event-types/', views.EventTypeListView.as_view(), name='eventtype-list'),
