@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_email',
     'two_factor',  
     'two_factor.plugins.email',
+    'genview.context_processors.app_version',
 ]
 
 MIDDLEWARE = [
