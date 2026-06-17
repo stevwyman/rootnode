@@ -74,4 +74,3 @@ DJANGO_SUPERUSER_PASSWORD=admin
 
 ## ToDos
 
-- [ ] check if the editor/superuser tasks are securely protected on Mixin Level
