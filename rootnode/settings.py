@@ -82,7 +82,6 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_email',
     'two_factor',  
     'two_factor.plugins.email',
-    'genview.context_processors.app_version',
 ]
 
 MIDDLEWARE = [
@@ -115,6 +114,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'genview.context_processors.app_version',
             ],
         },
     },
