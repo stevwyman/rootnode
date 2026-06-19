@@ -63,7 +63,7 @@ class IndividualForm(ModelForm):
             "name_suffix": forms.TextInput(attrs={"class": "form-control"}),
             "sex": forms.Select(attrs={"class": "form-select"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
-            "sources": CheckboxSelectMultiple(),
+            "sources": forms.SelectMultiple(attrs={'class': 'form-control select2-sources'}),
         }
 
     # --------------------------------------------------------------
@@ -237,7 +237,7 @@ class FamilyForm(ModelForm):
             "wife": forms.Select(attrs={"class": "form-select"}),
             "parent": forms.Select(attrs={"class": "form-select"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
-            "sources": CheckboxSelectMultiple(),
+            "sources": forms.SelectMultiple(attrs={'class': 'form-control select2-sources'}),
         }
 
     # --------------------------------------------------------------
