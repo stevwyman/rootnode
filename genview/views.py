@@ -1229,6 +1229,21 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             return self._handle_detection(request, media)
         elif "assign" in request.POST:
             return self._handle_assignment(request, media)
+        elif "ocr" in request.POST:
+            return self._handle_ocr(request, media)
+
+        return redirect(request.path)
+    
+    def _handle_ocr(self, request, media):
+        from .ocr_client import extract_text_via_api
+        try:
+            extracted_text = extract_text_via_api(media.file.path)
+            # Optional: Text in ein Feld des MediaObject speichern
+            media.extracted_text = extracted_text
+            media.save()
+            messages.success(request, "Text erfolgreich extrahiert.")
+        except Exception as exc:
+            messages.error(request, f"OCR‑Fehler: {exc}")
 
         return redirect(request.path)
 

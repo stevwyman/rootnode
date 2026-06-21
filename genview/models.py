@@ -961,6 +961,8 @@ class MediaObject(GedcomIdMixin):
         upload_to=tree_media_directory_path, verbose_name=_("Datei/Bild")
     )
 
+    extracted_text = models.CharField(blank=True, null=True)
+
     gedcom_original_filepath = models.CharField(
         max_length=500, 
         blank=True, 

@@ -12,3 +12,7 @@ python-gedcom
 qrcode
 requests
 whitenoise
+# adding ocr
+transformers 
+pillow 
+torch
