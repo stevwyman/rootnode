@@ -14,6 +14,7 @@ Main features:
 - media management
 - two factor authorizations
 - multi language support
+- face detection support (would need [facenode](https://github.com/stevwyman/facenode))
 
 The main driver of initiating this project has been to focus on security. This type of information can be very sensitive and therefore **privacy** needs attention. On the other hand you want to share as much as possible to either help others or to get others information, if they have same.
 
@@ -29,6 +30,8 @@ The above values can be of course configured.
 ![individual view](docu/individual_view.png "individual view")
 
 ![family view](docu/family_view.png "family view")
+
+![media view](docu/media_view.png "media view")
 
 ## usage
 
