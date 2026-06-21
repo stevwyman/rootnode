@@ -1,4 +1,5 @@
 import numpy as np
+from .models import FaceTag
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
     """

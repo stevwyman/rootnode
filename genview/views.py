@@ -1251,6 +1251,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         with Image.open(media.file.path) as img:
             img_width, img_height = img.size
 
+        auto_match_count = 0
+
         for f in faces:
             # Umrechnung in Prozent (0.0 bis 100.0)
             x_pct = (f['x'] / img_width) * 100
@@ -1278,7 +1280,11 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
                 individual=auto_assigned_individual
             )
             
-        messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
+        if auto_match_count > 0:
+            messages.success(request, f"{(auto_match_count)} Gesicht(er) automatisch zugeordnet.")
+        else:
+            messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
+        
         return redirect(request.path)
 
     # -------------------------------------------------

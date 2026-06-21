@@ -51,6 +51,7 @@ def detect_faces_via_api(image_path: str) -> List[Dict[str, Any]]:
             'width': int(entry.get('width', 0)),
             'height': int(entry.get('height', 0)),
             'confidence': float(entry.get('confidence', 1.0)),
+            'embedding': entry.get('embedding')
         }
         for entry in payload.get('faces', [])
     ]
