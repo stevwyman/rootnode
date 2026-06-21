@@ -30,6 +30,65 @@
                 <p class="text-danger mt-5">Keine Datei gefunden.</p>
             {% endif %}
         </div>
+        <div class="container mt-4">
+
+            <h2 class="mb-3">{{ media.title }}</h2>
+
+            <div class="mb-4 text-center">
+                {% if media.annotated_image %}
+                    <!-- <img src="{{ media.annotated_image.url }}" alt="Annotiertes Bild" class="img-fluid"> -->
+                    <img src="{% url 'genview:annotated-media-file' tree_id=tree_id pk=media.pk %}" alt="Annotiertes Bild" class="img-fluid">
+                {% else %}
+                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" alt="Originalbild" class="img-fluid">
+                {% endif %}
+            </div>
+
+            {# ---- Erkennungs‑Button ---- #}
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="detect" class="btn btn-primary mb-3">
+                    Gesichter erkennen
+                </button>
+            </form>
+
+            {# ---- Bereits erkannte Gesichter + Zuordnungs‑Formular ---- #}
+            {% if tags %}
+                <h4>Erkannte Gesichter</h4>
+                <ul class="list-group">
+                    {% for tag in tags %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                {% if tag.individual %}
+                                    <strong>Verknüpft:</strong> {{ tag.individual.given_name }} {{ tag.individual.surname }}
+                                {% else %}
+                                    <strong>Unverknüpft</strong>
+                                {% endif %}
+                                (Box: {{ tag.x }}, {{ tag.y }}, {{ tag.width }}×{{ tag.height }})
+                            </div>
+
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="assign" value="1">
+                                <input type="hidden" name="tag_id" value="{{ tag.id }}">
+
+                                <select name="individual_id" class="form-select d-inline-block w-auto me-2">
+                                    <option value="">-- Person wählen --</option>
+                                    {% for person in individuals %}
+                                        <option value="{{ person.id }}"
+                                            {% if tag.individual and tag.individual.id == person.id %}selected{% endif %}>
+                                            {{ person.given_name }} {{ person.surname }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+
+                                <button type="submit" class="btn btn-success btn-sm">Zuordnen</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+        </div>
     {% endblock%}
 
     {% block edit-right %}

@@ -4,8 +4,10 @@ django-debug-toolbar
 python-dateutil
 django-mptt
 django-two-factor-auth
+pillow
 pytest
 python-dotenv
 python-gedcom
 qrcode
+requests
 whitenoise

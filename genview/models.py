@@ -30,6 +30,18 @@ def tree_media_directory_path(instance, filename):
     # Build the path: trees/tree_<id>/<filename>
     return f"trees/tree_{tree_id}/{filename}"
 
+def tree_annotated_media_directory_path(instance, filename):
+    """
+    Dynamically generates the upload path for a media file based on its Tree ID.
+    Example: MEDIA_ROOT/trees/tree_5/my_photo.jpg
+    """
+    # Grab the tree ID. Fallback to 'unassigned' just in case,
+    # though your forms should prevent this.
+    tree_id = instance.gedcom_tree_id or "unassigned"
+
+    # Build the path: trees/tree_<id>/<filename>
+    return f"trees/tree_{tree_id}/annotated/{filename}"
+
 
 class Tree(models.Model):
     """Represents a distinct family tree (a GEDCOM file import)."""
@@ -945,7 +957,6 @@ class MediaObject(GedcomIdMixin):
 
     title = models.CharField(max_length=255, blank=True)
 
-    # file = models.FileField(upload_to="gedcom_media/")
     file = models.FileField(
         upload_to=tree_media_directory_path, verbose_name=_("Datei/Bild")
     )
@@ -966,6 +977,10 @@ class MediaObject(GedcomIdMixin):
     description = models.TextField(blank=True)
 
     is_private = models.BooleanField(default=False)
+
+    annotated_image = models.ImageField(
+        upload_to=tree_annotated_media_directory_path,
+        blank=True, null=True) 
 
     # Beziehungen zu den anderen Entitäten
     individuals = models.ManyToManyField(
@@ -1049,6 +1064,33 @@ class MediaObject(GedcomIdMixin):
         return False
 
 
+class FaceTag(models.Model):
+    """
+    Speichert den Bildausschnitt (crop) und die Verknüpfung zu einer Person.
+    """
+    media          = models.ForeignKey(MediaObject, on_delete=models.CASCADE, related_name="facetags")
+    individual     = models.ForeignKey(Individual, on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name="face_tags")
+    
+    # Position / Größe des Rechtecks (einfach u/v Koordinaten, relativ zum Original)
+    x      = models.PositiveIntegerField()   # linke obere Ecke, Pixel
+    y      = models.PositiveIntegerField()
+    width  = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+
+    # Optional: ein kommentierbares Feld, falls du ein manuelles Tag setzen willst
+    tag_label = models.CharField(max_length=200, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("media", "x", "y", "width", "height")   # vermeidet Duplikate
+
+    def __str__(self):
+        return f"FaceTag für {self.individual or 'unbekannt'} ({self.media.id})"
+
+
 # ----------------------------------------------------------------------
 # 🔟 alternative names for i.e. marriage
 # ----------------------------------------------------------------------
@@ -1084,6 +1126,7 @@ class AlternativeName(models.Model):
         type_display = self.get_name_type_display()
         return f"{self.given_name or ''} {self.surname or ''} ({type_display})".strip()
     
+
 @receiver(post_delete, sender=MediaObject)
 def auto_delete_file_on_delete(sender, instance, **kwargs):
     """

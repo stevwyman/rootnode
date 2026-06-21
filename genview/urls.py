@@ -137,6 +137,11 @@ urlpatterns = [
         name="media-file",
     ),
     path(
+        "tree/<int:tree_id>/annotated_media/<int:pk>/file/",
+        views.ProtectedAnnotatedMediaFileView.as_view(),
+        name="annotated-media-file",
+    ),
+    path(
         'tree/<int:tree_id>/media/<int:pk>/', 
         views.MediaObjectDetailView.as_view(), 
         name='media-detail'
