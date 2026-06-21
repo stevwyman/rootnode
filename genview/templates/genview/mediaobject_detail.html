@@ -43,7 +43,10 @@
                              
                              {% if tag.individual %}
                                  <span class="badge bg-success position-absolute start-0 top-100 face-badge text-nowrap shadow">
-                                     {{ tag.individual.short_given_name }}
+                                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tag.individual.pk %}"
+                                        class="text-dark">
+                                        {{ tag.individual.short_given_name }}
+                                    </a>
                                  </span>
                              {% else %}
                                  <span class="badge bg-warning text-dark position-absolute start-0 top-100 face-badge text-nowrap shadow">
@@ -102,14 +105,16 @@
                                     <input type="hidden" name="assign" value="1">
                                     <input type="hidden" name="tag_id" value="{{ tag.id }}">
 
-                                    <select name="individual_id" class="form-select form-select-sm d-inline-block w-auto me-2" required>
-                                        <option value="">-- Person wählen --</option>
-                                        {% for person in individuals %}
-                                            <option value="{{ person.id }}"
-                                                {% if tag.individual and tag.individual.id == person.id %}selected{% endif %}>
-                                                {{ person.given_name }} {{ person.surname }}
+                                    {# ---- Select2‑Feld (keine Optionen nötig, weil AJAX) ---- #}
+                                    <select name="individual_id"
+                                            class="individual-select form-select form-select-sm d-inline-block w-auto me-2"
+                                            data-placeholder="Person wählen…"
+                                            style="width: 250px;">
+                                        {% if tag.individual %}
+                                            <option value="{{ tag.individual.id }}" selected>
+                                                {{ tag.individual.full_name }}
                                             </option>
-                                        {% endfor %}
+                                        {% endif %}
                                     </select>
 
                                     <button type="submit" class="btn btn-outline-success btn-sm text-nowrap">💾 Speichern</button>
@@ -207,3 +212,32 @@
     {% block sys-info-right%}
         {% include "genview/_basic_system_information.html" with object=media %}
     {% endblock%}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+jQuery(document).ready(function($) {
+    
+    // Unsere bewährte Helferfunktion
+    function initSelect2(elementClass, apiUrl, placeholderText) {
+        $(elementClass).select2({
+            placeholder: placeholderText,
+            minimumInputLength: 2,
+            allowClear: true,
+            ajax: {
+                url: apiUrl,
+                dataType: 'json',
+                delay: 250,
+                data: function (params) { return { q: params.term }; },
+                processResults: function (data) { return { results: data.results }; }
+            }
+        });
+    }
+
+    initSelect2('.individual-select', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
+});
+</script>
+{% endblock %}

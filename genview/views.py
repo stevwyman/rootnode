@@ -1208,7 +1208,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         # Lade die Tags inklusive der verknüpften Personen für das Frontend
-        ctx['tags'] = self.object.face_tags.select_related('individual')
+        ctx['tags'] = self.object.facetags.select_related('individual')
         
         # ACHTUNG: Bei sehr großen Bäumen (Tausende Personen) sollte das im 
         # Frontend perspektivisch durch ein AJAX-Suchfeld (Select2) ersetzt werden!
@@ -1242,7 +1242,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             return redirect(request.path)
 
         # Vorhandene Tags vorher bereinigen
-        media.face_tags.all().delete()
+        media.facetags.all().delete()
 
         # Bilddimensionen auslesen, um Pixel in % umzurechnen
         with Image.open(media.file.path) as img:
@@ -1254,6 +1254,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             y_pct = (f['y'] / img_height) * 100
             w_pct = (f['width'] / img_width) * 100
             h_pct = (f['height'] / img_height) * 100
+            confidence = f['confidence']
 
             # Setzt voraus, dass dein Modell nun x_percent, y_percent etc. nutzt
             # (wie im vorherigen Vorschlag empfohlen)
@@ -1263,6 +1264,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
                 y_percent=y_pct,
                 width_percent=w_pct,
                 height_percent=h_pct,
+                confidence=confidence
             )
             
         messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
@@ -2203,9 +2205,9 @@ class UserSearchAPIView(View):
             
         return JsonResponse({'results': results})
 
-#
+# --------------------------------------------------------------
 # --- ADMIN
-#
+# --------------------------------------------------------------
 
 from io import StringIO
 import tempfile
@@ -2370,7 +2372,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
         return self._stderr_buf
 
 
-class TreeMembershipManageView(TreeEditAccessMixin, View): # Nutze hier dein passendes Mixin (z.B. TreeAdminAccessMixin)
+class TreeMembershipManageView(TreeEditAccessMixin, View): 
     template_name = "genview/tree_membership_manage.html"
 
     def get_formset(self, tree, post_data=None):

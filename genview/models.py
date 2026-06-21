@@ -1066,13 +1066,14 @@ class FaceTag(models.Model):
     """
     media          = models.ForeignKey(MediaObject, on_delete=models.CASCADE, related_name="facetags")
     individual     = models.ForeignKey(Individual, on_delete=models.SET_NULL, null=True, blank=True,
-                                      related_name="face_tags")
+                                      related_name="tagged_faces")
     
     # Position / Größe des Rechtecks (einfach u/v Koordinaten, relativ zum Original)
-    x      = models.PositiveIntegerField()   # linke obere Ecke, Pixel
-    y      = models.PositiveIntegerField()
-    width  = models.PositiveIntegerField()
-    height = models.PositiveIntegerField()
+    x_percent      = models.FloatField()   # linke obere Ecke, Pixel
+    y_percent      = models.FloatField()
+    width_percent  = models.FloatField()
+    height_percent = models.FloatField()
+    confidence = models.FloatField()
 
     # Optional: ein kommentierbares Feld, falls du ein manuelles Tag setzen willst
     tag_label = models.CharField(max_length=200, blank=True)
@@ -1081,7 +1082,7 @@ class FaceTag(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("media", "x", "y", "width", "height")   # vermeidet Duplikate
+        unique_together = ("media", "x_percent", "y_percent", "width_percent", "height_percent")   # vermeidet Duplikate
 
     def __str__(self):
         return f"FaceTag für {self.individual or 'unbekannt'} ({self.media.id})"
