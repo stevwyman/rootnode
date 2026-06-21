@@ -10,14 +10,50 @@
     {% endblock%}
 
     {% block left %}
-        <div class="col text-center bg-light p-3 rounded border">
+        <style>
+            .face-box {
+                background-color: rgba(255, 255, 255, 0);
+                transition: background-color 0.2s, box-shadow 0.2s;
+                cursor: pointer;
+            }
+            .face-box:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+                box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            }
+            /* Verhindert, dass Nametags beim Hover das Bild verzerren */
+            .face-badge {
+                z-index: 10;
+                transform: translateY(5px);
+            }
+        </style>
+
+        <div class="col text-center bg-light p-3 rounded border mb-4">
             {% if media.is_image and media.file %}
-                <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" target="_blank">
+                <div class="position-relative d-inline-block" style="max-width: 100%;">
+                    
                     <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" 
                         class="img-fluid rounded shadow-sm" 
                         style="max-height: 70vh; object-fit: contain;" 
                         alt="{{ media.title }}">
-                </a>
+                    
+                    {% for tag in tags %}
+                        <div class="position-absolute border border-2 {% if tag.individual %}border-success{% else %}border-warning{% endif %} face-box"
+                             style="left: {{ tag.x_percent|unlocalize }}%; top: {{ tag.y_percent|unlocalize }}%; width: {{ tag.width_percent|unlocalize }}%; height: {{ tag.height_percent|unlocalize }}%;"
+                             title="{% if tag.individual %}{{ tag.individual.full_name }}{% else %}Gesicht #{{ forloop.counter }} (Unbekannt){% endif %}">
+                             
+                             {% if tag.individual %}
+                                 <span class="badge bg-success position-absolute start-0 top-100 face-badge text-nowrap shadow">
+                                     {{ tag.individual.short_given_name }}
+                                 </span>
+                             {% else %}
+                                 <span class="badge bg-warning text-dark position-absolute start-0 top-100 face-badge text-nowrap shadow">
+                                     ? (#{{ forloop.counter }})
+                                 </span>
+                             {% endif %}
+                        </div>
+                    {% endfor %}
+                    
+                </div>
             {% elif media.file %}
                 <div class="py-5">
                     <h1 class="display-1 text-muted">📄</h1>
@@ -30,66 +66,68 @@
                 <p class="text-danger mt-5">Keine Datei gefunden.</p>
             {% endif %}
         </div>
-        <div class="container mt-4">
 
-            <h2 class="mb-3">{{ media.title }}</h2>
-
-            <div class="mb-4 text-center">
-                {% if media.annotated_image %}
-                    <!-- <img src="{{ media.annotated_image.url }}" alt="Annotiertes Bild" class="img-fluid"> -->
-                    <img src="{% url 'genview:annotated-media-file' tree_id=tree_id pk=media.pk %}" alt="Annotiertes Bild" class="img-fluid">
-                {% else %}
-                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" alt="Originalbild" class="img-fluid">
-                {% endif %}
+        <div class="container mt-4 px-0">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">🤖 Gesichtserkennung</h3>
+                
+                {# ---- Erkennungs-Button ---- #}
+                <form method="post" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" name="detect" class="btn btn-primary">
+                        🔍 Bild analysieren
+                    </button>
+                </form>
             </div>
 
-            {# ---- Erkennungs‑Button ---- #}
-            <form method="post">
-                {% csrf_token %}
-                <button type="submit" name="detect" class="btn btn-primary mb-3">
-                    Gesichter erkennen
-                </button>
-            </form>
-
-            {# ---- Bereits erkannte Gesichter + Zuordnungs‑Formular ---- #}
+            {# ---- Bereits erkannte Gesichter + Zuordnungs-Formular ---- #}
             {% if tags %}
-                <h4>Erkannte Gesichter</h4>
-                <ul class="list-group">
-                    {% for tag in tags %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                {% if tag.individual %}
-                                    <strong>Verknüpft:</strong> {{ tag.individual.given_name }} {{ tag.individual.surname }}
-                                {% else %}
-                                    <strong>Unverknüpft</strong>
-                                {% endif %}
-                                (Box: {{ tag.x }}, {{ tag.y }}, {{ tag.width }}×{{ tag.height }})
-                            </div>
+                <div class="card shadow-sm border-0">
+                    <ul class="list-group list-group-flush">
+                        {% for tag in tags %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                <div>
+                                    <span class="badge {% if tag.individual %}bg-success{% else %}bg-warning text-dark{% endif %} me-2 fs-6">
+                                        #{{ forloop.counter }}
+                                    </span>
+                                    {% if tag.individual %}
+                                        <strong>Verknüpft:</strong> {{ tag.individual.full_name }}
+                                    {% else %}
+                                        <strong>Unbekanntes Gesicht</strong>
+                                    {% endif %}
+                                </div>
 
-                            <form method="post" class="d-inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="assign" value="1">
-                                <input type="hidden" name="tag_id" value="{{ tag.id }}">
+                                <form method="post" class="d-flex align-items-center m-0">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="assign" value="1">
+                                    <input type="hidden" name="tag_id" value="{{ tag.id }}">
 
-                                <select name="individual_id" class="form-select d-inline-block w-auto me-2">
-                                    <option value="">-- Person wählen --</option>
-                                    {% for person in individuals %}
-                                        <option value="{{ person.id }}"
-                                            {% if tag.individual and tag.individual.id == person.id %}selected{% endif %}>
-                                            {{ person.given_name }} {{ person.surname }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
+                                    <select name="individual_id" class="form-select form-select-sm d-inline-block w-auto me-2" required>
+                                        <option value="">-- Person wählen --</option>
+                                        {% for person in individuals %}
+                                            <option value="{{ person.id }}"
+                                                {% if tag.individual and tag.individual.id == person.id %}selected{% endif %}>
+                                                {{ person.given_name }} {{ person.surname }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
 
-                                <button type="submit" class="btn btn-success btn-sm">Zuordnen</button>
-                            </form>
-                        </li>
-                    {% endfor %}
-                </ul>
+                                    <button type="submit" class="btn btn-outline-success btn-sm text-nowrap">💾 Speichern</button>
+                                </form>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% else %}
+                {% if media.is_image %}
+                    <div class="alert alert-secondary text-center">
+                        Bisher wurden noch keine Gesichter auf diesem Bild gescannt.
+                    </div>
+                {% endif %}
             {% endif %}
 
         </div>
-    {% endblock%}
+    {% endblock %}
 
     {% block edit-right %}
         <a href="{% url 'genview:media-edit' tree_id=tree_id pk=media.pk %}" class="btn btn-primary w-100">✏️ {% trans "Datei bearbeiten" %}</a>

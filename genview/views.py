@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-import io
 from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.core.files.base import ContentFile
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
@@ -22,7 +20,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
 
 from .facenode_client import detect_faces_via_api
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from logging import getLogger
 
@@ -1173,52 +1171,6 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
         return FileResponse(file_handle)
 
 
-class ProtectedAnnotatedMediaFileView(TreeAccessMixin, DetailView):
-    """
-    Acts as a secure tunnel to serve media files ONLY if the user
-    has access to the specific family tree.
-    """
-
-    model = MediaObject
-
-    def get_queryset(self):
-        # SECURITY FIX: Ensure the requested media belongs to this tree
-        tree_id = self.kwargs.get("tree_id")
-        return MediaObject.objects.filter(gedcom_tree_id=tree_id)
-
-    def get(self, request, *args, **kwargs):
-        # 1. get_object() automatically applies the get_queryset() filter
-        # and the TreeAccessMixin automatically checks basic tree access.
-        media_obj = self.get_object()
-
-        # ---------------------------------------------------------
-        # 🔒 2. DATENSCHUTZ-PRÜFUNG (NEU)
-        # ---------------------------------------------------------
-        # Hier musst du deine bestehende Logik für 'apply_privacy' einsetzen.
-        # (z.B. prüfen, ob der User nur die Rolle "VIEWER" hat).
-        # Beispiel: apply_privacy = request.tree_membership.role == 'VIEWER'
-        
-        apply_privacy = self.get_apply_privacy()  # ERSETZE DIES durch deine echte Rollen-Prüfung!
-
-        if apply_privacy and media_obj.is_confidential:
-            # Blockiert den Download mit einem 403 Forbidden Fehler
-            raise PermissionDenied("Dieses Dokument enthält vertrauliche Daten und wurde aus Datenschutzgründen gesperrt.")
-        
-        if apply_privacy and media_obj.is_private:
-            # Blockiert den Download mit einem 403 Forbidden Fehler
-            raise PermissionDenied("Dieses Dokument enthält vertrauliche Daten und wurde aus Datenschutzgründen gesperrt.")
-                
-        # ---------------------------------------------------------
-
-        # 3. Check if the file actually exists on the hard drive
-        if not media_obj.annotated_image or not os.path.exists(media_obj.annotated_image.path):
-            raise Http404("Datei nicht gefunden.")
-
-        # 4. Serve the file securely
-        file_handle = open(media_obj.annotated_image.path, "rb")
-        return FileResponse(file_handle)
-
-
 class MediaObjectDetailView(TreeAccessMixin, DetailView):
     model = MediaObject
     template_name = "genview/mediaobject_detail.html"
@@ -1231,8 +1183,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             "families__husband",
             "families__wife",
             "sources",
-            "events__individual",       # Lädt Events von Personen vorab
-            "events__family__husband",  # Lädt Events von Familien vorab
+            "events__individual",
+            "events__family__husband",
             "events__family__wife"
         )
     
@@ -1240,164 +1192,100 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # Security Check for Data Privacy
     # -----------------------------------------------------------------
     def get_object(self, queryset=None):
-        # 1. Hole die Person wie gewohnt aus der Datenbank.
-        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
-        # dass die Person überhaupt zu diesem Stammbaum gehört!)
         media = super().get_object(queryset)
-
-        # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
         apply_privacy = self.get_apply_privacy()
 
-        # 3. Die IDOR-Sperre: Wenn Datenschutz gilt UND die Person vertraulich ist:
-        if apply_privacy and media.is_confidential:
-            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
+        # IDOR & Privacy Sperre
+        if apply_privacy and (media.is_confidential or media.is_private):
             raise PermissionDenied(
-                "Diese Person unterliegt den Datenschutzrichtlinien. "
+                "Dieses Medium unterliegt den Datenschutzrichtlinien. "
                 "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
             )
         
-        if apply_privacy and media.is_private:
-            # Django bricht sofort ab und liefert eine saubere "403 Forbidden" Seite aus
-            raise PermissionDenied(
-                "Diese Person unterliegt den Datenschutzrichtlinien. "
-                "Sie haben keine Berechtigung, diese Detailseite aufzurufen."
-            )
-        
-        # 4. Nur wenn alles okay ist, wird die Person an die View/das Template übergeben
-        tags = media.facetags.select_related('individual')
-        individuals = Individual.objects.filter(gedcom_tree=media.gedcom_tree)
         return media
 
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        media = self.object
-        ctx['tags'] = media.facetags.select_related('individual')
+        # Lade die Tags inklusive der verknüpften Personen für das Frontend
+        ctx['tags'] = self.object.face_tags.select_related('individual')
+        
+        # ACHTUNG: Bei sehr großen Bäumen (Tausende Personen) sollte das im 
+        # Frontend perspektivisch durch ein AJAX-Suchfeld (Select2) ersetzt werden!
         ctx['individuals'] = Individual.objects.filter(
             gedcom_tree=self.kwargs.get('tree_id')
-        )
+        ).only('id', 'given_name', 'surname') # .only() spart massiv Arbeitsspeicher!
+        
         return ctx
     
     # -------------------------------------------------
-    # POST – zwei mögliche Aktionen: "detect" oder "assign"
+    # POST – Router für Aktionen
     # -------------------------------------------------
     def post(self, request, *args, **kwargs):
         media = self.get_object()
 
-        # --------------------------- 1️⃣ Gesichtserkennung ---------------------------
         if "detect" in request.POST:
-            try:
-                faces = detect_faces_via_api(media.file.path)
-            except Exception as exc:
-                messages.error(request, f"Erkennungs‑Fehler: {exc}")
-                return redirect(request.path)
-
-            # Optional: schon vorhandene Tags löschen (je nach Use‑Case)
-            media.facetags.all().delete()
-
-            # FaceTag‑Einträge anlegen
-            for f in faces:
-                FaceTag.objects.create(
-                    media=media,
-                    x=f['x'],
-                    y=f['y'],
-                    width=f['width'],
-                    height=f['height'],
-                )
-            messages.success(request,
-                             f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
-            # ---- Optional: ein annotiertes Bild erzeugen (für UI‑Preview) ----
-            self._save_annotated_image(media, faces)
-            return redirect(request.path)
-
-        # --------------------------- 2️⃣ Person zuweisen ---------------------------
+            return self._handle_detection(request, media)
         elif "assign" in request.POST:
-            tag_id = request.POST.get("tag_id")
-            indiv_id = request.POST.get("individual_id")
-            tag = get_object_or_404(FaceTag, pk=tag_id, media=media)
+            return self._handle_assignment(request, media)
 
-            if indiv_id:
-                individual = get_object_or_404(Individual, pk=indiv_id)
-                tag.individual = individual
-
-                # Wenn du das Gesicht auch als **Subject** in Compreface hinterlegen willst:
-                #if not tag.compreface_subject_id:
-                    # Erstelle das Subject + Lade das gecroppte Bild hoch
-                #    crop_path = self._crop_face(media.file.path, tag)
-                #    subject_id = self._create_compreface_subject(individual, crop_path)
-                #    tag.compreface_subject_id = subject_id
-                #    os.remove(crop_path)       # temporäre Datei entfernen
-                tag.save()
-                messages.success(request,
-                                 f"Gesicht {tag.id} mit {individual} verknüpft.")
-            else:
-                messages.warning(request,
-                                 "Keine Person ausgewählt – Tag bleibt unverknüpft.")
-            return redirect(request.path)
-
-        # fallback
         return redirect(request.path)
 
-    # -----------------------------------------------------------------
-    # Hilfs‑Methode: Annotiertes Bild (rote Rechtecke) erzeugen & speichern
-    # -----------------------------------------------------------------
-    def _save_annotated_image(self, media, faces):
-        """
-        Fügt zu `media.file` rote Rechtecke entsprechend `faces` hinzu
-        und speichert das Ergebnis in `media.annotated_image`.
-        """
-        pil = Image.open(media.file.path).convert('RGB')
-        draw = ImageDraw.Draw(pil)
-        font = ImageFont.load_default()
+    # -------------------------------------------------
+    # Action-Handler 1: Erkennung & Prozentrechnung
+    # -------------------------------------------------
+    def _handle_detection(self, request, media):
+        try:
+            faces = detect_faces_via_api(media.file.path)
+        except Exception as exc:
+            messages.error(request, f"Erkennungs-Fehler: {exc}")
+            return redirect(request.path)
 
-        for i, f in enumerate(faces):
-            x, y, w, h = f['x'], f['y'], f['width'], f['height']
-            draw.rectangle([x, y, x + w, y + h], outline="red", width=3)
-            label = f"Face {i+1}"
-            tw = draw.textlength(label, font=font)
-            th = font.size * 1
-            draw.rectangle([x, y - th - 2, x + tw, y], fill="red")
-            draw.text((x, y - th - 2), label, fill="white", font=font)
+        # Vorhandene Tags vorher bereinigen
+        media.face_tags.all().delete()
 
-        buffer = io.BytesIO()
-        pil.save(buffer, format="JPEG")
-        content = ContentFile(buffer.getvalue(),
-                              name=f"{media.id}_annotated.jpg")
-        media.annotated_image.save(content.name, content, save=True)
+        # Bilddimensionen auslesen, um Pixel in % umzurechnen
+        with Image.open(media.file.path) as img:
+            img_width, img_height = img.size
 
-    # -----------------------------------------------------------------
-    # Hilfs‑Methode: Einen Bild‑Ausschnitt (Face‑Crop) erzeugen (temporär)
-    # -----------------------------------------------------------------
-    def _crop_face(self, image_path, tag):
-        """
-        Liefert einen temporären Pfad zu einem Bild‑Ausschnitt,
-        das nur das erkannte Gesicht enthält.
-        """
-        from PIL import Image
-        import tempfile, os
+        for f in faces:
+            # Umrechnung in Prozent (0.0 bis 100.0)
+            x_pct = (f['x'] / img_width) * 100
+            y_pct = (f['y'] / img_height) * 100
+            w_pct = (f['width'] / img_width) * 100
+            h_pct = (f['height'] / img_height) * 100
 
-        img = Image.open(image_path).convert('RGB')
-        crop = img.crop((tag.x, tag.y,
-                         tag.x + tag.width,
-                         tag.y + tag.height))
-        fd, tmp_path = tempfile.mkstemp(suffix=".jpg")
-        os.close(fd)
-        crop.save(tmp_path, format='JPEG')
-        return tmp_path
+            # Setzt voraus, dass dein Modell nun x_percent, y_percent etc. nutzt
+            # (wie im vorherigen Vorschlag empfohlen)
+            FaceTag.objects.create(
+                media=media,
+                x_percent=x_pct,
+                y_percent=y_pct,
+                width_percent=w_pct,
+                height_percent=h_pct,
+            )
+            
+        messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
+        return redirect(request.path)
 
-    # -----------------------------------------------------------------
-    # Hilfs‑Methode: Subject in Compreface anlegen (wenn du das willst)
-    # -----------------------------------------------------------------
-    def _create_compreface_subject(self, individual, face_crop_path):
-        """
-        Nutzt den Remote‑API‑Wrapper, um ein **Subject** (Person) in Compreface anzulegen
-        und das gecroppte Gesicht als Trainings‑Bild hochzuladen.
-        Gibt die erhaltene `subject_id` zurück.
-        """
-        from .compreface_client import create_subject
-        name = f"{individual.given_name} {individual.surname}"
-        subject_id = create_subject(name, face_crop_path)
-        return subject_id
+    # -------------------------------------------------
+    # Action-Handler 2: Zuweisung einer Person
+    # -------------------------------------------------
+    def _handle_assignment(self, request, media):
+        tag_id = request.POST.get("tag_id")
+        indiv_id = request.POST.get("individual_id")
+        
+        tag = get_object_or_404(FaceTag, pk=tag_id, media=media)
+
+        if indiv_id:
+            individual = get_object_or_404(Individual, pk=indiv_id)
+            tag.individual = individual
+            tag.save()
+            messages.success(request, f"Gesicht erfolgreich mit {individual} verknüpft.")
+        else:
+            messages.warning(request, "Keine Person ausgewählt – Tag bleibt unverknüpft.")
+            
+        return redirect(request.path)
     
 
 class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMixin, ListView):

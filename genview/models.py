@@ -978,10 +978,6 @@ class MediaObject(GedcomIdMixin):
 
     is_private = models.BooleanField(default=False)
 
-    annotated_image = models.ImageField(
-        upload_to=tree_annotated_media_directory_path,
-        blank=True, null=True) 
-
     # Beziehungen zu den anderen Entitäten
     individuals = models.ManyToManyField(
         Individual,
