@@ -1074,6 +1074,12 @@ class FaceTag(models.Model):
     width_percent  = models.FloatField()
     height_percent = models.FloatField()
     confidence = models.FloatField()
+    # 🔥 NEU: Hier drinnen speichern wir die 512 Zahlen als Liste
+    embedding = models.JSONField(
+        null=True, 
+        blank=True, 
+        help_text="Der mathematische Gesichts-Vektor aus DeepFace."
+    )
 
     # Optional: ein kommentierbares Feld, falls du ein manuelles Tag setzen willst
     tag_label = models.CharField(max_length=200, blank=True)

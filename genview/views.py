@@ -20,6 +20,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
 
 from .facenode_client import detect_faces_via_api
+from .utils import find_best_match_for_face
 from PIL import Image
 
 from logging import getLogger
@@ -1235,6 +1236,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # Action-Handler 1: Erkennung & Prozentrechnung
     # -------------------------------------------------
     def _handle_detection(self, request, media):
+        tree_id = self.kwargs.get("tree_id")
+        
         try:
             faces = detect_faces_via_api(media.file.path)
         except Exception as exc:
@@ -1255,6 +1258,12 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             w_pct = (f['width'] / img_width) * 100
             h_pct = (f['height'] / img_height) * 100
             confidence = f['confidence']
+            detected_embedding=f['embedding'] # 🔥 Aus der API-Antwort mitspeichern
+
+            auto_assigned_individual = find_best_match_for_face(detected_embedding, tree_id)
+
+            if auto_assigned_individual:
+                auto_match_count += 1
 
             # Setzt voraus, dass dein Modell nun x_percent, y_percent etc. nutzt
             # (wie im vorherigen Vorschlag empfohlen)
@@ -1264,7 +1273,9 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
                 y_percent=y_pct,
                 width_percent=w_pct,
                 height_percent=h_pct,
-                confidence=confidence
+                confidence=confidence,
+                embedding=detected_embedding,
+                individual=auto_assigned_individual
             )
             
         messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
