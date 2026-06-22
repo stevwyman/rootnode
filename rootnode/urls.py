@@ -24,15 +24,15 @@ from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
 
 urlpatterns = [
 
-    # 2FA‑Routen (vor allen anderen geschützten Routen)
+    # 2FA-Routen (vor allen anderen geschützten Routen)
     path('', include(tf_urls)),
 
     path('i18n/', include('django.conf.urls.i18n')),
     # api also goes here
 ]
 
-handler404 = 'genview.views.handle_404'   # 404‑Handler
-handler403 = 'genview.views.handle_403'   # 403‑Handler
+handler404 = 'genview.views.handle_404'   # 404-Handler
+handler403 = 'genview.views.handle_403'   # 403-Handler
 
 urlpatterns += i18n_patterns(
 
@@ -43,7 +43,7 @@ urlpatterns += i18n_patterns(
 ) 
 
 # -------------------------------------------------
-# DEBUG‑Toolbar nur aktivieren, wenn DEBUG=True
+# DEBUG-Toolbar nur aktivieren, wenn DEBUG=True
 if settings.DEBUG:
     urlpatterns += debug_toolbar_urls()
 

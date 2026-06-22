@@ -1,6 +1,5 @@
 {% extends "genview/base_detail.html" %}
-{% load i18n %}
-{% load l10n %}
+{% load i18n l10n static %}
 
 {% block title %}{{ media.title }} - {% trans "Details" %}{% endblock %}
 
@@ -106,7 +105,7 @@
                                         <input type="hidden" name="assign" value="1">
                                         <input type="hidden" name="tag_id" value="{{ tag.id }}">
 
-                                        {# ---- Select2‑Feld (keine Optionen nötig, weil AJAX) ---- #}
+                                        {# ---- Select2-Feld (keine Optionen nötig, weil AJAX) ---- #}
                                         <select name="individual_id"
                                                 class="individual-select form-select form-select-sm d-inline-block w-auto me-2"
                                                 data-placeholder="Person wählen…"
@@ -142,7 +141,7 @@
                     <form method="post">
                         {% csrf_token %}
                         <button type="submit" name="ocr" class="btn btn-outline-primary mt-2">
-                            Handschrift‑Text extrahieren
+                            Handschrift-Text extrahieren
                         </button>
                     </form>
                 </div>

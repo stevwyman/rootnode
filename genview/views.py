@@ -19,8 +19,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
 
-from .facenode_client import detect_faces_via_api
-from .utils import find_best_match_for_face
 from PIL import Image
 
 from logging import getLogger
@@ -76,12 +74,12 @@ def handle_404(request, exception):
 
 def handle_403(request, exception):
     from django.http import HttpResponsePermanentRedirect
-    logger.info("403‑Handler aufgerufen")
-    # .error nimmt die format‑String‑Syntax
+    logger.info("403-Handler aufgerufen")
+    # .error nimmt die format-String-Syntax
     logger.error("403 thrown, potential exception %s", exception)
 
     # optional – falls du den kompletten Trace sehen willst:
-    logger.exception("403‑Exception aufgetreten", exc_info=exception)
+    logger.exception("403-Exception aufgetreten", exc_info=exception)
     return HttpResponsePermanentRedirect("/")
 
 # ----------------------------------------------------------------------
@@ -238,7 +236,7 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
     # --- NEU: Filter-Konfiguration ---
     search_fields = [
         'given_name', 'surname', 
-        'alternative_names__given_name', 'alternative_names__surname' # 🔥 NEU!
+        'alternative_names__given_name', 'alternative_names__surname' 
     ]
     exact_filter_fields = ['sex']              # Diese Felder müssen exakt übereinstimmen
 
@@ -859,9 +857,9 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
 
     search_fields = [
         'husband__given_name', 'husband__surname', 
-        'husband__alternative_names__surname', # 🔥 NEU!
+        'husband__alternative_names__surname', 
         'wife__given_name', 'wife__surname',
-        'wife__alternative_names__surname'     # 🔥 NEU!
+        'wife__alternative_names__surname'     
     ]
 
     def get_queryset(self):
@@ -1236,14 +1234,15 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     
     def _handle_ocr(self, request, media):
         from .ocr_client import extract_text_via_api
-        try:
-            extracted_text = extract_text_via_api(media.file.path)
-            # Optional: Text in ein Feld des MediaObject speichern
-            media.extracted_text = extracted_text
+        
+        response = extract_text_via_api(media.file.path)
+
+        if response["error"]:
+            messages.error(request, f"OCR-Fehler: {response["error"]}")
+        else:
+            media.extracted_text = response["text"]
             media.save()
             messages.success(request, "Text erfolgreich extrahiert.")
-        except Exception as exc:
-            messages.error(request, f"OCR‑Fehler: {exc}")
 
         return redirect(request.path)
 
@@ -1251,12 +1250,15 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # Action-Handler 1: Erkennung & Prozentrechnung
     # -------------------------------------------------
     def _handle_detection(self, request, media):
+        from .facenode_client import detect_faces_via_api
+        from .utils import find_best_match_for_face
+
         tree_id = self.kwargs.get("tree_id")
-        
-        try:
-            faces = detect_faces_via_api(media.file.path)
-        except Exception as exc:
-            messages.error(request, f"Erkennungs-Fehler: {exc}")
+
+        response = detect_faces_via_api(media.file.path)
+
+        if response["error"]:
+            messages.error(request, f"Erkennungs-Fehler: {response["error"]}")
             return redirect(request.path)
 
         # Vorhandene Tags vorher bereinigen
@@ -1268,7 +1270,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
 
         auto_match_count = 0
 
-        for f in faces:
+        for f in response["faces"]:
             # Umrechnung in Prozent (0.0 bis 100.0)
             x_pct = (f['x'] / img_width) * 100
             y_pct = (f['y'] / img_height) * 100
@@ -1298,7 +1300,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         if auto_match_count > 0:
             messages.success(request, f"{(auto_match_count)} Gesicht(er) automatisch zugeordnet.")
         else:
-            messages.success(request, f"{len(faces)} Gesicht(e) erkannt und gespeichert.")
+            messages.success(request, f"{len(response["faces"])} Gesicht(e) erkannt und gespeichert.")
         
         return redirect(request.path)
 
@@ -1342,9 +1344,7 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         qs = super().get_queryset().filter(gedcom_tree_id=self.kwargs['tree_id'])
         
         # 2. Die Filter (Suche & Kategorie) aus dem Mixin anwenden
-        qs = qs.filter(self.get_queryset_filters())
-
-        qs = qs.distinct()
+        qs = qs.filter(self.get_queryset_filters()).distinct()
         
         # 3. Die Sortierung aus dem Mixin anwenden
         qs = qs.order_by(self.get_ordering())
@@ -1558,6 +1558,45 @@ class BulkMediaUploadView(TreeAccessMixin, TemplateView):
 
         # Nach dem Post-Request laden wir die Seite neu (Post/Redirect/Get-Pattern)
         return redirect('genview:bulk-media-upload', tree_id=tree_id)
+
+
+class ToggleMediaCategoryView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    """
+    Schaltet die Kategorie eines MediaObject von PHOTO ↔ DOCUMENT.
+    Erwartet JSON-Body: {"id": <media_id>}
+    Liefert JSON-Response: {"id": ..., "new_category": "...", "error": null}
+    """
+    def post(self, request, *args, **kwargs):
+        try:
+            data = request.POST or request.body
+            # JSON-Payload akzeptieren
+            if request.content_type == "application/json":
+                import json
+                payload = json.loads(request.body)
+            else:
+                payload = request.POST
+            media_id = payload.get("id")
+            if not media_id:
+                return HttpResponseBadRequest(
+                    JsonResponse({"error": "Keine ID übergeben"}))
+        except Exception as e:
+            return HttpResponseBadRequest(JsonResponse({"error": str(e)}))
+
+        # ggf. Berechtigungs-Check (z. B. nur Besitzer/Admin darf ändern)
+        media = get_object_or_404(MediaObject, pk=media_id)
+
+        # ---- Kategorie umschalten ----
+        if media.category == MediaObject.Category.PHOTO:
+            media.category = MediaObject.Category.DOCUMENT
+        else:
+            media.category = MediaObject.Category.PHOTO
+        media.save(update_fields=["category"])
+
+        return JsonResponse({
+            "id": media.id,
+            "new_category": media.category,
+            "error": None,
+        })
 
 
 # --------------------------------------------------------------

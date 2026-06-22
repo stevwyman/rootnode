@@ -14,11 +14,11 @@ _already_created = False
 @receiver(post_migrate)
 def create_default_superuser(sender, **kwargs):
     """
-    Legt einen Super‑User an, wenn er noch nicht existiert.
-    Der Handler wird nach jedem erfolgreichen `migrate`‑Durchlauf ausgelöst,
+    Legt einen Super-User an, wenn er noch nicht existiert.
+    Der Handler wird nach jedem erfolgreichen `migrate`-Durchlauf ausgelöst,
     also erst **nach** dem Anlegen aller Tabellen.
     """
-    # Wir wollen das nur in Entwicklungs‑/Staging‑Umgebungen ausführen.
+    # Wir wollen das nur in Entwicklungs-/Staging-Umgebungen ausführen.
     if not getattr(settings, "CREATE_SUPERUSER_ON_STARTUP", False):
         return
     
@@ -37,9 +37,9 @@ def create_default_superuser(sender, **kwargs):
             User.objects.create_superuser(username=username,
                                          email=email,
                                          password=password)
-            logger.info(f"Super‑User '{username}' wurde angelegt.")
+            logger.info(f"Super-User '{username}' wurde angelegt.")
         else:
-            logger.debug(f"Super‑User '{username}' existiert bereits.")
+            logger.debug(f"Super-User '{username}' existiert bereits.")
     except IntegrityError:
-        # Race‑Condition – ein anderer Prozess hat den User bereits erstellt.
-        logger.debug("Super‑User bereits von einem anderen Prozess angelegt.")
+        # Race-Condition – ein anderer Prozess hat den User bereits erstellt.
+        logger.debug("Super-User bereits von einem anderen Prozess angelegt.")

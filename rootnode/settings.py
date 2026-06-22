@@ -77,8 +77,8 @@ INSTALLED_APPS = [
     'django_bootstrap5',
     'genview',
     'django_otp',
-    'django_otp.plugins.otp_totp',          # TOTP (Google‑Authenticator)
-    'django_otp.plugins.otp_static',        # Backup‑Tokens
+    'django_otp.plugins.otp_totp',          # TOTP (Google-Authenticator)
+    'django_otp.plugins.otp_static',        # Backup-Tokens
     'django_otp.plugins.otp_email',
     'two_factor',  
     'two_factor.plugins.email',
@@ -99,7 +99,7 @@ MIDDLEWARE = [
 ]
 
 # Schalte die automatische Anlage nur in den gewünschten Umgebungen an:
-CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev‑settings.py
+CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev-settings.py
 
 ROOT_URLCONF = 'rootnode.urls'
 
@@ -208,7 +208,7 @@ SECURE_BROWSER_XSS_FILTER = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_URL = 'two_factor:login'              # Name der 2FA‑Login‑View
+LOGIN_URL = 'two_factor:login'              # Name der 2FA-Login-View
 LOGIN_REDIRECT_URL = 'genview:tree-list'   # Ziel nach erfolgreichem Login            
 LOGOUT_REDIRECT_URL = 'two_factor:login'
 

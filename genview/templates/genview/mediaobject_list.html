@@ -1,6 +1,11 @@
 {% extends "genview/base.html" %}
+{% load static %}
 
 {% block title %}Medien-Galerie{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/media-toggle.css' %}">
+{% endblock %}
 
 {% block content %}
 
@@ -132,6 +137,19 @@
                                 <a href="{% url 'genview:media-edit' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-secondary">✎</a>
                                 <a href="{% url 'genview:media-delete' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-danger">🗑</a>
                             </div>
+                            <div>
+                                <button
+                                    class="btn btn-sm btn-outline-primary toggle-category"
+                                    data-id="{{ item.id }}"
+                                    title="Kategorie umschalten">
+                                    
+                                    {% if item.category == item.Category.PHOTO %}
+                                        📷 → 📄
+                                    {% else %}
+                                        📄 → 📷
+                                    {% endif %}
+                                </button>
+                            </div>
                             {% endif %}
                         </div>
                     </div>
@@ -172,4 +190,12 @@
         </nav>
     {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Wird beim Rendern vom Server ersetzt → richtige URL
+    const TOGGLE_CATEGORY_URL = "{% url 'genview:media-toggle-category' tree_id %}";
+</script>
+<script src="{% static 'js/media-toggle.js' %}"></script>
 {% endblock %}

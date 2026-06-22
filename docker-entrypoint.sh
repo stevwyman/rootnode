@@ -17,7 +17,7 @@ if [ ! -d "/data/genview/staticfiles" ]; then
     mkdir -p /data/genview/staticfiles
     chown -R $(id -u):$(id -g) /data/genview/staticfiles
 else
-    echo "✅ staticfiles‑Verzeichnis existiert bereits."
+    echo "✅ staticfiles-Verzeichnis existiert bereits."
 fi
 
 echo "🧹 Collectstatic wird ausgeführt …"
@@ -30,6 +30,6 @@ echo "🔁 Run migrations …"
 python manage.py migrate
 
 # ------------------------------------------------------------------
-# 4️⃣ Starte den eigentlichen Django‑Befehl (z. B. runserver, gunicorn, …)
+# 4️⃣ Starte den eigentlichen Django-Befehl (z. B. runserver, gunicorn, …)
 # ------------------------------------------------------------------
 exec "$@"
