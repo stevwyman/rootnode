@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
 from itertools import chain
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
@@ -48,6 +50,7 @@ from .forms import (
     EventForm,
     SourceForm,
     PlaceForm,
+    PlaceMergeForm
 )
 from .mixins import (
     SuperuserRequiredMixin, 
@@ -57,6 +60,8 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
+from .utils import place_normalized_key
+from .services.place_merge import merge_places
 
 
 def home(request):
@@ -1711,6 +1716,109 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
+class PlaceDuplicateMergeView(View):
+    template_name = "genview/place_duplicate_merge.html"
+
+    # -------------------------------------------------
+    # GET – Daten vorbereiten
+    # -------------------------------------------------
+    def get(self, request, tree_id):
+        tree = get_object_or_404(Tree, pk=tree_id)
+
+        # ---- 1. Alle Places dieses Trees holen ----
+        places_qs = (
+            Place.objects.filter(gedcom_tree=tree)
+            .order_by("name")
+            .only("id", "name", "latitude", "longitude")
+        )
+
+        # ---- 2. Gruppieren nach normalisiertem Namen ----
+        groups = defaultdict(list)
+        for p in places_qs:
+            groups[place_normalized_key(p.name)].append(p)
+
+        dup_groups = [(k, lst) for k, lst in groups.items() if len(lst) > 1]
+
+        if not dup_groups:
+            messages.info(request, "Keine duplizierten Orte gefunden.")
+            return redirect(
+                reverse("genview:place-list", kwargs={"tree_id": tree.id})
+            )
+
+        # ---- 3. Formular erzeugen (erstellt die Felder) ----
+        form = PlaceMergeForm(groups=dup_groups)
+
+        # ---- 4. Für jede Gruppe das fertige Radio‑Widget holen ----
+        # Wir bauen eine Liste von Tupeln: (places‑Liste, gerendertes Widget)
+        group_widgets = []
+        for idx, (_, places) in enumerate(dup_groups):
+            field_name = f"master_{idx}"
+            widget = form[field_name]               # gerendertes HTML‑Widget
+            group_widgets.append((places, widget))
+
+        context = {
+            "form": form,               # (optional, falls du weitere Felder brauchst)
+            "group_widgets": group_widgets,
+            "tree": tree,
+        }
+        return render(request, self.template_name, context)
+
+    # -------------------------------------------------
+    # POST – Merge‑Logik (leicht angepasst)
+    # -------------------------------------------------
+    def post(self, request, tree_id):
+        tree = get_object_or_404(Tree, pk=tree_id)
+
+        # dieselbe Gruppierung wie im GET‑Zweig, damit das Formular korrekt aufgebaut wird
+        places_qs = (
+            Place.objects.filter(gedcom_tree=tree)
+            .order_by("name")
+            .only("id", "name", "latitude", "longitude")
+        )
+        groups = defaultdict(list)
+        for p in places_qs:
+            groups[place_normalized_key(p.name)].append(p)
+
+        dup_groups = [(k, lst) for k, lst in groups.items() if len(lst) > 1]
+
+        form = PlaceMergeForm(groups=dup_groups, data=request.POST)
+
+        if not form.is_valid():
+            messages.error(request, "Bitte wähle für jede Gruppe einen Master‑Ort aus.")
+            # Widgets neu bauen, damit das Formular im Fehlerfall wieder angezeigt wird
+            group_widgets = []
+            for idx, (_, places) in enumerate(dup_groups):
+                field_name = f"master_{idx}"
+                group_widgets.append((places, form[field_name]))
+            return render(request, self.template_name, {
+                "form": form,
+                "group_widgets": group_widgets,
+                "tree": tree,
+            })
+
+        total_merged = 0
+        for idx, (_, places) in enumerate(dup_groups):
+            master_id = int(form.cleaned_data[f"master_{idx}"])
+            master = get_object_or_404(Place, pk=master_id, gedcom_tree=tree)
+
+            duplicates = [p for p in places if p.id != master_id]
+            if not duplicates:
+                continue
+
+            with transaction.atomic():
+                merge_places(master, duplicates)
+            total_merged += len(duplicates)
+
+        if total_merged:
+            messages.success(request, f"{total_merged} duplizierte Orte zusammengeführt.")
+        else:
+            messages.info(request, "Es wurde nichts zusammengeführt.")
+
+        return redirect(
+            reverse("genview:place-list", kwargs={"tree_id": tree.id})
+        )
+    
+
 # --------------------------------------------------------------
 # 7️⃣ Events
 # --------------------------------------------------------------
@@ -2528,3 +2636,4 @@ def toggle_eventtype_visibility(request, pk):
         'status': 'success', 
         'is_visible': event_type.is_visible
     })
+

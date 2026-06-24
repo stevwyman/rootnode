@@ -16,3 +16,4 @@ whitenoise
 transformers 
 pillow 
 torch
+unidecode

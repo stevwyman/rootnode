@@ -1,4 +1,6 @@
 import numpy as np
+import re
+from unidecode import unidecode
 from .models import FaceTag
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
@@ -38,3 +40,12 @@ def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
             best_individual = tag.individual
 
     return best_individual
+
+def place_normalized_key(name: str) -> str:
+    if not name:
+        return ""
+    name = name.split(",")[0].strip()
+    name = unidecode(name).lower()
+    name = re.sub(r"[^a-z0-9\s-]", "", name)
+    name = re.sub(r"\s+", "_", name.strip())
+    return name

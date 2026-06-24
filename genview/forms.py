@@ -2,6 +2,7 @@
 from django import forms
 from django.forms import ModelForm, DateInput
 from django.contrib.auth.models import User
+from typing import Tuple, Iterable
 from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, TreeMembership
 
 
@@ -609,7 +610,26 @@ class SourceForm(forms.ModelForm):
         }
 
 
-   
+class PlaceMergeForm(forms.Form):
+    """
+    Erwartet `groups` als Iterable von Tupeln:
+        (key, [Place, …])
+    Für jede Gruppe wird ein ChoiceField mit RadioSelect erzeugt.
+    """
+    def __init__(self, groups, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for idx, (key, places) in enumerate(groups):
+            field_name = f"master_{idx}"
+            choices = [(p.id, p.name or f"Place {p.id}") for p in places]
+
+            self.fields[field_name] = forms.ChoiceField(
+                label=f"Gruppe {idx + 1}",
+                choices=choices,
+                widget=forms.RadioSelect,
+                required=True,
+            )
+               
 #
 # --- ADMIN
 #
