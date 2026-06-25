@@ -235,11 +235,7 @@ urlpatterns = [
     path('tree/<int:tree_id>/places/<int:pk>/', views.PlaceDetailView.as_view(), name='place-detail'),
     path('tree/<int:tree_id>/places/<int:pk>/edit/', views.PlaceUpdateView.as_view(), name='place-edit'),
     path('tree/<int:tree_id>/places/<int:pk>/delete/', views.PlaceDeleteView.as_view(), name='place-delete'),
-    path(
-        "tree/<int:tree_id>/places/merge-duplicates/",
-        views.PlaceDuplicateMergeView.as_view(),
-        name="place-merge-duplicates",
-    ),
+    path('tree/<int:tree_id>/places/cleanup/', views.PlaceDeduplicationView.as_view(), name='place-deduplication'),
 
     # API for drop-down search
     path('tree/<int:tree_id>/api/search/individuals/', views.IndividualSearchAPIView.as_view(), name='api-search-individuals'),
