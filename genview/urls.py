@@ -236,6 +236,9 @@ urlpatterns = [
     path('tree/<int:tree_id>/places/<int:pk>/edit/', views.PlaceUpdateView.as_view(), name='place-edit'),
     path('tree/<int:tree_id>/places/<int:pk>/delete/', views.PlaceDeleteView.as_view(), name='place-delete'),
     path('tree/<int:tree_id>/places/cleanup/', views.PlaceDeduplicationView.as_view(), name='place-deduplication'),
+    path("tree/<int:tree_id>/places/geocode/", views.PlaceGeocodeView.as_view(), name="place-geocode"),
+
+
 
     # API for drop-down search
     path('tree/<int:tree_id>/api/search/individuals/', views.IndividualSearchAPIView.as_view(), name='api-search-individuals'),

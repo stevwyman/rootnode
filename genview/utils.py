@@ -1,4 +1,6 @@
 import numpy as np
+import requests
+from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
 from .models import FaceTag, Place
@@ -94,41 +96,44 @@ def merge_multiple_places(master_place, duplicate_places):
             # Nach dem Umbiegen aller Referenzen wird dieses eine Duplikat gelöscht
             duplicate.delete()
 
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
-def find_similar_places(tree_id, threshold=0.80):
+def geocode_place(query, limit=1, country_codes=None):
     """
-    Findet ähnliche Orte innerhalb eines Stammbaums.
-    Gibt eine Liste von Dictionaries zurück: 
-    [{'place1': p1, 'place2': p2, 'similarity': 0.85}]
+    Sendet eine Anfrage an Nominatim und gibt die erste (oder limit) Treffer zurück.
+    Rückgabe: Liste von Dicts mit at least ['lat', 'lon', 'display_name'].
     """
-    # Alle Orte des Baums holen. Wir sortieren nach Alphabet, 
-    # damit wir beim Paare-Vergleichen keine Duplikate (A-B und B-A) haben.
-    places = list(Place.objects.filter(gedcom_tree_id=tree_id).order_index('name'))
+    params = {
+        "q": query,
+        "format": "json",
+        "addressdetails": 1,
+        "limit": limit,
+    }
+    if country_codes:
+        params["countrycodes"] = country_codes   # z. B. "de" für Deutschland
+
+    # Nominatim verlangt einen User‑Agent‑Header – sonst 403
+    headers = {
+        "User-Agent": "YourAppName/1.0 (+https://stevwyman.com)",
+        "Accept-Language": "de",   # Ergebnis in Deutsch (optional)
+    }
+
+    url = f"{NOMINATIM_URL}?{urlencode(params)}"
+    response = requests.get(url, headers=headers, timeout=10)
     
-    similar_pairs = []
-    
-    # Verschachtelte Schleife zum Paar-Vergleich (O(N²) - bei gigantischen 
-    # Ortslisten evtl. später optimieren, für normale Bäume völlig okay)
-    for i in range(len(places)):
-        for j in range(i + 1, len(places)):
-            p1 = places[i]
-            p2 = places[j]
-            
-            # Schnell-Check: Wenn die Anfangsbuchstaben völlig verschieden sind, 
-            # überspringen (spart Rechenzeit)
-            if p1.name[0].lower() != p2.name[0].lower():
-                continue
-                
-            # Ähnlichkeit berechnen (Wert zwischen 0.0 und 1.0)
-            similarity = SequenceMatcher(None, p1.name.lower(), p2.name.lower()).ratio()
-            
-            if similarity >= threshold:
-                similar_pairs.append({
-                    'place1': p1,
-                    'place2': p2,
-                    'similarity': round(similarity * 100, 1) # In Prozent, z.B. 85.4
-                })
-                
-    # Sortieren nach höchster Ähnlichkeit zuerst
-    similar_pairs.sort(key=lambda x: x['similarity'], reverse=True)
-    return similar_pairs
+    response.raise_for_status()
+
+    results = response.json()
+    print(results)
+    # Normalisiere das Ergebnis – Liste von dicts
+    normalized = []
+    for r in results:
+        normalized.append({
+            "lat": float(r["lat"]),
+            "lon": float(r["lon"]),
+            "display_name": r["display_name"],
+            "type": r.get("type", ""),
+            "importance": float(r.get("importance", 0)),
+        })
+    return normalized
+

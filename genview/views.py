@@ -7,12 +7,11 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
 from django.db.models import Count, Subquery, OuterRef, Prefetch
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.forms import modelformset_factory
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, HttpResponseBadRequest
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView, FormView
@@ -58,7 +57,7 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
-from .utils import get_similar_place_clusters, merge_multiple_places
+from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place
 
 
 def home(request):
@@ -1756,7 +1755,63 @@ class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
                 messages.info(request, "Es gab keine Duplikate zum Zusammenführen.")
             
         return redirect(request.path)
-    
+
+
+class PlaceGeocodeView(TreeEditAccessMixin, View):
+    """
+    Erwartet POST‑Parameter `place_id`.  Holt den Ort, fragt Nominatim,
+    speichert die ersten Koordinaten und gibt das Ergebnis als JSON zurück
+    (für AJAX) oder leitet zurück zu `PlaceDetailView` (falls kein AJAX).
+    """
+    def post(self, request, *args, **kwargs):
+        place_id = request.POST.get("place_id")
+        tree_id = request.POST.get("tree_id")
+
+        if not tree_id:
+            return HttpResponseBadRequest("Missing tree_id")
+
+        if not place_id:
+            return HttpResponseBadRequest("Missing place_id")
+
+        place = get_object_or_404(Place, pk=place_id)
+
+        # Build die Such‑Query.  Priorität: address > name
+        query = place.name
+        if not query:
+            messages.error(request, "Ort hat weder Namen noch Adresse – kein Geocode möglich.")
+            return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
+
+        try:
+            results = geocode_place(query, limit=1, country_codes="de")
+        except Exception as exc:
+            messages.error(request, f"Nominatim‑Fehler: {exc}")
+            return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
+
+        if not results:
+            messages.warning(request, f"Keine Koordinaten für „{query}“ gefunden.")
+            return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
+
+        best = results[0]
+        place.latitude = best["lat"]
+        place.longitude = best["lon"]
+        place.save()
+
+        logger.info(best)
+
+        # Wenn es ein AJAX‑Request ist, return JSON
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({
+                "status": "ok",
+                "lat": place.latitude,
+                "lon": place.longitude,
+                "display_name": best["display_name"],
+                "message": f"Koordinaten für {query} wurden gefunden."
+            })
+        # Sonst: normales Redirect + Django‑Message
+        messages.success(request,
+                         f"Koordinaten ({place.latitude}, {place.longitude}) für „{query}“ gespeichert.")
+        return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
+        
 
 # --------------------------------------------------------------
 # 7️⃣ Events
