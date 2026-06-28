@@ -245,6 +245,7 @@ class FamilyForm(ModelForm):
     #  Initial-Daten für die virtuellen Felder befüllen
     # --------------------------------------------------------------
     def __init__(self, *args, tree_id=None, **kwargs):
+        self._tree_id = tree_id
         super().__init__(*args, **kwargs)
 
         # 1. Versuche die tree_id aus den View-Argumenten zu holen
@@ -310,6 +311,21 @@ class FamilyForm(ModelForm):
 
         return family
 
+    def clean(self):
+        cleaned_data = super().clean()
+        from .models import _validate_related_same_tree
+
+        tree_id = self.instance.gedcom_tree_id if self.instance.pk else self._tree_id
+        _validate_related_same_tree(
+            tree_id=tree_id,
+            pairs=[
+                (cleaned_data.get("husband"), "husband"),
+                (cleaned_data.get("wife"), "wife"),
+                (cleaned_data.get("parent"), "parent"),
+            ],
+        )
+        return cleaned_data
+
 
 # ----------------------------------------------------------------------
 #  ChildFamilyLinkForm – Kind-zu-Familie-Verknüpfung
@@ -323,6 +339,14 @@ class ChildFamilyLinkForm(ModelForm):
             "family": forms.Select(attrs={"class": "form-select"}),
             "relationship_type": forms.Select(attrs={"class": "form-select"}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        child = cleaned_data.get("child")
+        family = cleaned_data.get("family")
+        if child and family and child.gedcom_tree_id != family.gedcom_tree_id:
+            raise forms.ValidationError("Child and family must belong to the same tree.")
+        return cleaned_data
 
 
 # ----------------------------------------------------------------------
@@ -527,13 +551,13 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         # 1. Variablen herausziehen und löschen
         target_type = kwargs.pop('target_type', 'individual')
-        tree_id = kwargs.pop('tree_id', None)
+        self._tree_id = kwargs.pop('tree_id', None)
         
         # 2. Basis-Formular initialisieren
         super().__init__(*args, **kwargs)
 
         # 3. Den korrekten Stammbaum ermitteln (Priorität: Bestehendes Event > URL Parameter)
-        current_tree_id = self.instance.gedcom_tree_id if self.instance and self.instance.pk else tree_id
+        current_tree_id = self.instance.gedcom_tree_id if self.instance and self.instance.pk else self._tree_id
 
         # 4. SECURITY FIX: Alle Dropdowns auf den aktuellen Baum filtern
         if current_tree_id:
@@ -584,6 +608,34 @@ class EventForm(forms.ModelForm):
                 # Feld verstecken, wenn die Familie bereits übergeben wurde
                 if self.initial.get('family'):
                     self.fields['family'].widget = forms.HiddenInput()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from .models import _validate_related_same_tree
+
+        individual = cleaned_data.get("individual")
+        family = cleaned_data.get("family")
+        has_individual = individual is not None
+        has_family = family is not None
+        if has_individual and has_family:
+            raise forms.ValidationError(
+                "An event must be linked to either a person or a family, not both."
+            )
+        if not has_individual and not has_family:
+            raise forms.ValidationError(
+                "An event must be linked to a person or a family."
+            )
+
+        tree_id = self.instance.gedcom_tree_id if self.instance.pk else self._tree_id
+        _validate_related_same_tree(
+            tree_id=tree_id,
+            pairs=[
+                (individual, "individual"),
+                (family, "family"),
+                (cleaned_data.get("place"), "place"),
+            ],
+        )
+        return cleaned_data
 
 
 class EventTypeForm(forms.ModelForm):

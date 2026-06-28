@@ -1,46 +1,65 @@
 # genview/models.py
 from __future__ import annotations
 
-import os
-
+import re
 from datetime import date
 from typing import Optional
 
 from django.contrib.auth.models import User
-from django.db import models
-from django.db.models import Q
-from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
+from django.db import models, transaction
+from django.db.models import Q
+from django.db.models.signals import m2m_changed, post_delete, pre_save
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
 
+_YEAR_RE = re.compile(r"\d{4}")
+
+
+def _year_from_raw_date(raw: Optional[str]) -> Optional[int]:
+    if not raw:
+        return None
+    match = _YEAR_RE.search(raw)
+    return int(match.group()) if match else None
+
+
+def _tree_id_of(obj) -> Optional[int]:
+    if obj is None:
+        return None
+    return getattr(obj, "gedcom_tree_id", None)
+
+
+def _validate_related_same_tree(*, tree_id: Optional[int], pairs: list[tuple[object, str]]) -> None:
+    if tree_id is None:
+        return
+    errors = {}
+    for obj, label in pairs:
+        related_tree_id = _tree_id_of(obj)
+        if related_tree_id is not None and related_tree_id != tree_id:
+            errors[label] = f"{label} belongs to a different tree."
+    if errors:
+        raise ValidationError(errors)
+
+
+def _tree_media_directory_path(instance, filename, subdirectory=""):
+    tree_id = instance.gedcom_tree_id or "unassigned"
+    path = f"trees/tree_{tree_id}/"
+    if subdirectory:
+        path += f"{subdirectory}/"
+    return f"{path}{filename}"
 
 
 def tree_media_directory_path(instance, filename):
-    """
-    Dynamically generates the upload path for a media file based on its Tree ID.
-    Example: MEDIA_ROOT/trees/tree_5/my_photo.jpg
-    """
-    # Grab the tree ID. Fallback to 'unassigned' just in case,
-    # though your forms should prevent this.
-    tree_id = instance.gedcom_tree_id or "unassigned"
+    """Upload path: MEDIA_ROOT/trees/tree_<id>/<filename>"""
+    return _tree_media_directory_path(instance, filename)
 
-    # Build the path: trees/tree_<id>/<filename>
-    return f"trees/tree_{tree_id}/{filename}"
 
 def tree_annotated_media_directory_path(instance, filename):
-    """
-    Dynamically generates the upload path for a media file based on its Tree ID.
-    Example: MEDIA_ROOT/trees/tree_5/my_photo.jpg
-    """
-    # Grab the tree ID. Fallback to 'unassigned' just in case,
-    # though your forms should prevent this.
-    tree_id = instance.gedcom_tree_id or "unassigned"
-
-    # Build the path: trees/tree_<id>/<filename>
-    return f"trees/tree_{tree_id}/annotated/{filename}"
+    """Upload path for annotated/cropped derivatives."""
+    return _tree_media_directory_path(instance, filename, subdirectory="annotated")
 
 
 class Tree(models.Model):
@@ -117,21 +136,14 @@ class GedcomIdMixin(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        # 1. Prüfen, ob das Objekt brandneu ist
-        is_new = self.pk is None
-        
-        # 2. Normalen Django-Speichervorgang ausführen (erzeugt den Primary Key / pk)
-        super().save(*args, **kwargs)
+        if self.pk is not None or self.gedcom_id:
+            super().save(*args, **kwargs)
+            return
 
-        # 3. Automatische ID generieren, wenn neu und Feld leer
-        if is_new and not self.gedcom_id:
-            # Wir nutzen das Präfix des jeweiligen Kind-Modells 
-            # und hängen das "M" für manuell an, um Import-Konflikte zu vermeiden
-            prefix = self.gedcom_prefix
-            self.gedcom_id = f"@{prefix}-M{self.pk}@"
-            
-            # 4. Nur die gedcom_id nochmals in der DB aktualisieren
-            self.save(update_fields=['gedcom_id'])
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            self.gedcom_id = f"@{self.gedcom_prefix}-M{self.pk}@"
+            super().save(update_fields=["gedcom_id", "updated_at"])
 
 
 # ----------------------------------------------------------------------
@@ -227,27 +239,28 @@ class Individual(GedcomIdMixin):
     # ★★ Neu: Convenience-Properties für Geburts- und Sterbedatum ★★
     # --------------------------------------------------------------
     @property
-    def birth_year(self):
-        """Holt das Geburtsjahr für kompakte Stammbaum-Ansichten."""
+    def birth_year(self) -> Optional[int]:
+        """Geburtsjahr für kompakte Stammbaum-Ansichten."""
         if self.birth_date:
             return self.birth_date.year
-        # Fallback auf das rohe Datum, falls es nicht geparst werden konnte (z.B. "ABT 1890")
-        if self.birth_date_raw:
-            import re
-            match = re.search(r'\d{4}', self.birth_date_raw)
-            return match.group() if match else ""
-        return ""
+        return _year_from_raw_date(self.birth_date_raw)
 
     @property
-    def death_year(self):
-        """Holt das Sterbejahr für kompakte Stammbaum-Ansichten."""
+    def death_year(self) -> Optional[int]:
+        """Sterbejahr für kompakte Stammbaum-Ansichten."""
         if self.death_date:
             return self.death_date.year
-        if self.death_date_raw:
-            import re
-            match = re.search(r'\d{4}', self.death_date_raw)
-            return match.group() if match else ""
-        return ""
+        return _year_from_raw_date(self.death_date_raw)
+
+    def _event_by_tag(self, tag: str) -> Optional["Event"]:
+        """Resolve BIRT/DEAT events, preferring prefetched querysets from views."""
+        prefetched_attr = "birth_events" if tag == "BIRT" else "death_events" if tag == "DEAT" else None
+        if prefetched_attr and hasattr(self, prefetched_attr):
+            events = getattr(self, prefetched_attr)
+            return events[0] if events else None
+        if "events" in getattr(self, "_prefetched_objects_cache", {}):
+            return next((e for e in self.events.all() if e.event_type.tag == tag), None)
+        return self.events.filter(event_type__tag=tag).first()
     
     @property
     def short_given_name(self):
@@ -274,19 +287,11 @@ class Individual(GedcomIdMixin):
     
     @property
     def birth_event(self) -> Optional["Event"]:
-        """
-        Liefert das zugehörige ``BIRT``-Event (oder ``None``).
-        Wir nutzen das bereits vorgefertigte ``related_name='events'``
-        des ``Event``-Modells.
-        """
-        # `events` ist ein RelatedManager; ``filter`` gibt ein QuerySet zurück.
-        # Wir holen das **erste** passende Event (es sollte nur eines geben).
-        return self.events.filter(event_type__tag='BIRT').first()
+        return self._event_by_tag("BIRT")
 
     @property
     def death_event(self) -> Optional["Event"]:
-        """Liefert das zugehörige ``DEAT``-Event (oder ``None``)."""
-        return self.events.filter(event_type__tag='DEAT').first()
+        return self._event_by_tag("DEAT")
 
     @property
     def birth_date(self) -> Optional[date]:
@@ -350,9 +355,8 @@ class Individual(GedcomIdMixin):
     def father(self):
         """Returns the husband of the family where this person is a child."""
         # 1. Hole den ersten ChildFamilyLink für dieses Kind
-        link = self.parental_families.first() 
-        
-        # 2. Wenn ein Link existiert, eine Familie verknüpft ist UND es einen Ehemann gibt
+        link = self.parental_families.order_by("id").first()
+
         if link and link.family and link.family.husband:
             return link.family.husband
         return None
@@ -360,8 +364,7 @@ class Individual(GedcomIdMixin):
     @property
     def mother(self):
         """Returns the wife of the family where this person is a child."""
-        # 1. Hole den ersten ChildFamilyLink für dieses Kind
-        link = self.parental_families.first()
+        link = self.parental_families.order_by("id").first()
         
         # 2. Wenn ein Link existiert, eine Familie verknüpft ist UND es eine Ehefrau gibt
         if link and link.family and link.family.wife:
@@ -382,25 +385,23 @@ class Individual(GedcomIdMixin):
         Liefert alle Geschwister UND Halbgeschwister.
         Logik: Findet alle Eltern dieser Person -> Findet alle Familien dieser Eltern -> Holt die Kinder.
         """
-        # 1. Alle Familien holen, in denen diese Person ein Kind ist
-        my_families = Family.objects.filter(children__child=self)
-        
-        # 2. Die IDs der Väter und Mütter sammeln (None-Werte herausfiltern!)
-        father_ids = [f for f in my_families.values_list('husband_id', flat=True) if f is not None]
-        mother_ids = [m for m in my_families.values_list('wife_id', flat=True) if m is not None]
-        
-        # Wenn die Person gar keine bekannten Eltern hat, kann es auch keine ermittelbaren Geschwister geben
+        tree_id = self.gedcom_tree_id
+        my_families = Family.objects.filter(children__child=self, gedcom_tree_id=tree_id)
+
+        father_ids = [f for f in my_families.values_list("husband_id", flat=True) if f is not None]
+        mother_ids = [m for m in my_families.values_list("wife_id", flat=True) if m is not None]
+
         if not father_ids and not mother_ids:
             return Individual.objects.none()
 
-        # 3. Alle Familien finden, bei denen MINDESTENS EINER dieser Elternteile beteiligt ist
         sibling_families = Family.objects.filter(
-            Q(husband_id__in=father_ids) | Q(wife_id__in=mother_ids)
+            Q(husband_id__in=father_ids) | Q(wife_id__in=mother_ids),
+            gedcom_tree_id=tree_id,
         )
-        
-        # 4. Alle Kinder aus diesen Familien holen, sich selbst ausschließen und Duplikate (Vollgeschwister) filtern
+
         return Individual.objects.filter(
-            parental_families__family__in=sibling_families
+            parental_families__family__in=sibling_families,
+            gedcom_tree_id=tree_id,
         ).exclude(pk=self.pk).distinct()
     
     @property
@@ -609,6 +610,17 @@ class Family(MPTTModel, GedcomIdMixin):
         Tree, on_delete=models.CASCADE, related_name="families"
     )
 
+    def clean(self):
+        super().clean()
+        _validate_related_same_tree(
+            tree_id=self.gedcom_tree_id,
+            pairs=[
+                (self.husband, "husband"),
+                (self.wife, "wife"),
+                (self.parent, "parent"),
+            ],
+        )
+
     def __str__(self) -> str:
         husb = self.husband.surname if self.husband else "?"
         wife = self.wife.surname if self.wife else "?"
@@ -623,12 +635,12 @@ class Family(MPTTModel, GedcomIdMixin):
     # ------------------------------------------------------------------
     # Convenience-Methode – liefert ein QuerySet aller Kinder-Individuals
     # ------------------------------------------------------------------
-    def children_links(self) -> models.QuerySet["Individual"]:
-        """
-        Alle Kinder, die über das Through-Model ``ChildFamilyLink`` dieser Familie
-        verknüpft sind. (Kurzschreibweise: ``family.children().all()``)
-        """
-        return Individual.objects.filter(parental_families__family=self)
+    def child_individuals(self) -> models.QuerySet["Individual"]:
+        """All child individuals linked to this family."""
+        return Individual.objects.filter(
+            parental_families__family=self,
+            gedcom_tree_id=self.gedcom_tree_id,
+        )
 
     # ------------------------------------------------------------------
     #  Helfer-Property: das zugehörige MARR-Event (falls vorhanden)
@@ -729,6 +741,12 @@ class ChildFamilyLink(models.Model):
 
     def __str__(self) -> str:
         return f"{self.child.full_name()} → {self.family}"
+
+    def clean(self):
+        super().clean()
+        if self.child_id and self.family_id:
+            if self.child.gedcom_tree_id != self.family.gedcom_tree_id:
+                raise ValidationError("Child and family must belong to the same tree.")
 
 
 # ----------------------------------------------------------------------
@@ -914,31 +932,32 @@ class Event(models.Model):
         # Baut alles zusammen: z.B. "Geburt von Max Mustermann (1990)"
         return f"{event_name}{owner}{date_str}"
 
-    # --------------------------------------------------------------
-    # Validierung: Es darf nie **beide** FK gleichzeitig gesetzt sein
-    # --------------------------------------------------------------
     def clean(self):
         super().clean()
-        if bool(self.individual) == bool(self.family):
+        has_individual = bool(self.individual_id)
+        has_family = bool(self.family_id)
+        if has_individual and has_family:
             raise ValidationError(
-                "Ein Event muss entweder einer Person ODER einer Familie zugeordnet werden, nicht beiden."
+                "An event must be linked to either a person or a family, not both."
             )
-
-    def save(self, *args, **kwargs):
-        self.full_clean()  # ruft ``clean`` auf
-        super().save(*args, **kwargs)
+        if not has_individual and not has_family:
+            raise ValidationError("An event must be linked to a person or a family.")
+        _validate_related_same_tree(
+            tree_id=self.gedcom_tree_id,
+            pairs=[
+                (self.individual, "individual"),
+                (self.family, "family"),
+                (self.place, "place"),
+            ],
+        )
 
     @property
     def is_confidential(self):
-        """Ein Ereignis ist vertraulich, wenn sein Besitzer (Person oder Familie) vertraulich ist."""
-        # Wenn es ein Personen-Event ist (z.B. BIRT, DEAT)
-        if hasattr(self, 'individual') and self.individual:
+        """True when the linked person or family is confidential."""
+        if self.individual:
             return self.individual.is_confidential
-            
-        # Wenn es ein Familien-Event ist (z.B. MARR, DIV)
-        if hasattr(self, 'family') and self.family:
-            return self.family.is_confidential  # <--- Nutzt jetzt die neue Familien-Logik!
-            
+        if self.family:
+            return self.family.is_confidential
         return True
 
 
@@ -957,10 +976,13 @@ class MediaObject(GedcomIdMixin):
     title = models.CharField(max_length=255, blank=True)
 
     file = models.FileField(
-        upload_to=tree_media_directory_path, verbose_name=_("Datei/Bild")
+        upload_to=tree_media_directory_path,
+        blank=True,
+        verbose_name=_("Datei/Bild"),
+        help_text=_("May be empty for GEDCOM import placeholders awaiting bulk upload."),
     )
 
-    extracted_text = models.CharField(blank=True, null=True)
+    extracted_text = models.TextField(blank=True, null=True)
 
     gedcom_original_filepath = models.CharField(
         max_length=500, 
@@ -1032,32 +1054,22 @@ class MediaObject(GedcomIdMixin):
     
     @property
     def is_confidential(self):
-        """
-        Ein Medienobjekt (Foto, Urkunde) ist vertraulich, wenn es mit 
-        mindestens einer vertraulichen Person, Familie oder einem 
-        vertraulichen Ereignis verknüpft ist.
-        """
-        # 1. Hängt das Medium an vertraulichen Personen?
-        # (Nutze hier den related_name deiner Verknüpfung, z.B. 'individuals')
-        if hasattr(self, 'individuals'):
-            for person in self.individuals.all():
-                if person.is_confidential:
-                    return True
-                    
-        # 2. Hängt das Medium an vertraulichen Familien?
-        if hasattr(self, 'families'):
-            for family in self.families.all():
-                if family.is_confidential:
-                    return True
-                    
-        # 3. Hängt das Medium an vertraulichen Ereignissen?
-        if hasattr(self, 'events'):
-            for event in self.events.filter(event_type__is_visible=True):
-                if event.is_confidential:
-                    return True
-                    
-        # Wenn das Bild mit gar nichts Vertraulichem verknüpft ist (oder historische
-        # Personen zeigt), darf es öffentlich angezeigt werden.
+        """True when explicitly private or linked to confidential entities."""
+        if self.is_private:
+            return True
+
+        for person in self.individuals.all():
+            if person.is_confidential:
+                return True
+
+        for family in self.families.all():
+            if family.is_confidential:
+                return True
+
+        for event in self.events.filter(event_type__is_visible=True):
+            if event.is_confidential:
+                return True
+
         return False
 
 
@@ -1069,8 +1081,8 @@ class FaceTag(models.Model):
     individual     = models.ForeignKey(Individual, on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="tagged_faces")
     
-    # Position / Größe des Rechtecks (einfach u/v Koordinaten, relativ zum Original)
-    x_percent      = models.FloatField()   # linke obere Ecke, Pixel
+    # Percentage coordinates (0.0–100.0) relative to the original image
+    x_percent      = models.FloatField()
     y_percent      = models.FloatField()
     width_percent  = models.FloatField()
     height_percent = models.FloatField()
@@ -1090,6 +1102,20 @@ class FaceTag(models.Model):
 
     class Meta:
         unique_together = ("media", "x_percent", "y_percent", "width_percent", "height_percent")   # vermeidet Duplikate
+
+    def clean(self):
+        super().clean()
+        if self.individual_id and self.media_id:
+            if self.individual.gedcom_tree_id != self.media.gedcom_tree_id:
+                raise ValidationError("Individual must belong to the same tree as the media object.")
+
+    def save(self, *args, **kwargs):
+        self.x_percent = round(self.x_percent, 4)
+        self.y_percent = round(self.y_percent, 4)
+        self.width_percent = round(self.width_percent, 4)
+        self.height_percent = round(self.height_percent, 4)
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"FaceTag für {self.individual or 'unbekannt'} ({self.media.id})"
@@ -1111,8 +1137,8 @@ class AlternativeName(models.Model):
         on_delete=models.CASCADE, 
         related_name='alternative_names'
     )
-    given_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Vorname")
-    surname = models.CharField(max_length=100, blank=True, null=True, verbose_name="Nachname")
+    given_name = models.CharField(max_length=100, blank=True, default="", verbose_name="Vorname")
+    surname = models.CharField(max_length=100, blank=True, default="", verbose_name="Nachname")
     
     # Speichert den GEDCOM-Typ (z.B. married, aka)
     name_type = models.CharField(
@@ -1129,14 +1155,45 @@ class AlternativeName(models.Model):
     def __str__(self):
         type_display = self.get_name_type_display()
         return f"{self.given_name or ''} {self.surname or ''} ({type_display})".strip()
-    
+
+
+_TREE_SCOPED_M2M_PARENTS = (MediaObject, Individual, Family, Event)
+
+
+@receiver(m2m_changed)
+def validate_m2m_tree_consistency(sender, instance, action, pk_set, model, **kwargs):
+    """Ensure M2M links never cross tree boundaries."""
+    if action != "pre_add" or not pk_set:
+        return
+    if not isinstance(instance, _TREE_SCOPED_M2M_PARENTS):
+        return
+    if not hasattr(model, "gedcom_tree_id"):
+        return
+
+    tree_id = instance.gedcom_tree_id
+    if tree_id is None:
+        return
+
+    if model.objects.filter(pk__in=pk_set).exclude(gedcom_tree_id=tree_id).exists():
+        raise ValidationError("Related records must belong to the same tree.")
+
+
+@receiver(pre_save, sender=MediaObject)
+def auto_delete_replaced_media_file(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+    try:
+        old = MediaObject.objects.get(pk=instance.pk)
+    except MediaObject.DoesNotExist:
+        return
+    if old.file and old.file.name and old.file.name != getattr(instance.file, "name", ""):
+        if default_storage.exists(old.file.name):
+            default_storage.delete(old.file.name)
+
 
 @receiver(post_delete, sender=MediaObject)
 def auto_delete_file_on_delete(sender, instance, **kwargs):
-    """
-    Löscht die physische Datei vom Server, wenn das MediaObject
-    (z.B. durch das Löschen eines Stammbaums) aus der Datenbank entfernt wird.
-    """
-    if instance.file:
-        if os.path.isfile(instance.file.path):
-            os.remove(instance.file.path)
+    """Delete stored media when the database row is removed."""
+    if instance.file and instance.file.name:
+        if default_storage.exists(instance.file.name):
+            default_storage.delete(instance.file.name)

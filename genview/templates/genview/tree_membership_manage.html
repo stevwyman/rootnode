@@ -139,7 +139,7 @@ jQuery(document).ready(function($) {
         minimumInputLength: 2,
         allowClear: true,
         ajax: {
-            url: "{% url 'genview:api-search-users' %}",
+            url: "{% url 'genview:api-search-users' tree_id=tree_id %}",
             dataType: 'json',
             delay: 250,
             data: function (params) { return { q: params.term }; },

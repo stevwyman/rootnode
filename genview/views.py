@@ -55,6 +55,7 @@ from .mixins import (
     UserPassesTestMixin, 
     TreeAccessMixin, 
     TreeEditAccessMixin, 
+    TreeScopedQuerySetMixin,
     SortableListViewMixin, 
     FilterableListViewMixin
 )
@@ -681,7 +682,7 @@ class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         )
 
 
-class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, TreeScopedQuerySetMixin, UpdateView):
     model = Individual
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
@@ -698,7 +699,7 @@ class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         )
 
 
-class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, TreeScopedQuerySetMixin, DeleteView):
     model = Individual
     template_name = "genview/individual_confirm_delete.html"
 
@@ -737,11 +738,11 @@ class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
     # QuerySet filtern – case-insensitive, mehrere Felder
     # ------------------------------------------------------------------
     def get_queryset(self):
-        qs = super().get_queryset()
+        tree_id = self.kwargs.get("tree_id")
+        qs = Individual.objects.filter(gedcom_tree_id=tree_id).order_by(*self.ordering)
         query = self.request.GET.get("q", "").strip()
 
         if query:
-            # Wir splitten nach Leerzeichen, damit mehrere Begriffe möglich sind
             terms = query.split()
             for term in terms:
                 qs = qs.filter(
@@ -807,7 +808,7 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return JsonResponse({"table": table_html, "pager": pager_html})
 
 
-class IndividualAddExistingMediaView(TreeAccessMixin, FormView):
+class IndividualAddExistingMediaView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -924,8 +925,10 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
     context_object_name = "family"
 
     def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
         return (
-            Family.objects.select_related("husband", "wife")
+            Family.objects.filter(gedcom_tree_id=tree_id)
+            .select_related("husband", "wife")
             .prefetch_related(
                 # 1. Kinder-Links inkl. zugehörigem Child-Individual
                 # 🔥 UPDATE: Wir hängen hier direkt .prefetch_related("child__media_objects") an, 
@@ -1022,10 +1025,13 @@ class FamilyCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("genview:family-detail", kwargs={"pk": self.object.pk})
+        return reverse_lazy(
+            "genview:family-detail",
+            kwargs={"tree_id": self.kwargs.get("tree_id"), "pk": self.object.pk},
+        )
 
 
-class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, TreeScopedQuerySetMixin, UpdateView):
     model = Family
     form_class = FamilyForm
     template_name = "genview/family_form.html"
@@ -1048,7 +1054,7 @@ class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         )
 
 
-class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, TreeScopedQuerySetMixin, DeleteView):
     model = Family
     template_name = "genview/family_confirm_delete.html"
 
@@ -1059,7 +1065,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:family-list", kwargs={"tree_id": tree_id})
 
 
-class FamilyAddExistingMediaView(TreeAccessMixin, FormView):
+class FamilyAddExistingMediaView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -1103,10 +1109,17 @@ class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateV
     form_class = ChildFamilyLinkForm
     template_name = "genview/childfamilylink_form.html"
 
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
+
     def get_success_url(self):
         return reverse_lazy(
             "genview:family-detail",
-            kwargs={"pk": self.object.family.pk},
+            kwargs={
+                "tree_id": self.kwargs.get("tree_id"),
+                "pk": self.object.family.pk,
+            },
         )
 
 
@@ -1114,10 +1127,17 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
     model = ChildFamilyLink
     template_name = "genview/childfamilylink_confirm_delete.html"
 
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
+
     def get_success_url(self):
         return reverse_lazy(
             "genview:family-detail",
-            kwargs={"pk": self.object.family.pk},
+            kwargs={
+                "tree_id": self.kwargs.get("tree_id"),
+                "pk": self.object.family.pk,
+            },
         )
 
 
@@ -1223,6 +1243,9 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # POST – Router für Aktionen
     # -------------------------------------------------
     def post(self, request, *args, **kwargs):
+        if not self.user_can_edit():
+            raise PermissionDenied("Sie haben keine Berechtigung, Medien zu bearbeiten.")
+
         media = self.get_object()
 
         if "detect" in request.POST:
@@ -1316,7 +1339,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         tag = get_object_or_404(FaceTag, pk=tag_id, media=media)
 
         if indiv_id:
-            individual = get_object_or_404(Individual, pk=indiv_id)
+            tree_id = self.kwargs.get("tree_id")
+            individual = get_object_or_404(Individual, pk=indiv_id, gedcom_tree_id=tree_id)
             tag.individual = individual
             tag.save()
             messages.success(request, f"Gesicht erfolgreich mit {individual} verknüpft.")
@@ -1510,7 +1534,7 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
         return reverse_lazy("genview:tree-list")
 
 
-class BulkMediaUploadView(TreeAccessMixin, TemplateView):
+class BulkMediaUploadView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
     template_name = "genview/bulk_media_upload.html"
 
     def get_context_data(self, **kwargs):
@@ -1569,23 +1593,19 @@ class ToggleMediaCategoryView(LoginRequiredMixin, TreeEditAccessMixin, View):
     Liefert JSON-Response: {"id": ..., "new_category": "...", "error": null}
     """
     def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
         try:
-            data = request.POST or request.body
-            # JSON-Payload akzeptieren
             if request.content_type == "application/json":
-                import json
                 payload = json.loads(request.body)
             else:
                 payload = request.POST
             media_id = payload.get("id")
             if not media_id:
-                return HttpResponseBadRequest(
-                    JsonResponse({"error": "Keine ID übergeben"}))
-        except Exception as e:
-            return HttpResponseBadRequest(JsonResponse({"error": str(e)}))
+                return JsonResponse({"error": "Keine ID übergeben"}, status=400)
+        except (json.JSONDecodeError, ValueError) as e:
+            return JsonResponse({"error": str(e)}, status=400)
 
-        # ggf. Berechtigungs-Check (z. B. nur Besitzer/Admin darf ändern)
-        media = get_object_or_404(MediaObject, pk=media_id)
+        media = get_object_or_404(MediaObject, pk=media_id, gedcom_tree_id=tree_id)
 
         # ---- Kategorie umschalten ----
         if media.category == MediaObject.Category.PHOTO:
@@ -1713,7 +1733,7 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
-class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
+class PlaceDeduplicationView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
     template_name = "genview/place_deduplication.html"
 
     def get_context_data(self, **kwargs):
@@ -1973,7 +1993,7 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         return context
 
 
-class AddExistingMediaToEventView(TreeAccessMixin, FormView):
+class AddExistingMediaToEventView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -2007,10 +2027,10 @@ class AddExistingMediaToEventView(TreeAccessMixin, FormView):
             return redirect('genview:individual-detail', tree_id=tree_id, pk=event.individual.pk)
         elif event.family:
             return redirect('genview:family-detail', tree_id=tree_id, pk=event.family.pk)
-        return redirect('genview:tree-dashboard', tree_id=tree_id)
+        return redirect('genview:event-list', tree_id=tree_id)
 
 
-class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, TreeScopedQuerySetMixin, DeleteView):
     model = Event
     template_name = "genview/event_confirm_delete.html"
 
@@ -2035,8 +2055,7 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
             
         # 3. Fallback
         messages.success(self.request, "Ereignis erfolgreich gelöscht.")
-        # Passe diesen Fallback an deine existierende Übersichtsseite an
-        return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
+        return reverse_lazy("genview:event-list", kwargs={"tree_id": tree_id})
 
    
 #
@@ -2129,7 +2148,7 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         messages.success(self.request, "Quelle aktualisiert.")
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
-class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
+class AddExistingMediaToSourceView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -2297,10 +2316,10 @@ class PlaceSearchAPIView(GenericSelect2APIView):
         return obj.name
 
 
-class UserSearchAPIView(View):
+class UserSearchAPIView(LoginRequiredMixin, TreeEditAccessMixin, View):
     """
     AJAX-Endpoint für Select2, um Benutzer nach Username, 
-    E-Mail oder Vor-/Nachname im gesamten System zu suchen.
+    E-Mail oder Vor-/Nachname zu suchen (nur für Baum-Editoren).
     """
     def get(self, request, *args, **kwargs):
         query = request.GET.get('q', '').strip()
@@ -2404,7 +2423,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
     """
     template_name = "genview/gedcom_import.html"
     form_class = GedcomImportForm
-    success_url = reverse_lazy("tree-list")   # ggf. an deine Ansicht anpassen
+    success_url = reverse_lazy("genview:tree-list")
 
     # -----------------------------------------------------------------
     # Optional: Wenn du das Edit-Mixin nicht nutzt, überschreibe `test_func`
@@ -2490,7 +2509,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
         return self._stderr_buf
 
 
-class TreeMembershipManageView(TreeEditAccessMixin, View): 
+class TreeMembershipManageView(LoginRequiredMixin, TreeEditAccessMixin, View):
     template_name = "genview/tree_membership_manage.html"
 
     def get_formset(self, tree, post_data=None):

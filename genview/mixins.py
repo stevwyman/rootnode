@@ -13,38 +13,24 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
 class TreeAccessMixin(UserPassesTestMixin):
 
+    def user_can_edit(self) -> bool:
+        """True if the current user may create/update/delete in this tree."""
+        if self.request.user.is_superuser:
+            return True
+        tree_id = self.kwargs.get("tree_id")
+        if self.request.user.is_authenticated and tree_id is not None:
+            return TreeMembership.objects.filter(
+                user=self.request.user,
+                gedcom_tree_id=tree_id,
+                role__in=[TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN],
+            ).exists()
+        return False
+
     def get_apply_privacy(self):
-        """Ermittelt, ob der Datenschutz für den aktuellen Aufruf gilt."""
-        
-        # 1. Superuser haben immer vollen Durchblick
+        """True when confidential/private content should be redacted."""
         if self.request.user.is_superuser:
             return False
-            
-        # 2. Prüfen, ob der User eine Mitgliedschaft in diesem Baum hat
-        if self.request.user.is_authenticated:
-            tree_id = self.kwargs.get('tree_id')
-            from genview.models import TreeMembership
-            
-            try:
-                membership = TreeMembership.objects.get(
-                    user=self.request.user, 
-                    gedcom_tree_id=tree_id
-                )
-                
-                # Voller Durchblick für alle Mitglieder (VIEWER, EDITOR, ADMIN): 
-                # Datenschutz aushebeln!
-                if membership.role in [
-                    TreeMembership.Role.VIEWER, 
-                    TreeMembership.Role.EDITOR, 
-                    TreeMembership.Role.ADMIN
-                ]:
-                    return False
-                    
-            except TreeMembership.DoesNotExist:
-                pass
-                
-        # STANDARD: Datenschutz ist AKTIVIERT (für Gäste und öffentliche Aufrufe ohne Mitgliedschaft)
-        return True
+        return not self.user_can_edit()
 
     def dispatch(self, request, *args, **kwargs):
         tree_id = self.kwargs.get('tree_id')
@@ -123,28 +109,8 @@ class TreeAccessMixin(UserPassesTestMixin):
         if tree.is_public:
             context['is_tree_viewer'] = True
 
-        # ==========================================
-        # 🔥 DER PRIVACY-FIX
-        # ==========================================
-        
-        # Variante A: Wenn du deine eigene Methode `get_apply_privacy()` weiter nutzen willst:
-        if hasattr(self, 'get_apply_privacy'):
-            context['apply_privacy'] = self.get_apply_privacy()
-            
-        # Variante B: Die moderne, automatische Methode über unsere neuen Rollen!
-        # (Falls du get_apply_privacy in Zukunft nicht mehr manuell berechnen willst):
-        else:
-            # Regel: Wer Editor oder Admin ist, darf alles unzensiert sehen (Privacy = False).
-            # Wer nur Viewer ist (oder unregistriert auf einem öffentlichen Baum), 
-            # bekommt die Zensur aktiviert (Privacy = True).
-            context['apply_privacy'] = not context.get('is_tree_editor', False)
-
-        # ==========================================
-        # 🔥 DER FIX FÜR DEINE TEMPLATES
-        # ==========================================
-        # Wir stellen sicher, dass deine alten {% if can_edit %} Abfragen 
-        # exakt denselben Wert bekommen wie die neue Editor-Rolle.
-        context['can_edit'] = context.get('is_tree_editor', False)
+        context['apply_privacy'] = self.get_apply_privacy()
+        context['can_edit'] = self.user_can_edit()
 
         return context
     
@@ -155,20 +121,20 @@ class TreeEditAccessMixin(TreeAccessMixin):
     eingeloggt sein muss UND eine passende Rolle (EDITOR/ADMIN) benötigt.
     """
     def test_func(self):
-        if self.request.user.is_superuser:
-            return True
+        return self.user_can_edit()
 
-        tree_id = self.kwargs.get('tree_id')
-        
-        if self.request.user.is_authenticated:
-            return TreeMembership.objects.filter(
-                user=self.request.user, 
-                gedcom_tree_id=tree_id,
-                # Nur Editoren und Admins dürfen bearbeiten
-                role__in=[TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN]
-            ).exists()
 
-        return False
+class TreeScopedQuerySetMixin:
+    """Restrict get_queryset() to records belonging to the tree_id URL kwarg."""
+
+    tree_scoped_lookup = "gedcom_tree_id"
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        tree_id = self.kwargs.get("tree_id")
+        if tree_id is not None:
+            qs = qs.filter(**{self.tree_scoped_lookup: tree_id})
+        return qs
 
 
 class SortableListViewMixin:
