@@ -107,12 +107,25 @@ def extract_text_via_api(image_path: str) -> OcrExtractResult:
 
     try:
         with open(image_path, "rb") as image_file:
-            response = requests.post(
-                url,
-                files={"file": image_file},
-                headers=HEADERS,
-                timeout=REQUEST_TIMEOUT,
-            )
+            file_content = image_file.read()
+    except FileNotFoundError:
+        result["error"] = f"Datei nicht gefunden: {image_path}"
+        logger.error(result["error"])
+        return result
+    except OSError as exc:
+        result["error"] = f"Datei kann nicht gelesen werden: {image_path}"
+        logger.error("%s (%s)", result["error"], exc)
+        return result
+
+    filename = os.path.basename(image_path) or "image"
+
+    try:
+        response = requests.post(
+            url,
+            files={"file": (filename, file_content, "application/octet-stream")},
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
         response.raise_for_status()
 
         try:
@@ -135,12 +148,6 @@ def extract_text_via_api(image_path: str) -> OcrExtractResult:
         result["text"] = text
         return result
 
-    except FileNotFoundError:
-        result["error"] = f"Datei nicht gefunden: {image_path}"
-        logger.error(result["error"])
-    except OSError as exc:
-        result["error"] = f"Datei kann nicht gelesen werden: {image_path}"
-        logger.error("%s (%s)", result["error"], exc)
     except requests.exceptions.HTTPError as exc:
         resp = exc.response
         status = resp.status_code if resp is not None else "?"

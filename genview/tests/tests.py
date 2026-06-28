@@ -76,11 +76,11 @@ class IndividualListViewTests(TestCase):
         self.assertTrue(response.url.startswith("/account/login/")) # Adjust if your login URL is different
 
     def test_access_denied_for_unauthorized_tree(self):
-        """Logged-in users WITHOUT a TreeMembership should get a 403 Forbidden."""
+        """Logged-in users without a TreeMembership are denied (403 → redirect home)."""
         self.client.login(username="hacker", password="password")
         response = self.client.get(self.url)
-        # yes, should be 403, but we do not want to show that to hackers
-        self.assertEqual(response.status_code, 404) # 403 means "Forbidden"
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response.url, "/")
 
     def test_access_granted_for_authorized_user(self):
         """Logged-in users WITH a TreeMembership should see public data."""
