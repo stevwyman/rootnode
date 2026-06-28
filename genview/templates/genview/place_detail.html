@@ -1,5 +1,5 @@
 {% extends "genview/base_detail.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% load l10n %}
 
 {% block title %}{{ place.name }} - {% trans "Ort" %}{% endblock %}
@@ -61,8 +61,11 @@
     
 
     {% block edit-right %}
-        <a href="{% url 'genview:place-edit' tree_id=tree_id pk=place.pk %}" class="btn btn-primary w-100">✏️ {% trans "Ort bearbeiten" %}</a>
-        <a href="{% url 'genview:place-delete' tree_id=tree_id pk=place.pk %}" class="btn btn-outline-danger w-100">🗑 {% trans "Ort löschen" %}</a>
+        {% url 'genview:place-edit' tree_id=tree_id pk=place.pk as edit_url %}
+        {% url 'genview:place-delete' tree_id=tree_id pk=place.pk as delete_url %}
+        {% trans "Ort bearbeiten" as edit_label %}
+        {% trans "Ort löschen" as delete_label %}
+        {% action_buttons layout="sidebar" edit_url=edit_url delete_url=delete_url edit_label=edit_label delete_label=delete_label %}
     {% endblock%}
 
     {% block details-right%}

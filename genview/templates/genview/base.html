@@ -7,13 +7,14 @@
 <html lang="{{ LANGUAGE_CODE }}">
     <head>
         <meta charset="utf-8">
-        <title>{% block title %}GEDCOM-Stammbaum{% endblock %}</title>
+        <title>{% block title %}{% trans "GEDCOM-Stammbaum" %}{% endblock %}</title>
 
         <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
         <link rel="stylesheet" href="{% static 'my.css' %}">
 
         <link rel="stylesheet" href="{% static 'bootstrap.min.css' %}">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
         {% block extra_head %}{% endblock %}
     </head>
@@ -23,52 +24,50 @@
         <div class="container-fluid">
             <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
                 <div class="container-fluid">
-                    <a class="navbar-brand" href="{% url 'genview:tree-list' %}">Stammbaum</a>
+                    <a class="navbar-brand" href="{% url 'genview:tree-list' %}">{% trans "Stammbaum" %}</a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                             data-bs-target="#navbarNav" aria-controls="navbarNav"
-                            aria-expanded="false" aria-label="Navigation umschalten">
+                            aria-expanded="false" aria-label="{% trans 'Navigation umschalten' %}">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav ms-auto">
                             {% if tree_id %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Data</a>
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{% trans "Daten" %}</a>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
-                                    <li><a class="dropdown-item" href="{% url 'genview:individual-list' tree_id %}">👤 Personen</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:family-list' tree_id %}">👪 Familien</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:event-list' tree_id %}">📅 Ereignisse</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:place-list' tree_id %}">🌍 Orte</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:media-list' tree_id %}">📷 Medien</a></li>
-                                    <li><a class="dropdown-item" href="{% url 'genview:source-list' tree_id %}">📚 Quellen</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:individual-list' tree_id %}">👤 {% trans "Personen" %}</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:family-list' tree_id %}">👪 {% trans "Familien" %}</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:event-list' tree_id %}">📅 {% trans "Ereignisse" %}</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:place-list' tree_id %}">🌍 {% trans "Orte" %}</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:media-list' tree_id %}">📷 {% trans "Medien" %}</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:source-list' tree_id %}">📚 {% trans "Quellen" %}</a></li>
                                 </ul>
                             </li>
                             {% endif %}
                             {% if user.is_authenticated %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Signed in as {{ user.username }}</a>
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{% blocktrans with username=user.username %}Angemeldet als {{ username }}{% endblocktrans %}</a>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
-                                    <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">Stammbäume</a></li>
-                                    {% if user.is_authenticated and tree_id %}
-                                        <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 bulk upload</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ manage tree</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍manage places</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">{% trans "Stammbäume" %}</a></li>
+                                    {% if user.is_authenticated and tree_id and can_edit|default:False %}
+                                        <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 {% trans "Bulk-Upload" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ {% trans "Baum verwalten" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍 {% trans "Orte bereinigen" %}</a></li>
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     {% if user.is_superuser %}
-                                        <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 import gedcom</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'genview:user-management-list' %}">🧑‍💼 users</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'genview:eventtype-list' %}">🗓️ event types</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 {% trans "GEDCOM importieren" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:user-management-list' %}">🧑‍💼 {% trans "Benutzer" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:eventtype-list' %}">🗓️ {% trans "Ereignistypen" %}</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                     {% endif %}
+                                    <li><a class="dropdown-item" href="{% url 'two_factor:profile' %}">🪪 {% trans "Account-Sicherheit" %}</a></li>
                                     <li>
-                                        <li><a class="dropdown-item" href="{% url 'two_factor:profile' %}">🪪 Account Sicherheit</a></li>
-                                    </li>
-                                    <li>
-                                        <form method="post" action="{% url 'genview:logout' %}" class="m-0 p-0 d-inline">
+                                        <form method="post" action="{% url 'genview:logout' %}" class="m-0 p-0">
                                             {% csrf_token %}
                                             <button type="submit" class="dropdown-item text-danger">
-                                                🚪 Logout
+                                                🚪 {% trans "Abmelden" %}
                                             </button>
                                         </form>
                                     </li>
@@ -76,16 +75,16 @@
                             </li>
                             {% else %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'two_factor:login' %}">Log In</a>
+                                <a class="nav-link" href="{% url 'two_factor:login' %}">{% trans "Anmelden" %}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'genview:register' %}">Register</a>
+                                <a class="nav-link" href="{% url 'genview:register' %}">{% trans "Registrieren" %}</a>
                             </li>
                             {% endif %}
-                            {% if tree_id %}
-                            <li>
+                            {% if user.is_authenticated and tree_id %}
+                            <li class="nav-item">
                                 <form class="d-flex" action="{% url 'genview:global-search' tree_id=tree_id %}" method="get">
-                                    <input class="form-control me-2" type="search" name="q" placeholder="Stammbaum durchsuchen..." aria-label="Search">
+                                    <input class="form-control me-2" type="search" name="q" placeholder="{% trans 'Stammbaum durchsuchen…' %}" aria-label="{% trans 'Suche' %}">
                                     <button class="btn btn-outline-light" type="submit">🔍</button>
                                 </form>
                             </li>
@@ -130,32 +129,11 @@
                 class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top"
             >
                 <p class="col-md-4 mb-0 text-body-secondary">
-                &copy; 2026 Stev Wyman - version: <span class="badge bg-light text-secondary border">{{ APP_VERSION }}</span>
+                &copy; 2026 Stev Wyman — {% trans "Version" %}: <span class="badge bg-light text-secondary border">{{ APP_VERSION }}</span>
                 </p>
-                <a
-                href="/"
-                class="col-md-4 d-flex align-items-center justify-content-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none"
-                aria-label="Bootstrap"
-                >
-                <svg class="bi me-2" width="40" height="32" aria-hidden="true">
-                    <use xlink:href="#bootstrap"></use>
-                </svg>
-                </a>
                 <ul class="nav col-md-4 justify-content-end">
                 <li class="nav-item">
-                    <a href="#" class="nav-link px-2 text-body-secondary">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link px-2 text-body-secondary">Features</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link px-2 text-body-secondary">Pricing</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link px-2 text-body-secondary">FAQs</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link px-2 text-body-secondary">About</a>
+                    <a href="{% url 'genview:tree-list' %}" class="nav-link px-2 text-body-secondary">{% trans "Stammbäume" %}</a>
                 </li>
                 </ul>
             </footer>

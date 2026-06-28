@@ -1,6 +1,6 @@
 {# genview/templates/genview/individual_detail.html #}
 {% extends "genview/base.html" %}
-{% load django_bootstrap5 event_extras %}  
+{% load django_bootstrap5 event_extras i18n ui_tags %}  
 {% block title %}{{ person.full_name }}{% endblock %}
 
 {% block extra_head %}
@@ -58,42 +58,7 @@
 {% endblock%}
 
 {% block content %}
-<div class="row">
-    <h2 class="card-title fw-bold text-dark mb-1">
-        {{ object.full_name }}
-    </h2>
-    {% if object.noble_titles %}
-        <div class="mt-2">
-            {% for title in object.noble_titles %}
-                <span class="badge bg-light text-dark border border-secondary fw-normal me-1 mb-1">
-                    👑 {{ title }}
-                </span>
-            {% endfor %}
-        </div>
-    {% endif %}
-    {% if object.primary_title %}
-        <div class="text-primary fw-semibold fs-5 mb-2">
-            👑 {{ object.primary_title }}
-        </div>
-    {% endif %}
-    {% if object.primary_title %}
-        <div class="text-primary fw-semibold fs-5 mb-2">
-            👑 {{ object.primary_title }}
-        </div>
-    {% endif %}
-    {% if object.alternative_names.all %}
-    <div class="mt-1 text-muted small">
-        Alternative Namen: 
-        {% for alt in object.alternative_names.all %}
-            <span class="badge bg-light text-dark border">
-                {{ alt.given_name }} {{ alt.surname }} 
-                <small class="text-muted">({{ alt.get_name_type_display }})</small>
-            </span>
-            {% if not forloop.last %}, {% endif %}
-        {% endfor %}
-    </div>
-    {% endif %}
-</div>
+{% include "genview/_individual_detail_header.html" %}
 <div class="row">
     <div class="col-8">
         <div class="card shadow-sm border-0 mb-4 bg-white overflow-visible">
@@ -101,9 +66,9 @@
                 <!-- portrait -->
                 <div class="col-sm-4 col-md-3 p-4 bg-light d-flex align-items-center justify-content-center border-end">
                     
-                    {% with portrait=object.media_objects.first %}
-                        {% if portrait.file and portrait.file.name %}
-                            {% if portrait and portrait.is_image %}
+                    {% with portrait=object.profile_image %}
+                        {% if portrait and portrait.file and portrait.file.name %}
+                            {% if portrait.is_image %}
                                 <img src="{% url 'genview:media-file' tree_id=tree_id pk=portrait.pk %}" 
                                     alt="Portrait von {{ object.full_name }}" 
                                     class="img-fluid rounded-circle shadow-sm object-fit-cover" 
@@ -119,17 +84,13 @@
                                 </div>
                             {% endif %}
                         {% else %}
-                            <div class="p-3 bg-light border rounded text-center text-muted">
-                                <div class="fs-1 mb-2">📷</div>
-                                <strong>Bild fehlt</strong><br>
-                                <small>{{ portrait.title|default:"Ohne Titel" }}</small>
-                                
-                                {% if portrait.gedcom_original_filepath %}
-                                    <hr class="my-2">
-                                    <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
-                                        Pfad: {{ portrait.gedcom_original_filepath }}
-                                    </small>
-                                {% endif %}
+                            <div class="rounded-circle shadow-sm bg-secondary bg-opacity-25 d-flex justify-content-center align-items-center text-secondary"
+                                style="width: 160px; height: 160px; border: 4px solid white;">
+                                <span class="fs-1">
+                                    {% if object.sex == 'M' %}👨
+                                    {% elif object.sex == 'F' %}👩
+                                    {% else %}👤{% endif %}
+                                </span>
                             </div>
                         {% endif %}
                     {% endwith %}
@@ -182,7 +143,8 @@
                                 <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1" aria-labelledby="profileActions">
                                     <li>
                                         <a class="dropdown-item py-2" href="{% url 'genview:individual-edit' tree_id person.pk %}">
-                                            ✏️ Person bearbeiten
+                                            {% include "genview/_action_icon.html" with action="edit" %}
+                                            <span class="ms-1">{% trans "Person bearbeiten" %}</span>
                                         </a>
                                     </li>
                                     <li>
@@ -193,7 +155,8 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item py-2 text-danger" href="{% url 'genview:individual-delete' tree_id=tree_id pk=object.pk %}">
-                                            🗑️ Person löschen
+                                            {% include "genview/_action_icon.html" with action="delete" %}
+                                            <span class="ms-1">{% trans "Person löschen" %}</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -237,6 +200,12 @@
                                         <span class="fst-italic text-muted">-</span>
                                     {% endif %}
                                 </div>
+
+                                {% if object.birth_event and object.birth_event.place %}
+                                    <div class="small text-muted">
+                                        📍 {{ object.death_event.place.short_name }}
+                                    </div>
+                                {% endif %}
                                 
                             </div>
                             
@@ -305,7 +274,7 @@
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="fulltimeline-tab" data-bs-toggle="tab" data-bs-target="#fulltimeline-pane" type="button" role="tab">
-                            full timeline
+                            {% trans "Lebenslauf" %}
                         </button>
                     </li>
                     {% endif %}
@@ -342,16 +311,15 @@
                                                     </h6>
                                                     
                                                     {% if can_edit %}
-                                                    <div class="btn-group">
-                                                        <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-secondary border-0" title="Details ansehen">🔍</a>
-                                                        <a href="{% url 'genview:event-delete' tree_id=tree_id pk=event.pk %}" class="btn btn-sm btn-outline-danger border-0" title="Löschen">🗑️</a>
-                                                    </div>
+                                                    {% url 'genview:event-detail' tree_id=tree_id pk=event.pk as detail_url %}
+                                                    {% url 'genview:event-delete' tree_id=tree_id pk=event.pk as delete_url %}
+                                                    {% action_buttons layout="toolbar" detail_url=detail_url delete_url=delete_url btn_extra="border-0 btn-sm" %}
                                                     {% endif %}
                                                 </div>
 
                                                 {% if event.description %}
                                                 <!-- TODO -->
-                                                <div>Description: {{ event.description|linebreaks }}</div>
+                                                <div>{% trans "Beschreibung" %}: {{ event.description|linebreaks }}</div>
                                                 {% endif %}
 
                                                 <div class="text-muted small mb-2">
@@ -458,10 +426,9 @@
                                                         {{ media.title|default:"(ohne Titel)" }}
                                                     </h6>
                                                     {% if can_edit %}
-                                                    <div class="d-flex justify-content-between gap-2">
-                                                        <a href="{% url 'genview:media-edit' tree_id media.pk %}" class="btn btn-sm btn-outline-primary w-50">✏️</a>
-                                                        <a href="{% url 'genview:media-delete' tree_id media.pk %}" class="btn btn-sm btn-outline-danger w-50">🗑️</a>
-                                                    </div>
+                                                    {% url 'genview:media-edit' tree_id media.pk as edit_url %}
+                                                    {% url 'genview:media-delete' tree_id media.pk as delete_url %}
+                                                    {% action_buttons layout="split" edit_url=edit_url delete_url=delete_url %}
                                                     {% endif %}
                                                 </div>
                                             {% else %}
@@ -507,16 +474,14 @@
                                             </div>
                                         </div>
                                         
-                                        <div class="d-flex gap-2">
-                                            <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary">Ansehen ↗</a>
+                                        <div class="d-flex gap-2 align-items-center">
+                                            {% url 'genview:media-file' tree_id=tree_id pk=media.pk as open_url %}
                                             {% if can_edit %}
-                                            <div class="dropdown">
-                                                <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">⚙️</button>
-                                                <ul class="dropdown-menu dropdown-menu-end shadow">
-                                                    <li><a class="dropdown-item" href="#">✏️ Bearbeiten</a></li>
-                                                    <li><a class="dropdown-item text-danger" href="#">🗑️ Löschen</a></li>
-                                                </ul>
-                                            </div>
+                                                {% url 'genview:media-edit' tree_id media.pk as edit_url %}
+                                                {% url 'genview:media-delete' tree_id media.pk as delete_url %}
+                                                {% action_buttons layout="labeled" open_url=open_url open_new_tab=True edit_url=edit_url delete_url=delete_url %}
+                                            {% else %}
+                                                {% action_buttons layout="labeled" open_url=open_url open_new_tab=True %}
                                             {% endif %}
                                         </div>
                                     </div>
@@ -697,51 +662,51 @@
                             <table class="table-custom">
                                 <tbody>
                                     <tr>
-                                        <th>Home Person</th>
-                                        <th>Parents</th>
-                                        <th>Grand Parents</th>
+                                        <th>{% trans "Ausgangsperson" %}</th>
+                                        <th>{% trans "Eltern" %}</th>
+                                        <th>{% trans "Großeltern" %}</th>
                                     </tr>
                                     <tr>
-                                        <td rowspan="4" id="homePerson" class="person line-bottom">Home Person</td>
-                                        <td rowspan="2" id="Father" class="person line-bottom">Father</td>
-                                        <td id="Grandfather" class="person grand line-bottom">Grandfather</td>
+                                        <td rowspan="4" id="homePerson" class="person line-bottom">{% trans "Ausgangsperson" %}</td>
+                                        <td rowspan="2" id="Father" class="person line-bottom">{% trans "Vater" %}</td>
+                                        <td id="Grandfather" class="person grand line-bottom">{% trans "Großvater" %}</td>
                                     </tr>
                                     <tr>
                                         <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
-                                            Date here</td>
+                                            {% trans "Datum hier" %}</td>
                                     </tr>
                                     <tr>
                                         <td rowspan="2" class="bio line-left-down"><progress value="70" max="100">70 %</progress>
-                                        Date here
+                                        {% trans "Datum hier" %}
                                         </td>
-                                        <td class="person line-bottom grand line-left-up">Grandmother</td>
+                                        <td class="person line-bottom grand line-left-up">{% trans "Großmutter" %}</td>
                                     </tr>
                                     <tr>
                                         <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                                        Date here
+                                        {% trans "Datum hier" %}
                                         </td>
                                 </tr>
                                 <tr>
                                     <td rowspan="4" class="bio"><progress value="78" max="100">78 %</progress>
                                         1940 - 2018
                                     </td>
-                                    <td rowspan="2" class="person line-bottom line-left-up">Mother</td>
-                                    <td class="person grand line-bottom">Grandfther</td>
+                                    <td rowspan="2" class="person line-bottom line-left-up">{% trans "Mutter" %}</td>
+                                    <td class="person grand line-bottom">{% trans "Großvater" %}</td>
                                 </tr>
                                 <tr>
                                     <td class="bio grandDate line-left-down"><progress value="70" max="100">70 %</progress>
-                                        Date Here
+                                        {% trans "Datum hier" %}
                                     </td>
                                 </tr>
                                     <tr>
                                         <td rowspan="2" class="bio"><progress value="70" max="100">70 %</progress>
-                                            Date Here
+                                            {% trans "Datum hier" %}
                                         </td>
-                                        <td class="person grand line-bottom line-left-up">Grandmother</td>
+                                        <td class="person grand line-bottom line-left-up">{% trans "Großmutter" %}</td>
                                     </tr>
                                     <tr>
                                         <td class="bio grandDate line-left"><progress value="70" max="100">70 %</progress>
-                                            Date here
+                                            {% trans "Datum hier" %}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -1017,211 +982,11 @@
     </div>
 </div>
 
+{% endblock %}
 
-<!-- js for interactive tree  -->
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        let dTreeRendered = false;
-        const treeData = {{ tree_json|safe }};
-        const dtreeTabButton = document.getElementById('dtree-tab');
-
-        if (dtreeTabButton) {
-            dtreeTabButton.addEventListener('shown.bs.tab', function () {
-                // Nur einmal rendern, um doppelte Bäume zu vermeiden!
-                if (!dTreeRendered) {
-                    dTree.init(treeData, {
-                        target: "#graph",
-                        debug: false,
-                        height: 550,
-                        width: document.getElementById('graph').clientWidth,
-                        
-                        // 🔥 DIE NEUEN MAßE: Viel kleiner und kompakter!
-                        nodeWidth: 150, 
-                        nodeHeight: 60,
-                        
-                        callbacks: {
-                            nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
-                                
-                                // Platzhalter oder echtes Bild?
-                                let avatarHtml = extra && extra.avatar 
-                                    ? `<img src="${extra.avatar}" style="width: 100%; height: 100%; object-fit: cover;">`
-                                    : `<span style="color: #6c757d; font-size: 18px;">👤</span>`;
-                                
-                                // Hochzeitsdatum (falls vorhanden)
-                                let marriageHtml = extra && extra.marriage_info
-                                    ? `<div style="font-size: 9px; color: #d97706; font-style: italic; line-height: 1;">${extra.marriage_info}</div>`
-                                    : '';
-
-                                // Das neue, smarte Visitenkarten-Design per Flexbox
-                                return `
-                                <div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 6px; padding: 4px; box-sizing: border-box; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                    
-                                    <div style="flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; margin-right: 8px; border: 1px solid #dee2e6;">
-                                        ${avatarHtml}
-                                    </div>
-
-                                    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; text-align: left;">
-                                        <div style="font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">
-                                            ${name}
-                                        </div>
-                                        <div style="font-size: 9px; color: #6c757d; line-height: 1.2; margin-top: 2px;">
-                                            * ${extra?.b_year || '?'} &nbsp;† ${extra?.d_year || '?'}
-                                        </div>
-                                        ${marriageHtml}
-                                    </div>
-
-                                </div>`;
-                            },
-                            nodeClick: function(name, extra) {
-                                if (extra && extra.id) {
-                                    // 🔥 DER FIX: Wir hängen den Tab-Namen als URL-Parameter an!
-                                    // Aus "/de/genview/tree/3/individual/14/" 
-                                    // wird "/de/genview/tree/3/individual/14/?tab=dtree-pane"
-                                    window.location.href = extra.url + "?tab=dtree";
-                                }
-                            }
-                        }
-                    });
-                    dTreeRendered = true;
-                }
-            });
-        }
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        
-        // 1. Welcher Tab steht in der URL?
-        const urlParams = new URLSearchParams(window.location.search);
-        const activeTabId = urlParams.get('tab');
-
-        // 2. Wenn ein Tab in der URL steht, öffne ihn!
-        if (activeTabId) {
-            const tabButton = document.querySelector(`#${activeTabId}-tab`);
-            if (tabButton) {
-                // Entferne zuerst die "active" Klassen vom Standard-Reiter (Profil)
-                document.querySelector('.nav-link.active').classList.remove('active');
-                document.querySelector('.tab-pane.show.active').classList.remove('show', 'active');
-                
-                // Setze den neuen Reiter auf aktiv
-                const tab = new bootstrap.Tab(tabButton);
-                tab.show();
-            }
-        }
-
-        // 3. UX-Magie: Wenn der Nutzer klickt, die URL live anpassen!
-        const allTabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
-        allTabButtons.forEach(function(button) {
-            button.addEventListener('shown.bs.tab', function(event) {
-                // Holt den Namen des geklickten Tabs (z.B. aus 'pedigree-tab' wird 'pedigree')
-                const newTabId = event.target.id.replace('-tab', '');
-                
-                // URL im Browser anpassen, OHNE die Seite neu zu laden
-                const newUrl = window.location.pathname + "?tab=" + newTabId;
-                window.history.replaceState({}, "", newUrl);
-            });
-        });
-        
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        var map = null;
-
-        // Leaflet hat ein bekanntes Problem: Wenn eine Karte in einem versteckten Bootstrap-Tab
-        // initialisiert wird, kennt sie ihre finale Größe nicht und wird grau oder fehlerhaft dargestellt.
-        // Die Lösung: Wir initialisieren die Karte erst EXAKT in dem Moment, in dem der Tab geöffnet wird!
-        var mapTabButton = document.getElementById('map-tab');
-        
-        if (mapTabButton) {
-            mapTabButton.addEventListener('shown.bs.tab', function () {
-                
-                // Falls die Karte schon existiert, bauen wir sie nicht neu (verhindert Fehler)
-                if (map !== null) {
-                    map.invalidateSize(); // Erzwingt das korrekte Neuberechnen der Kartengröße
-                    return;
-                }
-
-                // --- 1. Daten aus Django auslesen ---
-                var stations = [];
-
-                // Geburtsdaten einbetten (nur wenn Koordinaten existieren)
-                {% if object.birth_event and object.birth_event.place and object.birth_event.place.latitude and object.birth_event.place.longitude %}
-                    stations.push({
-                        lat: parseFloat("{{ object.birth_event.place.latitude }}"),
-                        lng: parseFloat("{{ object.birth_event.place.longitude }}"),
-                        title: "🌟 Geburt",
-                        desc: "<b>{{ object.birth_date|default:object.birth_date_raw }}</b><br>{{ object.birth_event.place.name }}"
-                    });
-                {% endif %}
-
-                // Sterbedaten einbetten (nur wenn Koordinaten existieren)
-                {% if object.death_event and object.death_event.place and object.death_event.place.latitude and object.death_event.place.longitude %}
-                    stations.push({
-                        lat: parseFloat("{{ object.death_event.place.latitude }}"),
-                        lng: parseFloat("{{ object.death_event.place.longitude }}"),
-                        title: "✝️ Sterbeort",
-                        desc: "<b>{{ object.death_date|default:object.death_date_raw }}</b><br>{{ object.death_event.place.name }}"
-                    });
-                {% endif %}
-
-                // Wenn gar keine Koordinaten da sind, zeigen wir eine Standard-Weltkarte an und brechen ab
-                if (stations.length === 0) {
-                    map = L.map('lifecycle-map').setView([20, 0], 2);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap'
-                    }).addTo(map);
-                    
-                    // Kleiner Hinweis-Text im Kartenfeld
-                    document.getElementById('lifecycle-map').innerHTML = `
-                        <div class="d-flex h-100 align-items-center justify-content-center text-muted bg-light">
-                            <span>📍 Für diese Person sind noch keine Ortskoordinaten hinterlegt.</span>
-                        </div>`;
-                    return;
-                }
-
-                // --- 2. Karte erstellen und zentrieren ---
-                // Wir starten beim ersten gefundenen Punkt
-                map = L.map('lifecycle-map').setView([stations[0].lat, stations[0].lng], 6);
-
-                // OpenStreetMap Kacheln laden
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap-Mitwirkende'
-                }).addTo(map);
-
-                // --- 3. Pins (Marker) setzen und Lebensweg zeichnen ---
-                var pathCoords = [];
-
-                stations.forEach(function(station) {
-                    // Koordinate für die Linie merken
-                    pathCoords.push([station.lat, station.lng]);
-
-                    // Marker setzen und ein schönes Info-Fenster (Popup) verknüpfen
-                    L.marker([station.lat, station.lng]).addTo(map)
-                        .bindPopup(`<h5>\${station.title}</h5><p>\${station.desc}</p>`);
-                });
-
-                // Wenn es mehr als eine Station gibt (z.B. Geburt UND Tod), zeichnen wir den Weg dazwischen
-                if (pathCoords.length > 1) {
-                    var polyline = L.polyline(pathCoords, {
-                        color: '#0d6efd',       // Schön passendes Bootstrap-Blau
-                        weight: 3,
-                        dashArray: '5, 10',     // Macht die Linie gestrichelt (wirkt historischer)
-                        opacity: 0.7
-                    }).addTo(map);
-
-                    // Karte automatisch so zoomen, dass ALLE Pins perfekt ins Bild passen!
-                    var bounds = L.latLngBounds(pathCoords);
-                    map.fitBounds(bounds, { padding: [50, 50] });
-                }
-            });
-        }
-    });
-</script>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="">
-</script>
-
+{% block extra_js %}
+{{ tree_data|json_script:"tree-data" }}
+{{ lifecycle_stations|json_script:"lifecycle-stations" }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+{% include "genview/_individual_detail_scripts.html" %}
 {% endblock %}

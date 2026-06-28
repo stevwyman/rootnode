@@ -1,7 +1,8 @@
 {% extends "genview/base.html" %}
+{% load i18n ui_tags %}
 
 {% block title %}
-    {% if object %}Ereignis bearbeiten{% else %}Ereignis hinzufügen{% endif %}
+    {% if object %}{% trans "Ereignis bearbeiten" %}{% else %}{% trans "Ereignis hinzufügen" %}{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -13,7 +14,7 @@
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
                         {% if object %}
-                            ✏️ Ereignis bearbeiten
+                            <i class="bi bi-pencil me-1" aria-hidden="true"></i>{% trans "Ereignis bearbeiten" %}
                         {% else %}
                             ✨ Neues Ereignis
                         {% endif %}
@@ -104,10 +105,11 @@
                                         </div>
                                         
                                         <div class="text-end text-nowrap ms-3">
-                                            <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" class="btn btn-sm btn-outline-primary me-1">Details</a>
-                                            
+                                            {% url 'genview:media-detail' tree_id=tree_id pk=media.pk as detail_url %}
                                             {% if media.file %}
-                                                <a href="{{ media.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">Ansehen ↗</a>
+                                                {% action_buttons layout="labeled" detail_url=detail_url open_url=media.file.url open_new_tab=True %}
+                                            {% else %}
+                                                {% action_buttons layout="labeled" detail_url=detail_url %}
                                             {% endif %}
                                         </div>
                                     </li>
@@ -130,32 +132,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
+{% include "genview/_select2_assets.html" %}
 <script>
 jQuery(document).ready(function($) {
-    
-    // Unsere bewährte Helferfunktion
-    function initSelect2(elementClass, apiUrl, placeholderText) {
-        $(elementClass).select2({
-            placeholder: placeholderText,
-            minimumInputLength: 2,
-            allowClear: true,
-            ajax: {
-                url: apiUrl,
-                dataType: 'json',
-                delay: 250,
-                data: function (params) { return { q: params.term }; },
-                processResults: function (data) { return { results: data.results }; }
-            }
-        });
-    }
-
-    // 🔥 Orte und Quellen aktivieren (Baum-ID wird aus dem Context übergeben)
-    initSelect2('.select2-place', "{% url 'genview:api-search-places' tree_id=tree_id %}", "Ort suchen...");
-    initSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
+    initGenviewSelect2('.select2-place', "{% url 'genview:api-search-places' tree_id=tree_id %}", "Ort suchen...");
+    initGenviewSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
 });
 </script>
 {% endblock %}

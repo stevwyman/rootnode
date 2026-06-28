@@ -1,5 +1,5 @@
 {% extends "genview/base.html" %}
-{% load django_bootstrap5 %}
+{% load django_bootstrap5 ui_tags %}
 
 {% block title %}Familie {{ family.gedcom_id }}{% endblock %}
 
@@ -25,8 +25,9 @@
     <h2>👨‍👩‍👧‍👦 Familie <span class="text-muted fs-4">({{ family.gedcom_id }})</span></h2>
     <div>
         {% if can_edit %}
-            <a href="{% url 'genview:family-edit' tree_id family.pk %}" class="btn btn-outline-primary btn-sm">✏️ Bearbeiten</a>
-            <a href="{% url 'genview:family-delete' tree_id family.pk %}" class="btn btn-outline-danger btn-sm">🗑️ Löschen</a>
+            {% url 'genview:family-edit' tree_id family.pk as edit_url %}
+            {% url 'genview:family-delete' tree_id family.pk as delete_url %}
+            {% action_buttons layout="labeled" edit_url=edit_url delete_url=delete_url %}
         {% endif %}
         <a href="{% url 'genview:family-list' tree_id %}" class="btn btn-secondary btn-sm">Zurück zur Liste</a>
     </div>

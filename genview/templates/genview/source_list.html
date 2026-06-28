@@ -1,6 +1,5 @@
 {% extends "genview/base.html" %}
-
-{% block title %}Quellen-Verzeichnis{% endblock %}
+{% load ui_tags %}
 
 {% block content %}
 
@@ -55,10 +54,9 @@
                                 </td>
                                 {% if can_edit %}
                                 <td class="text-end pe-4">
-                                    <div class="btn-group">
-                                        <a href="{% url 'genview:source-edit' tree_id=tree_id pk=source.pk %}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
-                                        <a href="{% url 'genview:source-delete' tree_id=tree_id pk=source.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
-                                    </div>
+                                    {% url 'genview:source-edit' tree_id=tree_id pk=source.pk as edit_url %}
+                                    {% url 'genview:source-delete' tree_id=tree_id pk=source.pk as delete_url %}
+                                    {% action_buttons edit_url=edit_url delete_url=delete_url %}
                                 </td>
                                 {% endif %}
                             </tr>
@@ -76,30 +74,6 @@
         </div>
     </div>
 
-    {% if is_paginated %}
-        <nav class="mt-4" aria-label="Seiten-Navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
-                {% endif %}
-
-                <li class="page-item active">
-                    <span class="page-link">Seite {{ page_obj.number }} von {{ paginator.num_pages }}</span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
-                {% endif %}
-            </ul>
-        </nav>
-    {% endif %}
+    {% include "genview/_pagination.html" %}
 
 {% endblock %}

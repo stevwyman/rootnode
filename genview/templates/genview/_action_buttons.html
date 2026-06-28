@@ -1,0 +1,92 @@
+{% load i18n %}
+{% if detail_url or edit_url or delete_url or open_url %}
+    {% if layout == "sidebar" %}
+        <div class="d-flex flex-column gap-2">
+            {% if edit_url %}
+                <a href="{{ edit_url }}" class="btn btn-primary w-100 {{ btn_extra }}">
+                    <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ labels.edit }}
+                </a>
+            {% endif %}
+            {% if detail_url %}
+                <a href="{{ detail_url }}" class="btn btn-outline-secondary w-100 {{ btn_extra }}">
+                    <i class="bi bi-eye me-1" aria-hidden="true"></i>{{ labels.detail }}
+                </a>
+            {% endif %}
+            {% if open_url %}
+                <a href="{{ open_url }}" class="btn btn-outline-secondary w-100 {{ btn_extra }}"{% if open_new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>
+                    <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>{{ labels.open }}
+                </a>
+            {% endif %}
+            {% if delete_url %}
+                <a href="{{ delete_url }}" class="btn btn-outline-danger w-100 {{ btn_extra }}">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>{{ labels.delete }}
+                </a>
+            {% endif %}
+        </div>
+    {% elif layout == "split" %}
+        <div class="d-flex justify-content-between gap-2 w-100">
+            {% if edit_url %}
+                <a href="{{ edit_url }}" class="btn btn-sm btn-outline-secondary w-50 {{ btn_extra }}" title="{{ labels.edit }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.edit }}</span>{% endif %}
+                </a>
+            {% endif %}
+            {% if delete_url %}
+                <a href="{{ delete_url }}" class="btn btn-sm btn-outline-danger w-50 {{ btn_extra }}" title="{{ labels.delete }}">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.delete }}</span>{% endif %}
+                </a>
+            {% endif %}
+        </div>
+    {% elif layout == "labeled" %}
+        <div class="d-flex flex-wrap gap-2">
+            {% if detail_url %}
+                <a href="{{ detail_url }}" class="btn btn-sm btn-outline-secondary {{ btn_extra }}">
+                    <i class="bi bi-eye me-1" aria-hidden="true"></i>{{ labels.detail }}
+                </a>
+            {% endif %}
+            {% if edit_url %}
+                <a href="{{ edit_url }}" class="btn btn-sm btn-outline-secondary {{ btn_extra }}">
+                    <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ labels.edit }}
+                </a>
+            {% endif %}
+            {% if open_url %}
+                <a href="{{ open_url }}" class="btn btn-sm btn-outline-secondary {{ btn_extra }}"{% if open_new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>
+                    <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>{{ labels.open }}
+                </a>
+            {% endif %}
+            {% if delete_url %}
+                <a href="{{ delete_url }}" class="btn btn-sm btn-outline-danger {{ btn_extra }}">
+                    <i class="bi bi-trash me-1" aria-hidden="true"></i>{{ labels.delete }}
+                </a>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="{% if layout == 'toolbar' %}btn-group btn-group-sm{% else %}btn-group btn-group-sm{% endif %}">
+            {% if detail_url %}
+                <a href="{{ detail_url }}" class="btn btn-outline-secondary {{ btn_extra }}" title="{{ labels.detail }}">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.detail }}</span>{% endif %}
+                </a>
+            {% endif %}
+            {% if edit_url %}
+                <a href="{{ edit_url }}" class="btn btn-outline-{{ edit_variant }} {{ btn_extra }}" title="{{ labels.edit }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.edit }}</span>{% endif %}
+                </a>
+            {% endif %}
+            {% if open_url %}
+                <a href="{{ open_url }}" class="btn btn-outline-secondary {{ btn_extra }}" title="{{ labels.open }}"{% if open_new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>
+                    <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.open }}</span>{% endif %}
+                </a>
+            {% endif %}
+            {% if delete_url %}
+                <a href="{{ delete_url }}" class="btn btn-outline-danger {{ btn_extra }}" title="{{ labels.delete }}">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                    {% if show_labels %}<span class="ms-1">{{ labels.delete }}</span>{% endif %}
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endif %}

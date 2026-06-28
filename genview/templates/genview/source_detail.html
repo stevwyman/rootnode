@@ -1,5 +1,5 @@
 {% extends "genview/base_detail.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% load l10n %}
 
 {% block title %}{{ source.title }} - {% trans "Quelle" %}{% endblock %}
@@ -23,7 +23,13 @@
                         </tr>
                         <tr>
                             <th scope="row" class="text-muted">Autor:</th>
-                            <td>{{ source.author|default:"<span class='text-muted fst-italic'>Unbekannt</span>"|safe }}</td>
+                            <td>
+                                {% if source.author %}
+                                    {{ source.author }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Unbekannt</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         <tr>
                             <th scope="row" class="text-muted">Publikation:</th>
@@ -93,8 +99,11 @@
     {% endblock%}
         
     {% block edit-right %}
-        <a href="{% url 'genview:source-edit' tree_id=tree_id pk=source.pk %}" class="btn btn-primary w-100">✏️ {% trans "Quelle bearbeiten" %}</a>
-        <a href="{% url 'genview:source-delete' tree_id=tree_id pk=source.pk %}" class="btn btn-outline-danger w-100">🗑 {% trans "Quelle löschen" %}</a>
+        {% url 'genview:source-edit' tree_id=tree_id pk=source.pk as edit_url %}
+        {% url 'genview:source-delete' tree_id=tree_id pk=source.pk as delete_url %}
+        {% trans "Quelle bearbeiten" as edit_label %}
+        {% trans "Quelle löschen" as delete_label %}
+        {% action_buttons layout="sidebar" edit_url=edit_url delete_url=delete_url edit_label=edit_label delete_label=delete_label %}
     {% endblock%}
 
     {% block details-right%}

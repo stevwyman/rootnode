@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from itertools import chain
 from django.contrib import messages
+from django.utils.translation import gettext as _
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
@@ -151,8 +153,74 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         """Wird aufgerufen, wenn die Löschung bestätigt wird."""
         tree = self.get_object()
         # Eine Erfolgsmeldung für den Admin setzen
-        messages.success(self.request, f"Der Stammbaum '{tree.name}' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.")
+        messages.success(self.request, _("Der Stammbaum '%(name)s' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.") % {"name": tree.name})
         return super().form_valid(form)
+
+
+def _split_search_terms(query: str) -> list[str]:
+    return [part for part in query.split() if part]
+
+
+def _individual_name_q(term: str) -> Q:
+    return (
+        Q(given_name__icontains=term)
+        | Q(surname__icontains=term)
+        | Q(alternative_names__given_name__icontains=term)
+        | Q(alternative_names__surname__icontains=term)
+        | Q(gedcom_id__icontains=term)
+    )
+
+
+def _individual_and_q(terms: list[str]) -> Q:
+    combined = Q()
+    for term in terms:
+        combined &= _individual_name_q(term)
+    return combined
+
+
+def _annotate_individual_search_result(individual, apply_privacy, match: str | None = None):
+    individual.search_type = _("Person")
+    individual.search_icon = "👤"
+    individual.search_match = match
+    if apply_privacy and individual.is_confidential:
+        individual.search_title = _("Vertrauliche Person")
+        individual.search_desc = _("Datenschutzgeschützt")
+        individual.search_url = None
+    else:
+        individual.search_title = individual.full_name()
+        individual.search_desc = _("Geboren: %(date)s") % {"date": individual.birth_date_raw or "?"}
+        individual.search_url = individual.get_absolute_url()
+
+
+def _search_individuals(tree_id, query: str, apply_privacy, *, limit_and=20, limit_or=20):
+    terms = _split_search_terms(query)
+    if not terms:
+        return []
+
+    base = Individual.objects.filter(gedcom_tree_id=tree_id)
+    results = []
+
+    if len(terms) == 1:
+        for ind in base.filter(_individual_name_q(terms[0])).distinct()[:limit_and]:
+            _annotate_individual_search_result(ind, apply_privacy)
+            results.append(ind)
+        return results
+
+    and_pks = set()
+    for ind in base.filter(_individual_and_q(terms)).distinct()[:limit_and]:
+        and_pks.add(ind.pk)
+        _annotate_individual_search_result(ind, apply_privacy, match="and")
+        results.append(ind)
+
+    or_q = Q()
+    for term in terms:
+        or_q |= _individual_name_q(term)
+
+    for ind in base.filter(or_q).exclude(pk__in=and_pks).distinct()[:limit_or]:
+        _annotate_individual_search_result(ind, apply_privacy, match="or")
+        results.append(ind)
+
+    return results
 
 
 class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
@@ -166,49 +234,46 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
         results = []
 
         if q:
-            # 1. PERSONEN durchsuchen
-            individuals = Individual.objects.filter(gedcom_tree_id=tree_id).filter(
-                Q(given_name__icontains=q) | Q(surname__icontains=q) | Q(gedcom_id__icontains=q)
-            )[:20] # Limit auf 20, damit die Datenbank nicht explodiert
-            
-            for ind in individuals:
-                ind.search_type = "Person"
-                ind.search_icon = "👤"
-                ind.search_title = ind.full_name()
-                ind.search_desc = f"Geboren: {ind.birth_date_raw or '?'}"
-                ind.search_url = ind.get_absolute_url()
+            apply_privacy = self.get_apply_privacy()
+            terms = _split_search_terms(q)
 
-            # 2. FAMILIEN durchsuchen (Sucht im Namen des Mannes oder der Frau)
+            individuals = _search_individuals(tree_id, q, apply_privacy)
+
+            # 2. FAMILIEN durchsuchen
             families = Family.objects.filter(gedcom_tree_id=tree_id).filter(
-                Q(husband__surname__icontains=q) | 
+                Q(husband__surname__icontains=q) |
                 Q(wife__surname__icontains=q) |
                 Q(gedcom_id__icontains=q)
             ).select_related('husband', 'wife')[:10]
-            
+
             for fam in families:
-                fam.search_type = "Familie"
+                fam.search_type = _("Familie")
                 fam.search_icon = "👪"
-                fam.search_title = str(fam)
-                fam.search_desc = f"Heirat: {fam.marriage_date_raw or '?'}"
-                fam.search_url = fam.get_absolute_url()
+                if apply_privacy and fam.is_confidential:
+                    fam.search_title = _("Vertrauliche Familie")
+                    fam.search_desc = _("Datenschutzgeschützt")
+                    fam.search_url = None
+                else:
+                    fam.search_title = str(fam)
+                    fam.search_desc = _("Heirat: %(date)s") % {"date": fam.marriage_date_raw or "?"}
+                    fam.search_url = fam.get_absolute_url()
 
             # 3. ORTE durchsuchen
             places = Place.objects.filter(gedcom_tree_id=tree_id, name__icontains=q)[:10]
             for place in places:
-                place.search_type = "Ort"
+                place.search_type = _("Ort")
                 place.search_icon = "📍"
                 place.search_title = place.name
-                place.search_desc = "Ort im Stammbaum"
-                # Falls du noch keine Detail-URL für Orte hast, kannst du hier ein '#' setzen
+                place.search_desc = _("Ort im Stammbaum")
                 place.search_url = place.get_absolute_url()
 
             # 4. QUELLEN durchsuchen
             sources = Source.objects.filter(gedcom_tree_id=tree_id, title__icontains=q)[:10]
             for src in sources:
-                src.search_type = "Quelle"
+                src.search_type = _("Quelle")
                 src.search_icon = "📚"
                 src.search_title = src.title
-                src.search_desc = src.author or "Kein Autor angegeben"
+                src.search_desc = src.author or _("Kein Autor angegeben")
                 src.search_url = src.get_absolute_url()
 
             # 5. Alles zu einer einzigen flachen Liste zusammenketten!
@@ -216,6 +281,7 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
 
         context['results'] = results
         context['q'] = q
+        context['search_multi_word'] = len(_split_search_terms(q)) > 1
         return context
 
 # ----------------------------------------------------------------------
@@ -539,7 +605,48 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 })
             tree_data.append(target_node)
 
-        ctx["tree_json"] = json.dumps(tree_data)
+        ctx["tree_data"] = tree_data
+
+        lifecycle_stations = []
+        seen_event_pks = set()
+
+        def append_station(event, title=None):
+            place = event.place
+            if not place or place.latitude is None or place.longitude is None:
+                return
+            if event.pk in seen_event_pks:
+                return
+            seen_event_pks.add(event.pk)
+            if event.parsed_date:
+                date_str = event.parsed_date.strftime("%d.%m.%Y")
+            else:
+                date_str = event.raw_date or ""
+            lifecycle_stations.append({
+                "lat": float(place.latitude),
+                "lng": float(place.longitude),
+                "title": title or event.event_type_name(),
+                "date": date_str,
+                "place": place.name,
+                "_sort": event.parsed_date,
+            })
+
+        for event in combined_events:
+            append_station(event)
+
+        for family in person.spousal_families:
+            for child_link in family.children.all():
+                child = child_link.child
+                if not child:
+                    continue
+                child_birth = child.birth_event
+                if child_birth:
+                    append_station(
+                        child_birth,
+                        title=f"Geburt eines Kindes ({child.full_name()})",
+                    )
+
+        lifecycle_stations.sort(key=lambda s: s.pop("_sort", None) or date.min)
+        ctx["lifecycle_stations"] = lifecycle_stations
 
         return ctx
 
@@ -666,7 +773,7 @@ class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
                 existing_family.wife = new_person
                 existing_family.save()
 
-        messages.success(self.request, f"Person {new_person.full_name()} erfolgreich angelegt.")
+        messages.success(self.request, _("Person %(name)s erfolgreich angelegt.") % {"name": new_person.full_name()})
         return response
 
     def get_success_url(self):
@@ -687,7 +794,7 @@ class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        messages.success(self.request, "Personendaten wurden gespeichert.")  # optional
+        messages.success(self.request, _("Personendaten wurden gespeichert."))  # optional
         return response
 
     def get_success_url(self):
@@ -704,7 +811,7 @@ class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     def get_success_url(self):
         # Nach dem Löschen leiten wir den Nutzer zurück zur Personen-Liste
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, f"Person erfolgreich gelöscht.")
+        messages.success(self.request, _("Person erfolgreich gelöscht."))
         return reverse_lazy("genview:individual-list", kwargs={"tree_id": tree_id})
 
 
@@ -830,7 +937,7 @@ class IndividualAddExistingMediaView(TreeAccessMixin, FormView):
         # Die Medien mit der Person verknüpfen
         self.individual.media_objects.add(*selected_media)
         
-        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Person verknüpft.")
+        messages.success(self.request, _("%(count)s Medien erfolgreich mit der Person verknüpft.") % {"count": selected_media.count()})
         
         # 🔥 WICHTIG: Die FormView erwartet als Return das super(), 
         # welches dann automatisch zu get_success_url() weiterleitet.
@@ -1017,7 +1124,7 @@ class FamilyCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
-        messages.success(self.request, "Familie angelegt.")
+        messages.success(self.request, _("Familie angelegt."))
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -1037,7 +1144,7 @@ class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
-        messages.success(self.request, "Familie wurde aktualisiert.")
+        messages.success(self.request, _("Familie wurde aktualisiert."))
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -1053,7 +1160,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Familie und zugehörige Verknüpfungen erfolgreich gelöscht.")
+        messages.success(self.request, _("Familie und zugehörige Verknüpfungen erfolgreich gelöscht."))
         # Nutzer nach dem Löschen zur Familien-Übersicht (oder Stammbaum) zurückschicken
         return reverse_lazy("genview:family-list", kwargs={"tree_id": tree_id})
 
@@ -1084,7 +1191,7 @@ class FamilyAddExistingMediaView(TreeAccessMixin, FormView):
         # Die Medien mit der Familie verknüpfen
         self.family.media_objects.add(*selected_media)
         
-        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Familie verknüpft.")
+        messages.success(self.request, _("%(count)s Medien erfolgreich mit der Familie verknüpft.") % {"count": selected_media.count()})
         
         # 🔥 WICHTIG: Die FormView erwartet als Return das super(), 
         # welches dann automatisch zu get_success_url() weiterleitet.
@@ -1235,16 +1342,25 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     
     def _handle_ocr(self, request, media):
         from .ocr_client import extract_text_via_api
-        
+
+        if not media.file or not media.file.name:
+            messages.error(request, _("Keine Datei vorhanden."))
+            return redirect(request.path)
+
         response = extract_text_via_api(media.file.path)
 
         if response["error"]:
-            messages.error(request, f"OCR-Fehler: {response["error"]}")
-        else:
-            media.extracted_text = response["text"]
-            media.save()
-            messages.success(request, "Text erfolgreich extrahiert.")
+            messages.error(request, _("OCR-Fehler: %(detail)s") % {"detail": response["error"]})
+            return redirect(request.path)
 
+        text = response["text"]
+        if not text or not text.strip():
+            messages.info(request, _("Kein Text erkannt. Der bisher extrahierte Text bleibt erhalten."))
+            return redirect(request.path)
+
+        media.extracted_text = text
+        media.save()
+        messages.success(request, _("Text erfolgreich extrahiert."))
         return redirect(request.path)
 
     # -------------------------------------------------
@@ -1256,53 +1372,68 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
 
         tree_id = self.kwargs.get("tree_id")
 
+        if not media.file or not media.file.name:
+            messages.error(request, _("Keine Bilddatei vorhanden."))
+            return redirect(request.path)
+
+        try:
+            with Image.open(media.file.path) as img:
+                img_width, img_height = img.size
+        except OSError as exc:
+            messages.error(request, _("Bild konnte nicht gelesen werden: %(detail)s") % {"detail": exc})
+            return redirect(request.path)
+
+        if img_width <= 0 or img_height <= 0:
+            messages.error(request, _("Ungültige Bildabmessungen."))
+            return redirect(request.path)
+
         response = detect_faces_via_api(media.file.path)
 
         if response["error"]:
-            messages.error(request, f"Erkennungs-Fehler: {response["error"]}")
+            messages.error(request, _("Erkennungs-Fehler: %(detail)s") % {"detail": response["error"]})
             return redirect(request.path)
 
-        # Vorhandene Tags vorher bereinigen
+        faces = response["faces"]
+        if not faces:
+            messages.info(request, _("Keine Gesichter im Bild erkannt. Bestehende Markierungen bleiben erhalten."))
+            return redirect(request.path)
+
         media.facetags.all().delete()
 
-        # Bilddimensionen auslesen, um Pixel in % umzurechnen
-        with Image.open(media.file.path) as img:
-            img_width, img_height = img.size
-
         auto_match_count = 0
+        saved_count = 0
 
-        for f in response["faces"]:
-            # Umrechnung in Prozent (0.0 bis 100.0)
-            x_pct = (f['x'] / img_width) * 100
-            y_pct = (f['y'] / img_height) * 100
-            w_pct = (f['width'] / img_width) * 100
-            h_pct = (f['height'] / img_height) * 100
-            confidence = f['confidence']
-            detected_embedding=f['embedding'] # 🔥 Aus der API-Antwort mitspeichern
+        for face in faces:
+            x_pct = (face["x"] / img_width) * 100
+            y_pct = (face["y"] / img_height) * 100
+            w_pct = (face["width"] / img_width) * 100
+            h_pct = (face["height"] / img_height) * 100
+            detected_embedding = face["embedding"]
 
             auto_assigned_individual = find_best_match_for_face(detected_embedding, tree_id)
-
             if auto_assigned_individual:
                 auto_match_count += 1
 
-            # Setzt voraus, dass dein Modell nun x_percent, y_percent etc. nutzt
-            # (wie im vorherigen Vorschlag empfohlen)
             FaceTag.objects.create(
                 media=media,
                 x_percent=x_pct,
                 y_percent=y_pct,
                 width_percent=w_pct,
                 height_percent=h_pct,
-                confidence=confidence,
+                confidence=face["confidence"],
                 embedding=detected_embedding,
-                individual=auto_assigned_individual
+                individual=auto_assigned_individual,
             )
-            
+            saved_count += 1
+
         if auto_match_count > 0:
-            messages.success(request, f"{(auto_match_count)} Gesicht(er) automatisch zugeordnet.")
+            messages.success(
+                request,
+                _("%(saved)s Gesicht(er) erkannt, davon %(matched)s automatisch zugeordnet.") % {"saved": saved_count, "matched": auto_match_count},
+            )
         else:
-            messages.success(request, f"{len(response["faces"])} Gesicht(e) erkannt und gespeichert.")
-        
+            messages.success(request, _("%(count)s Gesicht(er) erkannt und gespeichert.") % {"count": saved_count})
+
         return redirect(request.path)
 
     # -------------------------------------------------
@@ -1318,9 +1449,9 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             individual = get_object_or_404(Individual, pk=indiv_id)
             tag.individual = individual
             tag.save()
-            messages.success(request, f"Gesicht erfolgreich mit {individual} verknüpft.")
+            messages.success(request, _("Gesicht erfolgreich mit %(person)s verknüpft.") % {"person": individual})
         else:
-            messages.warning(request, "Keine Person ausgewählt – Tag bleibt unverknüpft.")
+            messages.warning(request, _("Keine Person ausgewählt – Tag bleibt unverknüpft."))
             
         return redirect(request.path)
     
@@ -1420,7 +1551,7 @@ class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView)
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Bild erfolgreich hochgeladen.")
+        messages.success(self.request, _("Bild erfolgreich hochgeladen."))
 
         if self.person:
             return reverse_lazy(
@@ -1474,7 +1605,7 @@ class MediaObjectUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView)
 
         # LOGIK: Nach dem Update einfach auf die Detail-Seite des Bildes leiten!
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Medium erfolgreich aktualisiert.")
+        messages.success(self.request, _("Medium erfolgreich aktualisiert."))
         return reverse_lazy("genview:media-detail", kwargs={"tree_id": tree_id, "pk": self.object.pk})
 
 
@@ -1497,7 +1628,7 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
         tree_id = self.kwargs.get("tree_id")
         person_pk = self.kwargs.get("person_pk")
 
-        messages.success(self.request, "Bild wurde entfernt.")
+        messages.success(self.request, _("Bild wurde entfernt."))
 
         if person_pk:
             return reverse_lazy(
@@ -1553,9 +1684,9 @@ class BulkMediaUploadView(TreeAccessMixin, TemplateView):
 
         # Nutzer-Feedback
         if matched_count > 0:
-            messages.success(request, f"{matched_count} Bilder wurden erfolgreich zugeordnet!")
+            messages.success(request, _("%(count)s Bilder wurden erfolgreich zugeordnet!") % {"count": matched_count})
         if unmatched_count > 0:
-            messages.warning(request, f"{unmatched_count} hochgeladene Dateien konnten keinem fehlenden Eintrag zugeordnet werden.")
+            messages.warning(request, _("%(count)s hochgeladene Dateien konnten keinem fehlenden Eintrag zugeordnet werden.") % {"count": unmatched_count})
 
         # Nach dem Post-Request laden wir die Seite neu (Post/Redirect/Get-Pattern)
         return redirect('genview:bulk-media-upload', tree_id=tree_id)
@@ -1671,7 +1802,7 @@ class PlaceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Ort erfolgreich hinzugefügt.")
+        messages.success(self.request, _("Ort erfolgreich hinzugefügt."))
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -1689,7 +1820,7 @@ class PlaceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Orte aktualisiert.")
+        messages.success(self.request, _("Orte aktualisiert."))
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
 
 # --- 5. Delete View ---
@@ -1708,7 +1839,7 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Der Ort wurde erfolgreich gelöscht.")
+        messages.success(self.request, _("Der Ort wurde erfolgreich gelöscht."))
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
@@ -1749,10 +1880,10 @@ class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
                 
                 messages.success(
                     request, 
-                    f"Erfolgreich! {duplicates_count} Ort(e) wurden gelöscht und in '{master_place.name}' integriert."
+                    _("Erfolgreich! %(count)s Ort(e) wurden gelöscht und in '%(name)s' integriert.") % {"count": duplicates_count, "name": master_place.name}
                 )
             else:
-                messages.info(request, "Es gab keine Duplikate zum Zusammenführen.")
+                messages.info(request, _("Es gab keine Duplikate zum Zusammenführen."))
             
         return redirect(request.path)
 
@@ -1778,17 +1909,17 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
         # Build die Such‑Query.  Priorität: address > name
         query = place.name
         if not query:
-            messages.error(request, "Ort hat weder Namen noch Adresse – kein Geocode möglich.")
+            messages.error(request, _("Ort hat weder Namen noch Adresse – kein Geocode möglich."))
             return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
 
         try:
             results = geocode_place(query, limit=1, country_codes="de")
         except Exception as exc:
-            messages.error(request, f"Nominatim‑Fehler: {exc}")
+            messages.error(request, _("Nominatim-Fehler: %(detail)s") % {"detail": exc})
             return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
 
         if not results:
-            messages.warning(request, f"Keine Koordinaten für „{query}“ gefunden.")
+            messages.warning(request, _("Keine Koordinaten für „%(query)s“ gefunden.") % {"query": query})
             return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
 
         best = results[0]
@@ -1805,11 +1936,11 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
                 "lat": place.latitude,
                 "lon": place.longitude,
                 "display_name": best["display_name"],
-                "message": f"Koordinaten für {query} wurden gefunden."
+                "message": _("Koordinaten für %(query)s wurden gefunden.") % {"query": query}
             })
         # Sonst: normales Redirect + Django‑Message
         messages.success(request,
-                         f"Koordinaten ({place.latitude}, {place.longitude}) für „{query}“ gespeichert.")
+                         _("Koordinaten (%(lat)s, %(lon)s) für „%(query)s“ gespeichert.") % {"lat": place.latitude, "lon": place.longitude, "query": query})
         return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
         
 
@@ -1944,11 +2075,11 @@ class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         
         # 3. Maßgeschneiderte Erfolgsmeldung NACH dem erfolgreichen Speichern
         if self.object.individual:
-            messages.success(self.request, f"Ereignis für {self.object.individual} erfolgreich hinzugefügt.")
+            messages.success(self.request, _("Ereignis für %(person)s erfolgreich hinzugefügt.") % {"person": self.object.individual})
         elif self.object.family:
-            messages.success(self.request, "Familien-Ereignis erfolgreich hinzugefügt.")
+            messages.success(self.request, _("Familien-Ereignis erfolgreich hinzugefügt."))
         else:
-            messages.success(self.request, "Ereignis erfolgreich gespeichert.")
+            messages.success(self.request, _("Ereignis erfolgreich gespeichert."))
 
         return response
 
@@ -1999,11 +2130,11 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     def form_valid(self, form):
         # FIX: Saubere Erfolgsmeldungen (und kein "Bild" mehr 😉)
         if self.object.individual:
-            messages.success(self.request, f"Ereignis für {self.object.individual} erfolgreich aktualisiert.")
+            messages.success(self.request, _("Ereignis für %(person)s erfolgreich aktualisiert.") % {"person": self.object.individual})
         elif self.object.family:
-            messages.success(self.request, "Familien-Ereignis erfolgreich aktualisiert.")
+            messages.success(self.request, _("Familien-Ereignis erfolgreich aktualisiert."))
         else:
-            messages.success(self.request, "Ereignis erfolgreich aktualisiert.")
+            messages.success(self.request, _("Ereignis erfolgreich aktualisiert."))
 
         return super().form_valid(form)
     
@@ -2055,7 +2186,7 @@ class AddExistingMediaToEventView(TreeAccessMixin, FormView):
         # dem Many-to-Many Feld 'media_objects' des Events hinzu!
         event.media_objects.add(*selected_media)
         
-        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit dem Ereignis verknüpft.")
+        messages.success(self.request, _("%(count)s Medien erfolgreich mit dem Ereignis verknüpft.") % {"count": selected_media.count()})
         
         # Weiterleitung zurück zur Detailseite des Events oder der Person
         if event.individual:
@@ -2074,7 +2205,7 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         
         # 1. Prüfen: Gehörte das gelöschte Event zu einer Person?
         if self.object.individual:
-            messages.success(self.request, "Ereignis erfolgreich gelöscht.")
+            messages.success(self.request, _("Ereignis erfolgreich gelöscht."))
             return reverse_lazy(
                 "genview:individual-detail", 
                 kwargs={"tree_id": tree_id, "pk": self.object.individual.pk}
@@ -2082,14 +2213,14 @@ class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
             
         # 2. Prüfen: Gehörte das Event zu einer Familie?
         elif self.object.family:
-            messages.success(self.request, "Familien-Ereignis erfolgreich gelöscht.")
+            messages.success(self.request, _("Familien-Ereignis erfolgreich gelöscht."))
             return reverse_lazy(
                 "genview:family-detail", 
                 kwargs={"tree_id": tree_id, "pk": self.object.family.pk}
             )
             
         # 3. Fallback
-        messages.success(self.request, "Ereignis erfolgreich gelöscht.")
+        messages.success(self.request, _("Ereignis erfolgreich gelöscht."))
         # Passe diesen Fallback an deine existierende Übersichtsseite an
         return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
 
@@ -2162,7 +2293,7 @@ class SourceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         # Automatically assign the source to the current tree
         tree_id = self.kwargs.get("tree_id")
         form.instance.gedcom_tree_id = tree_id
-        messages.success(self.request, "Quelle erfolgreich erstellt.")
+        messages.success(self.request, _("Quelle erfolgreich erstellt."))
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -2181,7 +2312,7 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Quelle aktualisiert.")
+        messages.success(self.request, _("Quelle aktualisiert."))
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
 class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
@@ -2208,7 +2339,7 @@ class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
         # related_name 'media_objects' von der Quelle aus darauf zu:
         source.media_objects.add(*selected_media)
         
-        messages.success(self.request, f"{selected_media.count()} Medien erfolgreich mit der Quelle verknüpft.")
+        messages.success(self.request, _("%(count)s Medien erfolgreich mit der Quelle verknüpft.") % {"count": selected_media.count()})
         
         # Zurück zur Detailseite der Quelle leiten
         return redirect('genview:source-detail', tree_id=tree_id, pk=source.pk)
@@ -2224,7 +2355,7 @@ class SourceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        messages.success(self.request, "Quelle gelöscht.")
+        messages.success(self.request, _("Quelle gelöscht."))
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
     
 
@@ -2412,8 +2543,7 @@ class RegisterView(CreateView):
         # Dem User eine freundliche Nachricht anzeigen
         messages.info(
             self.request, 
-            f"Registrierung für „{user.username}“ erfolgreich! Dein Account ist aktuell noch inaktiv. "
-            f"Ein Administrator prüft deine Anmeldung und schaltet dich in Kürze frei."
+            _("Registrierung für „%(username)s“ erfolgreich! Dein Account ist aktuell noch inaktiv. Ein Administrator prüft deine Anmeldung und schaltet dich in Kürze frei.") % {"username": user.username}
         )
         return redirect(self.success_url)
 
@@ -2438,12 +2568,12 @@ class UserManagementActionView(SuperuserRequiredMixin, View):
             user.is_active = not user.is_active
             user.save()
             status = "aktiviert" if user.is_active else "deaktiviert"
-            messages.success(request, f"Benutzer {user.username} wurde erfolgreich {status}.")
+            messages.success(request, _("Benutzer %(username)s wurde erfolgreich %(status)s.") % {"username": user.username, "status": status})
             
         elif action == "delete":
             username = user.username
             user.delete()
-            messages.success(request, f"Benutzer {username} wurde dauerhaft gelöscht.")
+            messages.success(request, _("Benutzer %(username)s wurde dauerhaft gelöscht.") % {"username": username})
             
         return redirect('genview:user-management-list')
     
@@ -2518,7 +2648,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
 
         except Exception as exc:                 # catch any DB-/Import-Fehler
             messages.error(self.request,
-                f"Import fehlgeschlagen: {exc}")
+                _("Import fehlgeschlagen: %(detail)s") % {"detail": exc})
             # Aufräumen, dann zum Formular zurück
             os.remove(tmp_path)
             return self.form_invalid(form)
@@ -2528,7 +2658,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
 
         # 4️⃣ Erfolgsmeldung
         messages.success(self.request,
-            f"GEDCOM-Datei erfolgreich importiert – Stammbaum „{tree_name}“ angelegt.")
+            _("GEDCOM-Datei erfolgreich importiert – Stammbaum „%(name)s“ angelegt.") % {"name": tree_name})
         return super().form_valid(form)
 
     # -----------------------------------------------------------------
@@ -2576,7 +2706,7 @@ class TreeMembershipManageView(TreeEditAccessMixin, View):
             tree.is_public = not tree.is_public
             tree.save()
             status = "öffentlich zugänglich" if tree.is_public else "privat und geschützt"
-            messages.info(request, f"Der Stammbaum ist jetzt {status}.")
+            messages.info(request, _("Der Stammbaum ist jetzt %(status)s.") % {"status": status})
             return redirect('genview:manage-memberships', tree_id=tree.id)
         
 
@@ -2595,15 +2725,15 @@ class TreeMembershipManageView(TreeEditAccessMixin, View):
                 defaults={'role': new_user_role}
             )
             if created:
-                messages.success(request, f"Benutzer {new_user.username} wurde erfolgreich hinzugefügt.")
+                messages.success(request, _("Benutzer %(username)s wurde erfolgreich hinzugefügt.") % {"username": new_user.username})
             else:
-                messages.warning(request, f"{new_user.username} ist bereits Mitglied in diesem Stammbaum.")
+                messages.warning(request, _("%(username)s ist bereits Mitglied in diesem Stammbaum.") % {"username": new_user.username})
             return redirect('genview:manage-memberships', tree_id=tree.id)
 
         # 2. Workflow: BESTEHENDE ROLLER ÄNDERN / LÖSCHEN
         if formset.is_valid():
             formset.save()
-            messages.success(request, "Mitgliederlisten und Rollen erfolgreich aktualisiert.")
+            messages.success(request, _("Mitgliederlisten und Rollen erfolgreich aktualisiert."))
             return redirect('genview:manage-memberships', tree_id=tree.id)
             
         return render(request, self.template_name, {

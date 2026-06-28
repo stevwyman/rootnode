@@ -2,7 +2,7 @@
 from django import forms
 from django.forms import ModelForm, DateInput
 from django.contrib.auth.models import User
-from typing import Tuple, Iterable
+from django.utils.translation import gettext_lazy as _
 from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, TreeMembership
 
 
@@ -21,26 +21,26 @@ class IndividualForm(ModelForm):
     # --------------------------------------------------------------
     birth_date_raw = forms.CharField(
         required=False,
-        label="Geburts-Datum (Roh-String, z. B. 'ABT 1900')",
+        label=_("Geburts-Datum (Roh-String, z. B. 'ABT 1900')"),
         widget=forms.TextInput(
             attrs={"class": "form-control", "placeholder": "z. B. 12 JAN 1885"}
         ),
     )
     birth_date_parsed = forms.DateField(
         required=False,
-        label="Geburts-Datum (geparst)",
+        label=_("Geburts-Datum (geparst)"),
         widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
     death_date_raw = forms.CharField(
         required=False,
-        label="Sterbe-Datum (Roh-String)",
+        label=_("Sterbe-Datum (Roh-String)"),
         widget=forms.TextInput(
             attrs={"class": "form-control", "placeholder": "z. B. 5 MAY 1972"}
         ),
     )
     death_date_parsed = forms.DateField(
         required=False,
-        label="Sterbe-Datum (geparst)",
+        label=_("Sterbe-Datum (geparst)"),
         widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
     )
 
@@ -176,7 +176,7 @@ class IndividualSearchForm(forms.Form):
 
     q = forms.CharField(
         required=False,
-        label="Suche",
+        label=_("Suche"),
         widget=forms.TextInput(
             attrs={
                 "class": "form-control",
@@ -199,14 +199,14 @@ class FamilyForm(ModelForm):
     # ---------- Virtuelle Felder ----------
     marriage_raw_date = forms.CharField(
         required=False,
-        label="Heirats-Datum (Roh-String, z. B. '15 JUN 1890')",
+        label=_("Heirats-Datum (Roh-String, z. B. '15 JUN 1890')"),
         widget=forms.TextInput(
             attrs={"class": "form-control", "placeholder": "z. B. 15 JUN 1890"}
         ),
     )
     marriage_parsed_date = forms.DateField(
         required=False,
-        label="Heirats-Datum (geparst)",
+        label=_("Heirats-Datum (geparst)"),
         widget=forms.DateInput(
                 format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
                 attrs={
@@ -218,7 +218,7 @@ class FamilyForm(ModelForm):
     marriage_place = forms.ModelChoiceField(
         queryset=Place.objects.none(), 
         required=False,
-        label="Heiratsort",
+        label=_("Heiratsort"),
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
@@ -468,7 +468,7 @@ class AddExistingMediaForm(forms.Form):
     media_objects = forms.ModelMultipleChoiceField(
         queryset=MediaObject.objects.none(),
         required=True,
-        label="Bestehende Medien suchen und auswählen",
+        label=_("Bestehende Medien suchen und auswählen"),
         # 🔥 Das Checkbox-Widget fliegt raus, Select2 kommt rein:
         widget=forms.SelectMultiple(attrs={'class': 'form-control select2-media'})
     )
@@ -660,12 +660,12 @@ class GedcomImportForm(forms.Form):
     - `tree_name`   : Name des neuen Stammbaums, wie beim CLI-Befehl
     """
     gedcom_file = forms.FileField(
-        label="GEDCOM-Datei",
+        label=_("GEDCOM-Datei"),
         help_text="Nur .ged/.gedcom-Dateien, max. 10 MB",
     )
     tree_name = forms.CharField(
         max_length=200,
-        label="Name des Stammbaums",
+        label=_("Name des Stammbaums"),
         help_text="Wie soll der neue Baum heißen?"
     )
 

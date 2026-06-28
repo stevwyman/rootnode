@@ -3,161 +3,820 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-13 11:19+0000\n"
+"POT-Creation-Date: 2026-06-28 13:50+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: genview/models.py:838
+#: genview/forms.py:24
+msgid "Geburts-Datum (Roh-String, z. B. 'ABT 1900')"
+msgstr "Birth date (raw string, e.g. 'ABT 1900')"
+
+#: genview/forms.py:31
+msgid "Geburts-Datum (geparst)"
+msgstr "Birth date (parsed)"
+
+#: genview/forms.py:36
+msgid "Sterbe-Datum (Roh-String)"
+msgstr "Death date (raw string)"
+
+#: genview/forms.py:43
+msgid "Sterbe-Datum (geparst)"
+msgstr "Death date (parsed)"
+
+#: genview/forms.py:179 genview/templates/genview/base.html:86
+msgid "Suche"
+msgstr "Search"
+
+#: genview/forms.py:202
+msgid "Heirats-Datum (Roh-String, z. B. '15 JUN 1890')"
+msgstr "Heirats-Datum (Roh-String, z. B. '15 JUN 1890')"
+
+#: genview/forms.py:209
+msgid "Heirats-Datum (geparst)"
+msgstr "Heirats-Datum (geparst)"
+
+#: genview/forms.py:221
+msgid "Heiratsort"
+msgstr "Heiratsort"
+
+#: genview/forms.py:471
+msgid "Bestehende Medien suchen und auswählen"
+msgstr "Bestehende Medien suchen und auswählen"
+
+#: genview/forms.py:663
+msgid "GEDCOM-Datei"
+msgstr "GEDCOM-Datei"
+
+#: genview/forms.py:668
+#, fuzzy
+#| msgid "Stammbaum"
+msgid "Name des Stammbaums"
+msgstr "Family tree"
+
+#: genview/models.py:960
 msgid "Datei/Bild"
-msgstr "file/picture"
+msgstr "File/image"
 
-#: genview/models.py:879
+#: genview/models.py:1003
 msgid "Ereignisse, mit denen dieses Medium verknüpft ist"
-msgstr ""
+msgstr "Events linked to this media object"
 
-#: genview/models.py:884
+#: genview/models.py:1008
 msgid "Dieses Bild wird als Portrait auf der Personen-Detail-Seite angezeigt."
-msgstr ""
+msgstr "This image is shown as the portrait on the person detail page."
 
 #: genview/templates/genview/_basic_system_information.html:5
-#, fuzzy
-#| msgid "Erstellt"
 msgid "Erstellt am"
-msgstr "created"
+msgstr "Created on"
 
 #: genview/templates/genview/_basic_system_information.html:6
 msgid "Zuletzt geändert"
-msgstr ""
+msgstr "Last modified"
+
+#: genview/templates/genview/_individual_detail_header.html:22
+msgid "Alternative Namen"
+msgstr "Alternative names"
+
+#: genview/templates/genview/_individual_detail_scripts.html:115
+msgid "Für diese Person sind noch keine Ortskoordinaten hinterlegt."
+msgstr "No location coordinates are stored for this person yet."
 
 #: genview/templates/genview/_individual_mini.html:18
 msgid "vertraulich"
-msgstr ""
+msgstr "confidential"
+
+#: genview/templates/genview/_individual_table.html:11
+#: genview/templates/genview/_individual_table.html:18
+#: genview/templates/genview/individual_list.html:145
+#: genview/templates/genview/individual_list.html:153 genview/views.py:186
+msgid "Vertrauliche Person"
+msgstr "Confidential person"
+
+#: genview/templates/genview/_individual_table.html:57
+msgid "Bearbeiten"
+msgstr "Edit"
+
+#: genview/templates/genview/_individual_table.html:59
+msgid "Löschen"
+msgstr "Delete"
+
+#: genview/templates/genview/_individual_table.html:64
+#: genview/templates/genview/individual_list.html:212
+msgid "Keine Personen gefunden."
+msgstr "No persons found."
+
+#: genview/templates/genview/_pagination.html:3
+msgid "Seiten-Navigation"
+msgstr "Page navigation"
+
+#: genview/templates/genview/_pagination.html:7
+#: genview/templates/genview/_pagination.html:10
+msgid "Zurück"
+msgstr "Back"
+
+#: genview/templates/genview/_pagination.html:14
+#, python-format
+msgid "Seite %(current)s von %(total)s"
+msgstr "Page %(current)s of %(total)s"
+
+#: genview/templates/genview/_pagination.html:19
+#: genview/templates/genview/_pagination.html:22
+msgid "Weiter"
+msgstr "Next"
+
+#: genview/templates/genview/base.html:10
+msgid "GEDCOM-Stammbaum"
+msgstr "GEDCOM family tree"
+
+#: genview/templates/genview/base.html:26
+msgid "Stammbaum"
+msgstr "Family tree"
+
+#: genview/templates/genview/base.html:29
+msgid "Navigation umschalten"
+msgstr "Toggle navigation"
+
+#: genview/templates/genview/base.html:36
+msgid "Daten"
+msgstr "Data"
+
+#: genview/templates/genview/base.html:38
+#: genview/templates/genview/individual_list.html:3
+#: genview/templates/genview/tree_list.html:31
+msgid "Personen"
+msgstr "Persons"
+
+#: genview/templates/genview/base.html:39
+#: genview/templates/genview/tree_list.html:35
+msgid "Familien"
+msgstr "Families"
+
+#: genview/templates/genview/base.html:40
+msgid "Ereignisse"
+msgstr "Events"
+
+#: genview/templates/genview/base.html:41
+#: genview/templates/genview/tree_list.html:39
+msgid "Orte"
+msgstr "Places"
+
+#: genview/templates/genview/base.html:42
+msgid "Medien"
+msgstr "Media"
+
+#: genview/templates/genview/base.html:43
+msgid "Quellen"
+msgstr "Sources"
+
+#: genview/templates/genview/base.html:49
+#, python-format
+msgid "Angemeldet als %(username)s"
+msgstr "Signed in as %(username)s"
+
+#: genview/templates/genview/base.html:51
+#: genview/templates/genview/base.html:135
+msgid "Stammbäume"
+msgstr "Family trees"
+
+#: genview/templates/genview/base.html:53
+msgid "Bulk-Upload"
+msgstr "Bulk upload"
+
+#: genview/templates/genview/base.html:54
+#: genview/templates/genview/tree_list.html:56
+msgid "Baum verwalten"
+msgstr "Manage tree"
+
+#: genview/templates/genview/base.html:55
+msgid "Orte bereinigen"
+msgstr "Clean up places"
+
+#: genview/templates/genview/base.html:59
+msgid "GEDCOM importieren"
+msgstr "Import GEDCOM"
+
+#: genview/templates/genview/base.html:60
+msgid "Benutzer"
+msgstr "Users"
+
+#: genview/templates/genview/base.html:61
+msgid "Ereignistypen"
+msgstr "Event types"
+
+#: genview/templates/genview/base.html:64
+msgid "Account-Sicherheit"
+msgstr "Account security"
+
+#: genview/templates/genview/base.html:69
+msgid "Abmelden"
+msgstr "Log out"
+
+#: genview/templates/genview/base.html:77
+msgid "Anmelden"
+msgstr "Log in"
+
+#: genview/templates/genview/base.html:80
+msgid "Registrieren"
+msgstr "Register"
+
+#: genview/templates/genview/base.html:86
+msgid "Stammbaum durchsuchen…"
+msgstr "Search family tree…"
+
+#: genview/templates/genview/base.html:131
+msgid "Version"
+msgstr "Version"
 
 #: genview/templates/genview/event_detail.html:5
 msgid "Ereignis"
-msgstr ""
+msgstr "Event"
 
 #: genview/templates/genview/event_detail.html:25
-#: genview/templates/genview/mediaobject_detail.html:9
+#: genview/templates/genview/mediaobject_detail.html:8
 #: genview/templates/genview/place_detail.html:9
 #: genview/templates/genview/source_detail.html:9
 msgid "Zurück zur Übersicht"
-msgstr ""
+msgstr "Back to overview"
 
-#: genview/templates/genview/mediaobject_detail.html:5
+#: genview/templates/genview/global_search.html:5
+msgid "Globale Suche"
+msgstr "Global search"
+
+#: genview/templates/genview/global_search.html:9
+msgid "Suche nach Personen, Familien, Orten…"
+msgstr "Search for persons, families, places…"
+
+#: genview/templates/genview/global_search.html:10
+msgid "Suchen"
+msgstr "Search"
+
+#: genview/templates/genview/global_search.html:15
+#, python-format
+msgid "Ergebnisse für „%(query)s“ (%(count)s Treffer)"
+msgstr "Results for \"%(query)s\" (%(count)s matches)"
+
+#: genview/templates/genview/global_search.html:24
+msgid "Personen mit allen Suchbegriffen"
+msgstr "Persons matching all search terms"
+
+#: genview/templates/genview/global_search.html:28
+msgid "Weitere Personen (einzelne Suchbegriffe)"
+msgstr "More persons (individual search terms)"
+
+#: genview/templates/genview/global_search.html:56
+msgid "Keine Ergebnisse für diesen Suchbegriff gefunden."
+msgstr "No results found for this search term."
+
+#: genview/templates/genview/home.html:3
+msgid "Startseite"
+msgstr "Home"
+
+#: genview/templates/genview/home.html:7
+msgid "Willkommen beim GEDCOM-Stammbaum"
+msgstr "Welcome to the GEDCOM family tree"
+
+#: genview/templates/genview/home.html:9
+msgid ""
+"Hier kannst du Personen, Familien und Ereignisse durchsuchen, Stammbäume "
+"visualisieren und GEDCOM-Dateien importieren."
+msgstr ""
+"Browse persons, families, and events, visualize family trees, and import "
+"GEDCOM files."
+
+#: genview/templates/genview/home.html:13
+msgid "Personen ansehen"
+msgstr "View persons"
+
+#: genview/templates/genview/home.html:16
+msgid "Familien ansehen"
+msgstr "View families"
+
+#: genview/templates/genview/individual_detail.html:275
+msgid "Lebenslauf"
+msgstr "Life timeline"
+
+#: genview/templates/genview/individual_detail.html:321
+msgid "Beschreibung"
+msgstr "Description"
+
+#: genview/templates/genview/individual_detail.html:667
+#: genview/templates/genview/individual_detail.html:672
+msgid "Ausgangsperson"
+msgstr "Focus person"
+
+#: genview/templates/genview/individual_detail.html:668
+msgid "Eltern"
+msgstr "Parents"
+
+#: genview/templates/genview/individual_detail.html:669
+msgid "Großeltern"
+msgstr "Grandparents"
+
+#: genview/templates/genview/individual_detail.html:673
+msgid "Vater"
+msgstr "Father"
+
+#: genview/templates/genview/individual_detail.html:674
+#: genview/templates/genview/individual_detail.html:696
+msgid "Großvater"
+msgstr "Grandfather"
+
+#: genview/templates/genview/individual_detail.html:678
+#: genview/templates/genview/individual_detail.html:682
+#: genview/templates/genview/individual_detail.html:688
+#: genview/templates/genview/individual_detail.html:700
+#: genview/templates/genview/individual_detail.html:705
+#: genview/templates/genview/individual_detail.html:711
+msgid "Datum hier"
+msgstr "Date here"
+
+#: genview/templates/genview/individual_detail.html:684
+#: genview/templates/genview/individual_detail.html:707
+msgid "Großmutter"
+msgstr "Grandmother"
+
+#: genview/templates/genview/individual_detail.html:695
+msgid "Mutter"
+msgstr "Mother"
+
+#: genview/templates/genview/individual_list.html:7
+msgid "Alle Personen"
+msgstr "All persons"
+
+#: genview/templates/genview/individual_list.html:10
+msgid "Neue Person anlegen"
+msgstr "Add new person"
+
+#: genview/templates/genview/individual_list.html:26
+msgid "Vor- oder Nachname…"
+msgstr "First or last name…"
+
+#: genview/templates/genview/individual_list.html:32
+msgid "Alle Geschlechter"
+msgstr "All sexes"
+
+#: genview/templates/genview/individual_list.html:33
+msgid "Männlich (M)"
+msgstr "Male (M)"
+
+#: genview/templates/genview/individual_list.html:34
+msgid "Weiblich (F)"
+msgstr "Female (F)"
+
+#: genview/templates/genview/individual_list.html:35
+msgid "Unbekannt (U)"
+msgstr "Unknown (U)"
+
+#: genview/templates/genview/individual_list.html:40
+msgid "Suchen & Filtern"
+msgstr "Search & filter"
+
+#: genview/templates/genview/individual_list.html:41
+msgid "Zurücksetzen"
+msgstr "Reset"
+
+#: genview/templates/genview/individual_list.html:94
+msgid "Nachname"
+msgstr "Nachname"
+
+#: genview/templates/genview/mediaobject_detail.html:4
 msgid "Details"
-msgstr ""
+msgstr "Details"
 
-#: genview/templates/genview/mediaobject_detail.html:34
+#: genview/templates/genview/mediaobject_detail.html:162
 msgid "Datei bearbeiten"
-msgstr ""
+msgstr "Edit file"
 
-#: genview/templates/genview/mediaobject_detail.html:35
-#, fuzzy
-#| msgid "Baum löschen"
+#: genview/templates/genview/mediaobject_detail.html:163
 msgid "Datei löschen"
-msgstr "delete tree"
+msgstr "Delete file"
 
-#: genview/templates/genview/place_detail.html:5
-#, fuzzy
-#| msgid "Orte"
+#: genview/templates/genview/place_detail.html:5 genview/views.py:264
 msgid "Ort"
-msgstr "places"
+msgstr "Place"
 
 #: genview/templates/genview/place_detail.html:64
 msgid "Ort bearbeiten"
-msgstr ""
+msgstr "Edit place"
 
 #: genview/templates/genview/place_detail.html:65
-#, fuzzy
-#| msgid "Baum löschen"
 msgid "Ort löschen"
-msgstr "delete tree"
+msgstr "Delete place"
 
-#: genview/templates/genview/source_detail.html:5
+#: genview/templates/genview/register.html:10
+msgid "Neuen Account erstellen"
+msgstr "Create a new account"
+
+#: genview/templates/genview/register.html:15
+msgid ""
+"Erstelle ein Konto, um Zugang zu den Stammbäumen zu erhalten. Nach der "
+"Registrierung muss dein Account von einem Administrator freigeschaltet "
+"werden."
+msgstr ""
+"Create an account to access family trees. After registration, an "
+"administrator must activate your account."
+
+#: genview/templates/genview/register.html:45
+msgid "Jetzt registrieren"
+msgstr "Register now"
+
+#: genview/templates/genview/register.html:52
+msgid "Bereits registriert?"
+msgstr "Already registered?"
+
+#: genview/templates/genview/register.html:53
+msgid "Hier einloggen"
+msgstr "Log in here"
+
+#: genview/templates/genview/source_detail.html:5 genview/views.py:273
 msgid "Quelle"
-msgstr ""
-
-#: genview/templates/genview/source_detail.html:96
-msgid "Quelle bearbeiten"
-msgstr ""
-
-#: genview/templates/genview/source_detail.html:97
-#, fuzzy
-#| msgid "Baum löschen"
-msgid "Quelle löschen"
-msgstr "delete tree"
+msgstr "Source"
 
 #: genview/templates/genview/source_detail.html:102
+msgid "Quelle bearbeiten"
+msgstr "Edit source"
+
+#: genview/templates/genview/source_detail.html:103
+msgid "Quelle löschen"
+msgstr "Delete source"
+
+#: genview/templates/genview/source_detail.html:108
 msgid "Verknüpfte Ereignisse"
-msgstr ""
+msgstr "Linked events"
 
-#: genview/templates/genview/source_detail.html:121
-#, fuzzy
-#| msgid "Familien"
+#: genview/templates/genview/source_detail.html:127 genview/views.py:250
 msgid "Familie"
-msgstr "families"
+msgstr "Family"
 
-#: genview/templates/genview/source_detail.html:128
+#: genview/templates/genview/source_detail.html:134
 msgid "Diese Quelle ist noch mit keinem Ereignis verknüpft."
-msgstr ""
+msgstr "This source is not linked to any event yet."
 
 #: genview/templates/genview/tree_list.html:4
 #: genview/templates/genview/tree_list.html:9
 msgid "Meine Stammbäume"
-msgstr "My Family Trees"
+msgstr "My family trees"
+
+#: genview/templates/genview/tree_list.html:19
+msgid "Unbenannter Stammbaum"
+msgstr "Unnamed family tree"
 
 #: genview/templates/genview/tree_list.html:25
 msgid "Erstellt"
-msgstr "created"
+msgstr "Created"
 
-#: genview/templates/genview/tree_list.html:31
-msgid "Personen"
-msgstr "persons"
-
-#: genview/templates/genview/tree_list.html:35
-msgid "Familien"
-msgstr "families"
-
-#: genview/templates/genview/tree_list.html:39
-msgid "Orte"
-msgstr "places"
+#: genview/templates/genview/tree_list.html:25
+msgid "Unbekannt"
+msgstr "Unknown"
 
 #: genview/templates/genview/tree_list.html:47
 msgid "Personen anzeigen"
-msgstr "list persons"
+msgstr "Show persons"
 
 #: genview/templates/genview/tree_list.html:51
 msgid "Familien anzeigen"
-msgstr "list families"
+msgstr "Show families"
 
-#: genview/templates/genview/tree_list.html:56
-msgid "Baum verwalten"
+#: genview/templates/genview/tree_list.html:61
+msgid "Baum löschen"
+msgstr "Delete tree"
+
+#: genview/templates/genview/tree_list.html:73
+msgid "Noch keine Stammbäume vorhanden"
+msgstr "No family trees yet"
+
+#: genview/templates/genview/tree_list.html:74
+msgid "Lade eine GEDCOM-Datei hoch oder erstelle deinen ersten Stammbaum."
+msgstr "Upload a GEDCOM file or create your first family tree."
+
+#: genview/views.py:156
+#, python-format
+msgid ""
+"Der Stammbaum '%(name)s' und alle dazugehörigen Daten wurden unwiderruflich "
+"gelöscht."
+msgstr "Family tree '%(name)s' and all related data were permanently deleted."
+
+#: genview/views.py:182
+#, fuzzy
+#| msgid "Personen"
+msgid "Person"
+msgstr "Persons"
+
+#: genview/views.py:187 genview/views.py:254
+msgid "Datenschutzgeschützt"
 msgstr ""
 
-#: genview/templates/genview/tree_list.html:59
-msgid "Baum löschen"
-msgstr "delete tree"
+#: genview/views.py:191
+#, python-format
+msgid "Geboren: %(date)s"
+msgstr ""
 
-#: genview/templates/genview/tree_list.html:71
-msgid "Noch keine Stammbäume vorhanden"
-msgstr "no trees available"
+#: genview/views.py:253
+#, fuzzy
+#| msgid "Vertrauliche Person"
+msgid "Vertrauliche Familie"
+msgstr "Confidential person"
 
-#: rootnode/settings.py:140
+#: genview/views.py:258
+#, python-format
+msgid "Heirat: %(date)s"
+msgstr ""
+
+#: genview/views.py:267
+#, fuzzy
+#| msgid "Stammbaum"
+msgid "Ort im Stammbaum"
+msgstr "Family tree"
+
+#: genview/views.py:276
+msgid "Kein Autor angegeben"
+msgstr ""
+
+#: genview/views.py:776
+#, python-format
+msgid "Person %(name)s erfolgreich angelegt."
+msgstr "Person %(name)s created successfully."
+
+#: genview/views.py:797
+msgid "Personendaten wurden gespeichert."
+msgstr "Person data saved."
+
+#: genview/views.py:814
+msgid "Person erfolgreich gelöscht."
+msgstr "Person deleted successfully."
+
+#: genview/views.py:940
+#, python-format
+msgid "%(count)s Medien erfolgreich mit der Person verknüpft."
+msgstr "%(count)s media objects linked to the person successfully."
+
+#: genview/views.py:1127
+msgid "Familie angelegt."
+msgstr "Family created."
+
+#: genview/views.py:1147
+msgid "Familie wurde aktualisiert."
+msgstr "Family updated."
+
+#: genview/views.py:1163
+msgid "Familie und zugehörige Verknüpfungen erfolgreich gelöscht."
+msgstr "Family and related links deleted successfully."
+
+#: genview/views.py:1194
+#, python-format
+msgid "%(count)s Medien erfolgreich mit der Familie verknüpft."
+msgstr "%(count)s media objects linked to the family successfully."
+
+#: genview/views.py:1347
+msgid "Keine Datei vorhanden."
+msgstr "No file available."
+
+#: genview/views.py:1353
+#, python-format
+msgid "OCR-Fehler: %(detail)s"
+msgstr "OCR error: %(detail)s"
+
+#: genview/views.py:1358
+msgid "Kein Text erkannt. Der bisher extrahierte Text bleibt erhalten."
+msgstr "No text detected. Previously extracted text was kept."
+
+#: genview/views.py:1363
+msgid "Text erfolgreich extrahiert."
+msgstr "Text extracted successfully."
+
+#: genview/views.py:1376
+msgid "Keine Bilddatei vorhanden."
+msgstr "No image file available."
+
+#: genview/views.py:1383
+#, python-format
+msgid "Bild konnte nicht gelesen werden: %(detail)s"
+msgstr "Image could not be read: %(detail)s"
+
+#: genview/views.py:1387
+msgid "Ungültige Bildabmessungen."
+msgstr "Invalid image dimensions."
+
+#: genview/views.py:1393
+#, python-format
+msgid "Erkennungs-Fehler: %(detail)s"
+msgstr "Detection error: %(detail)s"
+
+#: genview/views.py:1398
+msgid ""
+"Keine Gesichter im Bild erkannt. Bestehende Markierungen bleiben erhalten."
+msgstr "No faces detected in the image. Existing tags were kept."
+
+#: genview/views.py:1432
+#, python-format
+msgid ""
+"%(saved)s Gesicht(er) erkannt, davon %(matched)s automatisch zugeordnet."
+msgstr "%(saved)s face(s) detected, %(matched)s automatically assigned."
+
+#: genview/views.py:1435
+#, python-format
+msgid "%(count)s Gesicht(er) erkannt und gespeichert."
+msgstr "%(count)s face(s) detected and saved."
+
+#: genview/views.py:1452
+#, python-format
+msgid "Gesicht erfolgreich mit %(person)s verknüpft."
+msgstr "Face linked to %(person)s successfully."
+
+#: genview/views.py:1454
+msgid "Keine Person ausgewählt – Tag bleibt unverknüpft."
+msgstr "No person selected – tag remains unlinked."
+
+#: genview/views.py:1554
+msgid "Bild erfolgreich hochgeladen."
+msgstr "Image uploaded successfully."
+
+#: genview/views.py:1608
+msgid "Medium erfolgreich aktualisiert."
+msgstr "Media object updated successfully."
+
+#: genview/views.py:1631
+msgid "Bild wurde entfernt."
+msgstr "Image removed."
+
+#: genview/views.py:1687
+#, python-format
+msgid "%(count)s Bilder wurden erfolgreich zugeordnet!"
+msgstr "%(count)s images assigned successfully!"
+
+#: genview/views.py:1689
+#, python-format
+msgid ""
+"%(count)s hochgeladene Dateien konnten keinem fehlenden Eintrag zugeordnet "
+"werden."
+msgstr "%(count)s uploaded files could not be matched to a missing entry."
+
+#: genview/views.py:1805
+msgid "Ort erfolgreich hinzugefügt."
+msgstr "Place added successfully."
+
+#: genview/views.py:1823
+msgid "Orte aktualisiert."
+msgstr "Places updated."
+
+#: genview/views.py:1842
+msgid "Der Ort wurde erfolgreich gelöscht."
+msgstr "Place deleted successfully."
+
+#: genview/views.py:1883
+#, python-format
+msgid ""
+"Erfolgreich! %(count)s Ort(e) wurden gelöscht und in '%(name)s' integriert."
+msgstr "Success! %(count)s place(s) were deleted and merged into '%(name)s'."
+
+#: genview/views.py:1886
+msgid "Es gab keine Duplikate zum Zusammenführen."
+msgstr "There were no duplicates to merge."
+
+#: genview/views.py:1912
+msgid "Ort hat weder Namen noch Adresse – kein Geocode möglich."
+msgstr "Place has neither name nor address – geocoding not possible."
+
+#: genview/views.py:1918
+#, python-format
+msgid "Nominatim-Fehler: %(detail)s"
+msgstr "Nominatim error: %(detail)s"
+
+#: genview/views.py:1922
+#, python-format
+msgid "Keine Koordinaten für „%(query)s“ gefunden."
+msgstr "No coordinates found for \"%(query)s\"."
+
+#: genview/views.py:1939
+#, python-format
+msgid "Koordinaten für %(query)s wurden gefunden."
+msgstr "Coordinates for %(query)s were found."
+
+#: genview/views.py:1943
+#, python-format
+msgid "Koordinaten (%(lat)s, %(lon)s) für „%(query)s“ gespeichert."
+msgstr "Coordinates (%(lat)s, %(lon)s) saved for \"%(query)s\"."
+
+#: genview/views.py:2078
+#, python-format
+msgid "Ereignis für %(person)s erfolgreich hinzugefügt."
+msgstr "Event for %(person)s added successfully."
+
+#: genview/views.py:2080
+msgid "Familien-Ereignis erfolgreich hinzugefügt."
+msgstr "Family event added successfully."
+
+#: genview/views.py:2082
+msgid "Ereignis erfolgreich gespeichert."
+msgstr "Event saved successfully."
+
+#: genview/views.py:2133
+#, python-format
+msgid "Ereignis für %(person)s erfolgreich aktualisiert."
+msgstr "Event for %(person)s updated successfully."
+
+#: genview/views.py:2135
+msgid "Familien-Ereignis erfolgreich aktualisiert."
+msgstr "Family event updated successfully."
+
+#: genview/views.py:2137
+msgid "Ereignis erfolgreich aktualisiert."
+msgstr "Event updated successfully."
+
+#: genview/views.py:2189
+#, python-format
+msgid "%(count)s Medien erfolgreich mit dem Ereignis verknüpft."
+msgstr "%(count)s media objects linked to the event successfully."
+
+#: genview/views.py:2208 genview/views.py:2223
+msgid "Ereignis erfolgreich gelöscht."
+msgstr "Event deleted successfully."
+
+#: genview/views.py:2216
+msgid "Familien-Ereignis erfolgreich gelöscht."
+msgstr "Family event deleted successfully."
+
+#: genview/views.py:2296
+msgid "Quelle erfolgreich erstellt."
+msgstr "Source created successfully."
+
+#: genview/views.py:2315
+msgid "Quelle aktualisiert."
+msgstr "Source updated."
+
+#: genview/views.py:2342
+#, python-format
+msgid "%(count)s Medien erfolgreich mit der Quelle verknüpft."
+msgstr "%(count)s media objects linked to the source successfully."
+
+#: genview/views.py:2358
+msgid "Quelle gelöscht."
+msgstr "Source deleted."
+
+#: genview/views.py:2546
+#, python-format
+msgid ""
+"Registrierung für „%(username)s“ erfolgreich! Dein Account ist aktuell noch "
+"inaktiv. Ein Administrator prüft deine Anmeldung und schaltet dich in Kürze "
+"frei."
+msgstr ""
+"Registration for \"%(username)s\" successful! Your account is currently "
+"inactive. An administrator will review your registration and activate you "
+"soon."
+
+#: genview/views.py:2571
+#, python-format
+msgid "Benutzer %(username)s wurde erfolgreich %(status)s."
+msgstr "User %(username)s was %(status)s successfully."
+
+#: genview/views.py:2576
+#, python-format
+msgid "Benutzer %(username)s wurde dauerhaft gelöscht."
+msgstr "User %(username)s was permanently deleted."
+
+#: genview/views.py:2651
+#, python-format
+msgid "Import fehlgeschlagen: %(detail)s"
+msgstr "Import failed: %(detail)s"
+
+#: genview/views.py:2661
+#, python-format
+msgid "GEDCOM-Datei erfolgreich importiert – Stammbaum „%(name)s“ angelegt."
+msgstr "GEDCOM file imported successfully – family tree \"%(name)s\" created."
+
+#: genview/views.py:2709
+#, python-format
+msgid "Der Stammbaum ist jetzt %(status)s."
+msgstr "The family tree is now %(status)s."
+
+#: genview/views.py:2728
+#, python-format
+msgid "Benutzer %(username)s wurde erfolgreich hinzugefügt."
+msgstr "User %(username)s was added successfully."
+
+#: genview/views.py:2730
+#, python-format
+msgid "%(username)s ist bereits Mitglied in diesem Stammbaum."
+msgstr "%(username)s is already a member of this family tree."
+
+#: genview/views.py:2736
+msgid "Mitgliederlisten und Rollen erfolgreich aktualisiert."
+msgstr "Member list and roles updated successfully."
+
+#: rootnode/settings.py:168
 msgid "German"
-msgstr "deutsch"
+msgstr "German"
 
-#: rootnode/settings.py:141
+#: rootnode/settings.py:169
 msgid "English"
-msgstr "englisch"
+msgstr "English"

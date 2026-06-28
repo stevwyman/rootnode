@@ -1,21 +1,21 @@
 {% comment %}
 Nur das <tbody>-Fragment – wird von Ajax ersetzt.
 {% endcomment %}
-{% load event_extras %}  
+{% load event_extras i18n ui_tags %}
 <tbody>
     {% for person in object_list %}
     <tr>
         <td>{{ forloop.counter }}</td>
         <td>
             {% if apply_privacy and person.is_confidential %}
-                <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
             {% else %}
                 <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
             {% endif %}
         </td>
         <td>
             {% if apply_privacy and person.is_confidential %}
-                <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
             {% else %}
                 <a href="{{ person.get_absolute_url }}">{{ person.given_name }}</a>
             {% endif %}
@@ -53,14 +53,13 @@ Nur das <tbody>-Fragment – wird von Ajax ersetzt.
         </td>
         {% if can_edit %}
         <td>
-            <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
-               class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
-            <a href="{% url 'genview:individual-delete' tree_id person.pk %}"
-               class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+            {% url 'genview:individual-edit' tree_id=tree_id pk=person.pk as edit_url %}
+            {% url 'genview:individual-delete' tree_id=tree_id pk=person.pk as delete_url %}
+            {% action_buttons edit_url=edit_url delete_url=delete_url %}
         </td>
         {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="text-center">Keine Personen gefunden.</td></tr>
+    <tr><td colspan="{% if can_edit %}8{% else %}7{% endif %}" class="text-center">{% trans "Keine Personen gefunden." %}</td></tr>
     {% endfor %}
 </tbody>

@@ -1,4 +1,5 @@
 {% extends "genview/base.html" %}
+{% load ui_tags %}
 
 {% block content %}
 <div class="container mt-4">
@@ -36,8 +37,9 @@
                         </div>
                     </td>
                     <td class="text-end">
-                        <a href="{% url 'genview:eventtype-edit' et.pk %}" class="btn btn-sm btn-outline-secondary">Bearbeiten</a>
-                        <a href="{% url 'genview:eventtype-delete' et.pk %}" class="btn btn-sm btn-outline-danger">Löschen</a>
+                        {% url 'genview:eventtype-edit' et.pk as edit_url %}
+                        {% url 'genview:eventtype-delete' et.pk as delete_url %}
+                        {% action_buttons layout="labeled" edit_url=edit_url delete_url=delete_url %}
                     </td>
                 </tr>
                 {% empty %}

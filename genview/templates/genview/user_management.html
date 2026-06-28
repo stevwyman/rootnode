@@ -1,4 +1,5 @@
 {% extends "genview/base.html" %}
+{% load i18n %}
 
 {% block content %}
 <div class="container mt-4">
@@ -58,7 +59,10 @@
                                         <form method="post" action="{% url 'genview:user-management-action' user_id=u.id action='delete' %}" 
                                               onsubmit="return confirm('Möchtest du den Benutzer {{ u.username }} wirklich unwiderruflich löschen?');">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-danger">🗑️ Löschen</button>
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                {% include "genview/_action_icon.html" with action="delete" %}
+                                                <span class="ms-1">{% trans "Löschen" %}</span>
+                                            </button>
                                         </form>
 
                                     </div>

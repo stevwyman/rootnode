@@ -1,0 +1,26 @@
+{% load i18n pagination_tags %}
+{% if is_paginated %}
+<nav class="mt-4" aria-label="{% trans 'Seiten-Navigation' %}">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% querystring page_obj.previous_page_number %}">{% trans "Zurück" %}</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">{% trans "Zurück" %}</span></li>
+        {% endif %}
+
+        <li class="page-item disabled">
+            <span class="page-link">{% blocktrans with current=page_obj.number total=page_obj.paginator.num_pages %}Seite {{ current }} von {{ total }}{% endblocktrans %}</span>
+        </li>
+
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% querystring page_obj.next_page_number %}">{% trans "Weiter" %}</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">{% trans "Weiter" %}</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}

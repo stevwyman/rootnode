@@ -3,6 +3,20 @@ from django import template
 
 register = template.Library()
 
+
+@register.simple_tag(takes_context=True)
+def querystring(context, page=None):
+    """Rebuild the current GET query string, optionally setting page."""
+    request = context.get("request")
+    if request is None:
+        return f"page={page}" if page is not None else ""
+
+    params = request.GET.copy()
+    params.pop("page", None)
+    if page is not None:
+        params["page"] = page
+    return params.urlencode()
+
 @register.simple_tag
 def paginate_range(page_obj, surrounding=2):
     """

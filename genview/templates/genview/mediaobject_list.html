@@ -1,5 +1,5 @@
 {% extends "genview/base.html" %}
-{% load static %}
+{% load static ui_tags %}
 
 {% block title %}Medien-Galerie{% endblock %}
 
@@ -71,7 +71,13 @@
     <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
         {% for item in media %}
             {% if apply_privacy and item.is_confidential or apply_privacy and item.is_private %}
-                <span class="text-muted fst-italic">🔒 vertraulich</span>
+                <div class="col">
+                    <div class="card h-100 shadow-sm bg-light border-0">
+                        <div class="card-body d-flex align-items-center justify-content-center text-muted fst-italic" style="min-height: 200px;">
+                            🔒 Vertraulich
+                        </div>
+                    </div>
+                </div>
             {% else %}
                 <div class="col">
                     <div class="card h-100 shadow-sm">
@@ -92,12 +98,12 @@
                             <div class="p-3 bg-light border rounded text-center text-muted">
                                 <div class="fs-1 mb-2">📷</div>
                                 <strong>Bild fehlt</strong><br>
-                                <small>{{ media.title|default:"Ohne Titel" }}</small>
+                                <small>{{ item.title|default:"Ohne Titel" }}</small>
                                 
-                                {% if media.gedcom_original_filepath %}
+                                {% if item.gedcom_original_filepath %}
                                     <hr class="my-2">
                                     <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
-                                        Pfad: {{ media.gedcom_original_filepath }}
+                                        Pfad: {{ item.gedcom_original_filepath }}
                                     </small>
                                 {% endif %}
                             </div>
@@ -133,17 +139,16 @@
                             {% endif %}
 
                             {% if can_edit %}
-                            <div class="btn-group">
-                                <a href="{% url 'genview:media-edit' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-secondary">✎</a>
-                                <a href="{% url 'genview:media-delete' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-danger">🗑</a>
-                            </div>
+                            {% url 'genview:media-edit' tree_id=tree_id pk=item.pk as edit_url %}
+                            {% url 'genview:media-delete' tree_id=tree_id pk=item.pk as delete_url %}
+                            {% action_buttons edit_url=edit_url delete_url=delete_url %}
                             <div>
                                 <button
                                     class="btn btn-sm btn-outline-primary toggle-category"
                                     data-id="{{ item.id }}"
                                     title="Kategorie umschalten">
                                     
-                                    {% if item.category == item.Category.PHOTO %}
+                                    {% if item.category == 'PHOTO' %}
                                         📷 → 📄
                                     {% else %}
                                         📄 → 📷
@@ -164,31 +169,7 @@
         {% endfor %}
     </div>
 
-    {% if is_paginated %}
-        <nav class="mt-5" aria-label="Seiten-Navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
-                {% endif %}
-
-                <li class="page-item active">
-                    <span class="page-link">Seite {{ page_obj.number }} von {{ paginator.num_pages }}</span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
-                {% endif %}
-            </ul>
-        </nav>
-    {% endif %}
+    {% include "genview/_pagination.html" %}
 
 {% endblock %}
 

@@ -1,70 +1,163 @@
 # genview/ocr_client.py
+import json
 import logging
 import os
+from typing import Any, TypedDict
+
 import requests
 from dotenv import load_dotenv
-from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-# -----------------------------------------------------------------
-# Konfiguration – URL & API-Key (falls du in Compreface auth nutzt)
-# -----------------------------------------------------------------
-API_BASE = os.getenv('OCR_RECOGNITION_URL', 'http://localhost:8000/api/v1')
-API_KEY  = os.getenv('OCR_RECOGNITION_API_KEY', '')        # leer → kein Header nötig
+API_BASE = os.getenv("OCR_RECOGNITION_URL", "http://localhost:8000/api/v1")
+API_KEY = os.getenv("OCR_RECOGNITION_API_KEY", "")
+HEADERS = {"X-API-Key": API_KEY} if API_KEY else {}
 
-HEADERS = {'X-API-Key': API_KEY} if API_KEY else {}
+REQUEST_TIMEOUT = 120
+_LOG_BODY_MAX_LEN = 500
 
-# -----------------------------------------------------------------
-# 1️⃣ Detect-Funktion – gibt Bounding-Boxes zurück
-# -----------------------------------------------------------------
-def extract_text_via_api(image_path: str) -> Dict[str, Any]:
+
+class OcrExtractResult(TypedDict):
+    text: str
+    error: str | None
+
+
+def _truncate_for_log(text: str, max_len: int = _LOG_BODY_MAX_LEN) -> str:
+    text = text.replace("\n", " ").strip()
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len]}…"
+
+
+def _extract_api_error(payload: Any) -> str | None:
+    """Return a user-facing error if the API reports failure in a 200 body."""
+    if not isinstance(payload, dict):
+        return None
+
+    if payload.get("success") is False:
+        return str(payload.get("message") or payload.get("detail") or "OCR-Server meldete einen Fehler.")
+
+    api_error = payload.get("error")
+    if api_error:
+        return str(api_error)
+
+    return None
+
+
+def _normalize_text_value(raw: Any) -> tuple[str, str | None]:
+    if raw is None:
+        return "", None
+    if isinstance(raw, str):
+        return raw, None
+    if isinstance(raw, list):
+        lines: list[str] = []
+        for index, item in enumerate(raw, start=1):
+            if isinstance(item, str):
+                lines.append(item)
+            elif isinstance(item, dict):
+                line = item.get("text") or item.get("content") or item.get("value")
+                if line is None:
+                    logger.warning("OCR: Zeile #%s ohne Textfeld: %r", index, item)
+                    continue
+                lines.append(str(line))
+            elif item is not None:
+                lines.append(str(item))
+        return "\n".join(lines), None
+    if isinstance(raw, (int, float, bool)):
+        return str(raw), None
+
+    return "", "Ungültiges Antwortformat: 'text' hat einen unerwarteten Typ."
+
+
+def _normalize_text_payload(payload: Any) -> tuple[str, str | None]:
+    if not isinstance(payload, dict):
+        return "", "Ungültiges Antwortformat vom OCR-Server."
+
+    api_error = _extract_api_error(payload)
+    if api_error:
+        return "", api_error
+
+    if "text" not in payload:
+        return "", None
+
+    return _normalize_text_value(payload.get("text"))
+
+
+def extract_text_via_api(image_path: str) -> OcrExtractResult:
     """
-    Ruft den OCR-Service auf und liefert ein JSON-ähnliches Dict zurück:
+    Call the OCR service and return a stable result dict:
 
     {
-        "text":   [...],   # Ergebnis-Daten (kann leer sein)
-        "error":  None | "Fehlermeldung"
+        "text": "",
+        "error": None | "Fehlermeldung"
     }
 
-    So hat der Aufrufer immer dieselbe Datenstruktur und kann
-    bequem prüfen, ob ein Fehler aufgetreten ist.
+    Callers must check `error` first. Empty `text` with `error is None`
+    means the request succeeded but no text was detected.
     """
-    url = f'{API_BASE}/extract'
+    result: OcrExtractResult = {"text": "", "error": None}
 
-    # Grundgerüst des Rückgabe-Objekts
-    result: Dict[str, Any] = {
-        "text": [],      # Standard-Leerwert (Typ-kompatibel zu API-Antwort)
-        "error": None
-    }
+    if not image_path or not str(image_path).strip():
+        result["error"] = "Kein Bildpfad angegeben."
+        logger.error(result["error"])
+        return result
+
+    url = f"{API_BASE}/extract"
 
     try:
-        with open(image_path, 'rb') as f:
-            response = requests.post(url, files={'file': f}, timeout=120)
+        with open(image_path, "rb") as image_file:
+            response = requests.post(
+                url,
+                files={"file": image_file},
+                headers=HEADERS,
+                timeout=REQUEST_TIMEOUT,
+            )
         response.raise_for_status()
 
-        result["text"]=response.json().get('text', '')
+        try:
+            payload = response.json()
+        except json.JSONDecodeError:
+            result["error"] = "Ungültige JSON-Antwort vom OCR-Server."
+            logger.error(
+                "%s Body: %s",
+                result["error"],
+                _truncate_for_log(response.text),
+            )
+            return result
+
+        text, parse_error = _normalize_text_payload(payload)
+        if parse_error:
+            result["error"] = parse_error
+            logger.error("OCR-Antwortfehler: %s", parse_error)
+            return result
+
+        result["text"] = text
+        return result
+
     except FileNotFoundError:
         result["error"] = f"Datei nicht gefunden: {image_path}"
         logger.error(result["error"])
-
-    except requests.exceptions.HTTPError as http_err:
-        result["error"] = (
-            f"HTTP-Fehler {response.status_code}: {http_err}"
-        )
-        logger.error(result["error"])
-
+    except OSError as exc:
+        result["error"] = f"Datei kann nicht gelesen werden: {image_path}"
+        logger.error("%s (%s)", result["error"], exc)
+    except requests.exceptions.HTTPError as exc:
+        resp = exc.response
+        status = resp.status_code if resp is not None else "?"
+        body = _truncate_for_log(resp.text if resp is not None else str(exc))
+        result["error"] = f"OCR-Server antwortete mit HTTP {status}."
+        logger.error("OCR HTTP %s: %s", status, body)
     except requests.exceptions.ConnectionError:
-        result["error"] = "Verbindung zum OCR-Server fehlgeschlagen"
+        result["error"] = "Verbindung zum OCR-Server fehlgeschlagen."
         logger.error(result["error"])
-
     except requests.exceptions.Timeout:
-        result["error"] = "Anfrage an den OCR-Server hat das Zeitlimit überschritten"
+        result["error"] = "Anfrage an den OCR-Server hat das Zeitlimit überschritten."
         logger.error(result["error"])
-
-    except Exception as e:
-        result["error"] = f"Unerwarteter Fehler: {e}"
-        logger.exception(result["error"])
+    except requests.exceptions.RequestException as exc:
+        result["error"] = "Kommunikation mit dem OCR-Server fehlgeschlagen."
+        logger.exception("OCR RequestException: %s", exc)
+    except Exception as exc:
+        result["error"] = "Unerwarteter Fehler bei der Texterkennung."
+        logger.exception("OCR unerwarteter Fehler: %s", exc)
 
     return result

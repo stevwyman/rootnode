@@ -1,0 +1,143 @@
+{% load static i18n %}
+<script src="{% static 'js/genview-utils.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let dTreeRendered = false;
+    const treeDataEl = document.getElementById("tree-data");
+    const treeData = treeDataEl ? JSON.parse(treeDataEl.textContent) : [];
+    const dtreeTabButton = document.getElementById("dtree-tab");
+
+    if (dtreeTabButton && typeof dTree !== "undefined") {
+        dtreeTabButton.addEventListener("shown.bs.tab", function () {
+            if (dTreeRendered) {
+                return;
+            }
+            dTree.init(treeData, {
+                target: "#graph",
+                debug: false,
+                height: 550,
+                width: document.getElementById("graph").clientWidth,
+                nodeWidth: 150,
+                nodeHeight: 60,
+                callbacks: {
+                    nodeRenderer: function(name, x, y, height, width, extra, id, nodeClass) {
+                        const safeName = escapeHtml(name);
+                        const avatarUrl = extra && extra.avatar ? escapeHtml(extra.avatar) : "";
+                        const avatarHtml = avatarUrl
+                            ? `<img src="${avatarUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover;">`
+                            : `<span style="color: #6c757d; font-size: 18px;">👤</span>`;
+                        const marriageHtml = extra && extra.marriage_info
+                            ? `<div style="font-size: 9px; color: #d97706; font-style: italic; line-height: 1;">${escapeHtml(extra.marriage_info)}</div>`
+                            : "";
+                        const bYear = extra && extra.b_year != null ? escapeHtml(extra.b_year) : "?";
+                        const dYear = extra && extra.d_year != null ? escapeHtml(extra.d_year) : "?";
+
+                        return `
+                        <div class="${nodeClass}" style="width: 100%; height: 100%; display: flex; align-items: center; background-color: #ffffff; border: 2px solid #4a90e2; border-radius: 6px; padding: 4px; box-sizing: border-box; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; margin-right: 8px; border: 1px solid #dee2e6;">
+                                ${avatarHtml}
+                            </div>
+                            <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; text-align: left;">
+                                <div style="font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">${safeName}</div>
+                                <div style="font-size: 9px; color: #6c757d; line-height: 1.2; margin-top: 2px;">* ${bYear} &nbsp;† ${dYear}</div>
+                                ${marriageHtml}
+                            </div>
+                        </div>`;
+                    },
+                    nodeClick: function(name, extra) {
+                        if (extra && extra.url) {
+                            window.location.href = extra.url + "?tab=dtree";
+                        }
+                    }
+                }
+            });
+            dTreeRendered = true;
+        });
+    }
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTabId = urlParams.get("tab");
+
+    if (activeTabId) {
+        const tabButton = document.querySelector(`#${activeTabId}-tab`);
+        const activeNav = document.querySelector(".nav-link.active");
+        const activePane = document.querySelector(".tab-pane.show.active");
+        if (tabButton) {
+            if (activeNav) activeNav.classList.remove("active");
+            if (activePane) activePane.classList.remove("show", "active");
+            bootstrap.Tab.getOrCreateInstance(tabButton).show();
+        }
+    }
+
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function(button) {
+        button.addEventListener("shown.bs.tab", function(event) {
+            const newTabId = event.target.id.replace("-tab", "");
+            window.history.replaceState({}, "", window.location.pathname + "?tab=" + newTabId);
+        });
+    });
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let map = null;
+    const mapTabButton = document.getElementById("map-tab");
+    const stationsEl = document.getElementById("lifecycle-stations");
+    const stations = stationsEl ? JSON.parse(stationsEl.textContent) : [];
+
+    if (!mapTabButton || typeof L === "undefined") {
+        return;
+    }
+
+    mapTabButton.addEventListener("shown.bs.tab", function () {
+        if (map !== null) {
+            map.invalidateSize();
+            return;
+        }
+
+        const mapContainer = document.getElementById("lifecycle-map");
+        if (!mapContainer) {
+            return;
+        }
+
+        if (stations.length === 0) {
+            map = L.map("lifecycle-map").setView([20, 0], 2);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: "© OpenStreetMap"
+            }).addTo(map);
+            mapContainer.replaceChildren();
+            const msg = document.createElement("div");
+            msg.className = "d-flex h-100 align-items-center justify-content-center text-muted bg-light";
+            msg.textContent = "{% filter escapejs %}{% trans 'Für diese Person sind noch keine Ortskoordinaten hinterlegt.' %}{% endfilter %}";
+            mapContainer.appendChild(msg);
+            return;
+        }
+
+        map = L.map("lifecycle-map").setView([stations[0].lat, stations[0].lng], 6);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap-Mitwirkende"
+        }).addTo(map);
+
+        const pathCoords = [];
+        stations.forEach(function(station) {
+            pathCoords.push([station.lat, station.lng]);
+            const popupHtml = `<h5>${escapeHtml(station.title)}</h5><p><strong>${escapeHtml(station.date)}</strong><br>${escapeHtml(station.place)}</p>`;
+            L.marker([station.lat, station.lng]).addTo(map).bindPopup(popupHtml);
+        });
+
+        if (pathCoords.length > 1) {
+            L.polyline(pathCoords, {
+                color: "#0d6efd",
+                weight: 3,
+                dashArray: "5, 10",
+                opacity: 0.7
+            }).addTo(map);
+            map.fitBounds(L.latLngBounds(pathCoords), { padding: [50, 50] });
+        }
+    });
+});
+</script>

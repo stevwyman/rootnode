@@ -61,35 +61,13 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
+{% include "genview/_select2_assets.html" %}
 <script>
 jQuery(document).ready(function($) {
-    
-    // Helferfunktion für AJAX
-    function initSelect2(elementClass, apiUrl, placeholderText) {
-        $(elementClass).select2({
-            placeholder: placeholderText,
-            minimumInputLength: 2,
-            allowClear: true,
-            ajax: {
-                url: apiUrl,
-                dataType: 'json',
-                delay: 250,
-                data: function (params) { return { q: params.term }; },
-                processResults: function (data) { return { results: data.results }; }
-            }
-        });
-    }
-
-    // Die 4 Suchfelder initialisieren
-    initSelect2('.select2-individuals', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
-    initSelect2('.select2-families', "{% url 'genview:api-search-families' tree_id=tree_id %}", "Familien suchen...");
-    initSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
-    initSelect2('.select2-events', "{% url 'genview:api-search-events' tree_id=tree_id %}", "Ereignisse suchen...");
+    initGenviewSelect2('.select2-individuals', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
+    initGenviewSelect2('.select2-families', "{% url 'genview:api-search-families' tree_id=tree_id %}", "Familien suchen...");
+    initGenviewSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
+    initGenviewSelect2('.select2-events', "{% url 'genview:api-search-events' tree_id=tree_id %}", "Ereignisse suchen...");
 
     // ==========================================
     // 🔥 DER FIX: JS zwingt Select2 zur Vorauswahl beim Anlegen

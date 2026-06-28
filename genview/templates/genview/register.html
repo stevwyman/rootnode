@@ -1,4 +1,5 @@
 {% extends "genview/base.html" %}
+{% load i18n %}
 
 {% block content %}
 <div class="container mt-5">
@@ -6,13 +7,12 @@
         <div class="col-md-6 col-lg-5">
             <div class="card shadow border-0">
                 <div class="card-header bg-dark text-white text-center py-3">
-                    <h4 class="mb-0">🔑 Neuen Account erstellen</h4>
+                    <h4 class="mb-0">🔑 {% trans "Neuen Account erstellen" %}</h4>
                 </div>
                 <div class="card-body p-4">
                     
                     <p class="text-muted small text-center mb-4">
-                        Erstelle ein Konto, um Zugang zu den Stammbäumen zu erhalten. 
-                        Nach der Registrierung muss dein Account von einem Administrator freigeschaltet werden.
+                        {% trans "Erstelle ein Konto, um Zugang zu den Stammbäumen zu erhalten. Nach der Registrierung muss dein Account von einem Administrator freigeschaltet werden." %}
                     </p>
 
                     <form method="post" novalidate>
@@ -28,7 +28,7 @@
                                 
                                 {% if field.help_text %}
                                     <div class="form-text text-muted small" style="font-size: 0.8rem;">
-                                        {{ field.help_text|safe }}
+                                        {{ field.help_text }}
                                     </div>
                                 {% endif %}
 
@@ -42,15 +42,15 @@
 
                         <div class="d-grid gap-2 mt-4">
                             <button type="submit" class="btn btn-primary btn-lg fs-6">
-                                🚀 Jetzt registrieren
+                                🚀 {% trans "Jetzt registrieren" %}
                             </button>
                         </div>
                     </form>
 
                 </div>
                 <div class="card-footer text-center bg-light py-3">
-                    <span class="text-muted small">Bereits registriert?</span>
-                    <a href="{% url 'two_factor:login' %}" class="small fw-bold text-decoration-none ms-1">Hier einloggen</a>
+                    <span class="text-muted small">{% trans "Bereits registriert?" %}</span>
+                    <a href="{% url 'two_factor:login' %}" class="small fw-bold text-decoration-none ms-1">{% trans "Hier einloggen" %}</a>
                 </div>
             </div>
         </div>

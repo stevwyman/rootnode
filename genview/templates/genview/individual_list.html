@@ -1,13 +1,13 @@
 {% extends "genview/base.html" %}
-{% load django_bootstrap5 %}  
-{% block title %}Personen{% endblock %}
+{% load django_bootstrap5 i18n ui_tags %}
+{% block title %}{% trans "Personen" %}{% endblock %}
 
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mb-4">👤 Alle Personen</h1>
+        <h1 class="mb-4">👤 {% trans "Alle Personen" %}</h1>
         {% if can_edit %}
         <a href="{% url 'genview:individual-add' tree_id=tree_id %}" class="btn btn-primary">
-            + Neue Person anlegen
+            + {% trans "Neue Person anlegen" %}
         </a>
         {% endif %}
     </div>
@@ -23,22 +23,22 @@
                 <div class="col-md-5">
                     <div class="input-group">
                         <span class="input-group-text">🔍</span>
-                        <input type="text" name="q" class="form-control" placeholder="Vor- oder Nachname..." value="{{ current_search }}">
+                        <input type="text" name="q" class="form-control" placeholder="{% trans 'Vor- oder Nachname…' %}" value="{{ current_search }}">
                     </div>
                 </div>
 
                 <div class="col-md-3">
                     <select name="sex" class="form-select">
-                        <option value="">Alle Geschlechter</option>
-                        <option value="M" {% if current_filter_sex == 'M' %}selected{% endif %}>Männlich (M)</option>
-                        <option value="F" {% if current_filter_sex == 'F' %}selected{% endif %}>Weiblich (F)</option>
-                        <option value="U" {% if current_filter_sex == 'U' %}selected{% endif %}>Unbekannt (U)</option>
+                        <option value="">{% trans "Alle Geschlechter" %}</option>
+                        <option value="M" {% if current_filter_sex == 'M' %}selected{% endif %}>{% trans "Männlich (M)" %}</option>
+                        <option value="F" {% if current_filter_sex == 'F' %}selected{% endif %}>{% trans "Weiblich (F)" %}</option>
+                        <option value="U" {% if current_filter_sex == 'U' %}selected{% endif %}>{% trans "Unbekannt (U)" %}</option>
                     </select>
                 </div>
 
                 <div class="col-md-4">
-                    <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
-                    <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
+                    <button type="submit" class="btn btn-primary">{% trans "Suchen & Filtern" %}</button>
+                    <a href="?" class="btn btn-outline-secondary">{% trans "Zurücksetzen" %}</a>
                 </div>
                 
             </form>
@@ -91,7 +91,7 @@
                             <th>#</th>
                             <th>
                                 <a href="?sort=surname&dir={% if current_sort == 'surname' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&q={{ current_search }}&sex={{ current_filter_sex }}" class="text-decoration-none text-dark d-block">
-                                Nachname
+                                {% trans "Nachname" %}
                                 {% if current_sort == 'surname' %}
                                     {% if current_dir == 'asc' %}🔼{% else %}🔽{% endif %}
                                 {% endif %}
@@ -142,7 +142,7 @@
                             
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                                    <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
                                 {% else %}
                                     <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
                                 {% endif %}
@@ -150,7 +150,7 @@
                             
                             <td>
                                 {% if apply_privacy and person.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 Vertrauliche Person</span>
+                                    <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
                                 {% else %}
                                     <a href="{{ person.get_absolute_url }}">{{ person.short_given_name }}</a>
                                 {% endif %}
@@ -201,46 +201,21 @@
                             
                             {% if can_edit %}
                             <td>
-                                <a href="{% url 'genview:individual-edit' tree_id person.pk %}"
-                                class="btn btn-sm btn-outline-secondary" title="Bearbeiten">✎</a>
-                                <a href="{% url 'genview:individual-delete' tree_id person.pk %}"
-                                class="btn btn-sm btn-outline-danger" title="Löschen">🗑</a>
+                                {% url 'genview:individual-edit' tree_id=tree_id pk=person.pk as edit_url %}
+                                {% url 'genview:individual-delete' tree_id=tree_id pk=person.pk as delete_url %}
+                                {% action_buttons edit_url=edit_url delete_url=delete_url %}
                             </td>
                             {% endif %}
                         </tr>
                         {% empty %}
-                        <tr><td colspan="8" class="text-center py-4 text-muted">Keine Personen gefunden.</td></tr>
+                        <tr><td colspan="8" class="text-center py-4 text-muted">{% trans "Keine Personen gefunden." %}</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    {% if is_paginated %}
-        <nav class="mt-4" aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&sex={{ current_filter_sex }}"">Zurück</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Zurück</span></li>
-                {% endif %}
-
-                <li class="page-item disabled">
-                    <span class="page-link">Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}</span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&dir={{ current_dir }}&q={{ current_search }}&sex={{ current_filter_sex }}">Weiter</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">Weiter</span></li>
-                {% endif %}
-            </ul>
-        </nav>
-    {% endif %}
+    {% include "genview/_pagination.html" %}
 
 {% endblock %}
 

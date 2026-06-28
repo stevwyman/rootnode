@@ -1,4 +1,5 @@
 {% extends "genview/base.html" %}
+{% load i18n %}
 
 {% block content %}
 <div class="container mt-4">
@@ -68,8 +69,9 @@
                                             </td>
                                             <td class="text-center">
                                                 {{ form.DELETE }}
-                                                <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" data-prefix="{{ form.prefix }}">
-                                                    🗑️
+                                                <button type="button" class="btn btn-sm btn-outline-danger btn-delete-row" data-prefix="{{ form.prefix }}" title="{% trans 'Entfernen' %}">
+                                                    {% include "genview/_action_icon.html" with action="delete" %}
+                                                    <span class="visually-hidden">{% trans "Entfernen" %}</span>
                                                 </button>
                                             </td>
                                         </tr>
@@ -126,28 +128,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
+{% include "genview/_select2_assets.html" %}
 <script>
 jQuery(document).ready(function($) {
-    
-    // 1. Select2 für die Benutzersuche rechts initialisieren
-    $('.select2-users').select2({
-        placeholder: "Username oder E-Mail tippen...",
-        minimumInputLength: 2,
-        allowClear: true,
-        ajax: {
-            url: "{% url 'genview:api-search-users' %}",
-            dataType: 'json',
-            delay: 250,
-            data: function (params) { return { q: params.term }; },
-            processResults: function (data) { return { results: data.results }; }
-        }
-    });
+    initGenviewSelect2('.select2-users', "{% url 'genview:api-search-users' %}", "Username oder E-Mail tippen...");
 
-    // 2. Optischer Lösch-Effekt für die Tabellenzeilen links
     $('.btn-delete-row').on('click', function() {
         var prefix = $(this).data('prefix');
         var row = $('#row-' + prefix);

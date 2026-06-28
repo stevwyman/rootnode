@@ -130,3 +130,56 @@ class IndividualListViewTests(TestCase):
         self.assertContains(response, "Test")
         self.assertContains(response, "Person")
         self.assertNotContains(response, "Secret Guy") # From Tree 2 (Should NOT bleed over)
+
+
+class GlobalSearchViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username="search_user", password="password")
+        self.tree = Tree.objects.create(name="Search Tree")
+        TreeMembership.objects.create(user=self.user, gedcom_tree=self.tree, role="VIEWER")
+
+        self.john_smith = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="John",
+            surname="Smith",
+        )
+        self.jane_doe = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Jane",
+            surname="Doe",
+        )
+        self.johnson = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Robert",
+            surname="Johnson",
+        )
+
+        self.url = reverse("genview:global-search", kwargs={"tree_id": self.tree.id})
+
+    def test_multi_word_and_match_before_or_match(self):
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "John Smith"})
+
+        self.assertEqual(response.status_code, 200)
+        results = response.context["results"]
+        person_results = [r for r in results if getattr(r, "search_type", None) == "Person"]
+        self.assertGreaterEqual(len(person_results), 2)
+
+        and_results = [r for r in person_results if getattr(r, "search_match", None) == "and"]
+        or_results = [r for r in person_results if getattr(r, "search_match", None) == "or"]
+
+        self.assertEqual(and_results[0].pk, self.john_smith.pk)
+        self.assertTrue(any(r.pk == self.johnson.pk for r in or_results))
+        self.assertEqual(person_results.index(and_results[0]), 0)
+        if or_results:
+            self.assertGreater(person_results.index(or_results[0]), person_results.index(and_results[-1]))
+
+    def test_single_word_search_has_no_match_tiers(self):
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Jane"})
+
+        self.assertEqual(response.status_code, 200)
+        person_results = [r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"]
+        self.assertEqual(person_results[0].pk, self.jane_doe.pk)
+        self.assertFalse(any(getattr(r, "search_match", None) for r in person_results))

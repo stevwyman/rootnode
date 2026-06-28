@@ -1,5 +1,5 @@
 {% extends "genview/base_detail.html" %}
-{% load i18n l10n static %}
+{% load i18n l10n static ui_tags %}
 
 {% block title %}{{ media.title }} - {% trans "Details" %}{% endblock %}
 
@@ -159,8 +159,11 @@
     {% endblock %}
 
     {% block edit-right %}
-        <a href="{% url 'genview:media-edit' tree_id=tree_id pk=media.pk %}" class="btn btn-primary w-100">✏️ {% trans "Datei bearbeiten" %}</a>
-        <a href="{% url 'genview:media-delete' tree_id=tree_id pk=media.pk %}" class="btn btn-outline-danger w-100">🗑 {% trans "Datei löschen" %}</a>
+        {% url 'genview:media-edit' tree_id=tree_id pk=media.pk as edit_url %}
+        {% url 'genview:media-delete' tree_id=tree_id pk=media.pk as delete_url %}
+        {% trans "Datei bearbeiten" as edit_label %}
+        {% trans "Datei löschen" as delete_label %}
+        {% action_buttons layout="sidebar" edit_url=edit_url delete_url=delete_url edit_label=edit_label delete_label=delete_label %}
     {% endblock%}
 
     {% block details-right%}
@@ -238,30 +241,10 @@
     {% endblock%}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
+{% include "genview/_select2_assets.html" %}
 <script>
 jQuery(document).ready(function($) {
-    
-    // Unsere bewährte Helferfunktion
-    function initSelect2(elementClass, apiUrl, placeholderText) {
-        $(elementClass).select2({
-            placeholder: placeholderText,
-            minimumInputLength: 2,
-            allowClear: true,
-            ajax: {
-                url: apiUrl,
-                dataType: 'json',
-                delay: 250,
-                data: function (params) { return { q: params.term }; },
-                processResults: function (data) { return { results: data.results }; }
-            }
-        });
-    }
-
-    initSelect2('.individual-select', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
+    initGenviewSelect2('.individual-select', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
 });
 </script>
 {% endblock %}

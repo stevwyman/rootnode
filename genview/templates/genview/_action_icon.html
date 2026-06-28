@@ -1,0 +1,11 @@
+{% comment %}
+Single action icon for use inside <button> or standalone.
+Usage: {% include "genview/_action_icon.html" with action="delete" %}
+Actions: view, edit, delete, open, settings
+{% endcomment %}
+{% if action == "view" %}<i class="bi bi-eye" aria-hidden="true"></i>
+{% elif action == "edit" %}<i class="bi bi-pencil" aria-hidden="true"></i>
+{% elif action == "delete" %}<i class="bi bi-trash" aria-hidden="true"></i>
+{% elif action == "open" %}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+{% elif action == "settings" %}<i class="bi bi-gear" aria-hidden="true"></i>
+{% endif %}
