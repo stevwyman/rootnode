@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-28 13:50+0000\n"
+"POT-Creation-Date: 2026-06-29 18:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -33,7 +33,7 @@ msgstr "Death date (raw string)"
 msgid "Sterbe-Datum (geparst)"
 msgstr "Death date (parsed)"
 
-#: genview/forms.py:179 genview/templates/genview/base.html:86
+#: genview/forms.py:179 genview/templates/genview/base.html:87
 msgid "Suche"
 msgstr "Search"
 
@@ -102,16 +102,8 @@ msgstr "confidential"
 msgid "Vertrauliche Person"
 msgstr "Confidential person"
 
-#: genview/templates/genview/_individual_table.html:57
-msgid "Bearbeiten"
-msgstr "Edit"
-
-#: genview/templates/genview/_individual_table.html:59
-msgid "Löschen"
-msgstr "Delete"
-
-#: genview/templates/genview/_individual_table.html:64
-#: genview/templates/genview/individual_list.html:212
+#: genview/templates/genview/_individual_table.html:63
+#: genview/templates/genview/individual_list.html:211
 msgid "Keine Personen gefunden."
 msgstr "No persons found."
 
@@ -138,102 +130,102 @@ msgstr "Next"
 msgid "GEDCOM-Stammbaum"
 msgstr "GEDCOM family tree"
 
-#: genview/templates/genview/base.html:26
+#: genview/templates/genview/base.html:27
 msgid "Stammbaum"
 msgstr "Family tree"
 
-#: genview/templates/genview/base.html:29
+#: genview/templates/genview/base.html:30
 msgid "Navigation umschalten"
 msgstr "Toggle navigation"
 
-#: genview/templates/genview/base.html:36
+#: genview/templates/genview/base.html:37
 msgid "Daten"
 msgstr "Data"
 
-#: genview/templates/genview/base.html:38
+#: genview/templates/genview/base.html:39
 #: genview/templates/genview/individual_list.html:3
 #: genview/templates/genview/tree_list.html:31
 msgid "Personen"
 msgstr "Persons"
 
-#: genview/templates/genview/base.html:39
+#: genview/templates/genview/base.html:40
 #: genview/templates/genview/tree_list.html:35
 msgid "Familien"
 msgstr "Families"
 
-#: genview/templates/genview/base.html:40
+#: genview/templates/genview/base.html:41
 msgid "Ereignisse"
 msgstr "Events"
 
-#: genview/templates/genview/base.html:41
+#: genview/templates/genview/base.html:42
 #: genview/templates/genview/tree_list.html:39
 msgid "Orte"
 msgstr "Places"
 
-#: genview/templates/genview/base.html:42
+#: genview/templates/genview/base.html:43
 msgid "Medien"
 msgstr "Media"
 
-#: genview/templates/genview/base.html:43
+#: genview/templates/genview/base.html:44
 msgid "Quellen"
 msgstr "Sources"
 
-#: genview/templates/genview/base.html:49
+#: genview/templates/genview/base.html:50
 #, python-format
 msgid "Angemeldet als %(username)s"
 msgstr "Signed in as %(username)s"
 
-#: genview/templates/genview/base.html:51
-#: genview/templates/genview/base.html:135
+#: genview/templates/genview/base.html:52
+#: genview/templates/genview/base.html:136
 msgid "Stammbäume"
 msgstr "Family trees"
 
-#: genview/templates/genview/base.html:53
+#: genview/templates/genview/base.html:54
 msgid "Bulk-Upload"
 msgstr "Bulk upload"
 
-#: genview/templates/genview/base.html:54
+#: genview/templates/genview/base.html:55
 #: genview/templates/genview/tree_list.html:56
 msgid "Baum verwalten"
 msgstr "Manage tree"
 
-#: genview/templates/genview/base.html:55
+#: genview/templates/genview/base.html:56
 msgid "Orte bereinigen"
 msgstr "Clean up places"
 
-#: genview/templates/genview/base.html:59
+#: genview/templates/genview/base.html:60
 msgid "GEDCOM importieren"
 msgstr "Import GEDCOM"
 
-#: genview/templates/genview/base.html:60
+#: genview/templates/genview/base.html:61
 msgid "Benutzer"
 msgstr "Users"
 
-#: genview/templates/genview/base.html:61
+#: genview/templates/genview/base.html:62
 msgid "Ereignistypen"
 msgstr "Event types"
 
-#: genview/templates/genview/base.html:64
+#: genview/templates/genview/base.html:65
 msgid "Account-Sicherheit"
 msgstr "Account security"
 
-#: genview/templates/genview/base.html:69
+#: genview/templates/genview/base.html:70
 msgid "Abmelden"
 msgstr "Log out"
 
-#: genview/templates/genview/base.html:77
+#: genview/templates/genview/base.html:78
 msgid "Anmelden"
 msgstr "Log in"
 
-#: genview/templates/genview/base.html:80
+#: genview/templates/genview/base.html:81
 msgid "Registrieren"
 msgstr "Register"
 
-#: genview/templates/genview/base.html:86
+#: genview/templates/genview/base.html:87
 msgid "Stammbaum durchsuchen…"
 msgstr "Search family tree…"
 
-#: genview/templates/genview/base.html:131
+#: genview/templates/genview/base.html:132
 msgid "Version"
 msgstr "Version"
 
@@ -247,6 +239,25 @@ msgstr "Event"
 #: genview/templates/genview/source_detail.html:9
 msgid "Zurück zur Übersicht"
 msgstr "Back to overview"
+
+#: genview/templates/genview/event_detail.html:142
+#: genview/templates/genview/mediaobject_detail.html:4
+#: genview/templatetags/ui_tags.py:7
+msgid "Details"
+msgstr "Details"
+
+#: genview/templates/genview/event_form.html:5
+#: genview/templates/genview/event_form.html:17
+#, fuzzy
+#| msgid "Datei bearbeiten"
+msgid "Ereignis bearbeiten"
+msgstr "Edit file"
+
+#: genview/templates/genview/event_form.html:5
+#, fuzzy
+#| msgid "Ereignistypen"
+msgid "Ereignis hinzufügen"
+msgstr "Event types"
 
 #: genview/templates/genview/global_search.html:5
 msgid "Globale Suche"
@@ -301,51 +312,63 @@ msgstr "View persons"
 msgid "Familien ansehen"
 msgstr "View families"
 
-#: genview/templates/genview/individual_detail.html:275
+#: genview/templates/genview/individual_detail.html:147
+#, fuzzy
+#| msgid "Ort bearbeiten"
+msgid "Person bearbeiten"
+msgstr "Edit place"
+
+#: genview/templates/genview/individual_detail.html:159
+#, fuzzy
+#| msgid "Ort löschen"
+msgid "Person löschen"
+msgstr "Delete place"
+
+#: genview/templates/genview/individual_detail.html:277
 msgid "Lebenslauf"
 msgstr "Life timeline"
 
-#: genview/templates/genview/individual_detail.html:321
+#: genview/templates/genview/individual_detail.html:322
 msgid "Beschreibung"
 msgstr "Description"
 
-#: genview/templates/genview/individual_detail.html:667
-#: genview/templates/genview/individual_detail.html:672
+#: genview/templates/genview/individual_detail.html:665
+#: genview/templates/genview/individual_detail.html:670
 msgid "Ausgangsperson"
 msgstr "Focus person"
 
-#: genview/templates/genview/individual_detail.html:668
+#: genview/templates/genview/individual_detail.html:666
 msgid "Eltern"
 msgstr "Parents"
 
-#: genview/templates/genview/individual_detail.html:669
+#: genview/templates/genview/individual_detail.html:667
 msgid "Großeltern"
 msgstr "Grandparents"
 
-#: genview/templates/genview/individual_detail.html:673
+#: genview/templates/genview/individual_detail.html:671
 msgid "Vater"
 msgstr "Father"
 
-#: genview/templates/genview/individual_detail.html:674
-#: genview/templates/genview/individual_detail.html:696
+#: genview/templates/genview/individual_detail.html:672
+#: genview/templates/genview/individual_detail.html:694
 msgid "Großvater"
 msgstr "Grandfather"
 
-#: genview/templates/genview/individual_detail.html:678
-#: genview/templates/genview/individual_detail.html:682
-#: genview/templates/genview/individual_detail.html:688
-#: genview/templates/genview/individual_detail.html:700
-#: genview/templates/genview/individual_detail.html:705
-#: genview/templates/genview/individual_detail.html:711
+#: genview/templates/genview/individual_detail.html:676
+#: genview/templates/genview/individual_detail.html:680
+#: genview/templates/genview/individual_detail.html:686
+#: genview/templates/genview/individual_detail.html:698
+#: genview/templates/genview/individual_detail.html:703
+#: genview/templates/genview/individual_detail.html:709
 msgid "Datum hier"
 msgstr "Date here"
 
-#: genview/templates/genview/individual_detail.html:684
-#: genview/templates/genview/individual_detail.html:707
+#: genview/templates/genview/individual_detail.html:682
+#: genview/templates/genview/individual_detail.html:705
 msgid "Großmutter"
 msgstr "Grandmother"
 
-#: genview/templates/genview/individual_detail.html:695
+#: genview/templates/genview/individual_detail.html:693
 msgid "Mutter"
 msgstr "Mother"
 
@@ -389,15 +412,11 @@ msgstr "Reset"
 msgid "Nachname"
 msgstr "Nachname"
 
-#: genview/templates/genview/mediaobject_detail.html:4
-msgid "Details"
-msgstr "Details"
-
-#: genview/templates/genview/mediaobject_detail.html:162
+#: genview/templates/genview/mediaobject_detail.html:164
 msgid "Datei bearbeiten"
 msgstr "Edit file"
 
-#: genview/templates/genview/mediaobject_detail.html:163
+#: genview/templates/genview/mediaobject_detail.html:165
 msgid "Datei löschen"
 msgstr "Delete file"
 
@@ -405,11 +424,11 @@ msgstr "Delete file"
 msgid "Ort"
 msgstr "Place"
 
-#: genview/templates/genview/place_detail.html:64
+#: genview/templates/genview/place_detail.html:66
 msgid "Ort bearbeiten"
 msgstr "Edit place"
 
-#: genview/templates/genview/place_detail.html:65
+#: genview/templates/genview/place_detail.html:67
 msgid "Ort löschen"
 msgstr "Delete place"
 
@@ -442,23 +461,23 @@ msgstr "Log in here"
 msgid "Quelle"
 msgstr "Source"
 
-#: genview/templates/genview/source_detail.html:102
+#: genview/templates/genview/source_detail.html:104
 msgid "Quelle bearbeiten"
 msgstr "Edit source"
 
-#: genview/templates/genview/source_detail.html:103
+#: genview/templates/genview/source_detail.html:105
 msgid "Quelle löschen"
 msgstr "Delete source"
 
-#: genview/templates/genview/source_detail.html:108
+#: genview/templates/genview/source_detail.html:111
 msgid "Verknüpfte Ereignisse"
 msgstr "Linked events"
 
-#: genview/templates/genview/source_detail.html:127 genview/views.py:250
+#: genview/templates/genview/source_detail.html:130 genview/views.py:250
 msgid "Familie"
 msgstr "Family"
 
-#: genview/templates/genview/source_detail.html:134
+#: genview/templates/genview/source_detail.html:137
 msgid "Diese Quelle ist noch mit keinem Ereignis verknüpft."
 msgstr "This source is not linked to any event yet."
 
@@ -498,6 +517,24 @@ msgstr "No family trees yet"
 #: genview/templates/genview/tree_list.html:74
 msgid "Lade eine GEDCOM-Datei hoch oder erstelle deinen ersten Stammbaum."
 msgstr "Upload a GEDCOM file or create your first family tree."
+
+#: genview/templates/genview/tree_membership_manage.html:72
+#: genview/templates/genview/tree_membership_manage.html:74
+msgid "Entfernen"
+msgstr ""
+
+#: genview/templates/genview/user_management.html:64
+#: genview/templatetags/ui_tags.py:9
+msgid "Löschen"
+msgstr "Delete"
+
+#: genview/templatetags/ui_tags.py:8
+msgid "Bearbeiten"
+msgstr "Edit"
+
+#: genview/templatetags/ui_tags.py:10
+msgid "Öffnen"
+msgstr ""
 
 #: genview/views.py:156
 #, python-format
