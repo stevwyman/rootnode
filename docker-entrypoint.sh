@@ -29,13 +29,4 @@ python manage.py collectstatic --noinput
 echo "🔁 Run migrations …"
 python manage.py migrate
 
-# ------------------------------------------------------------------
-# 4️⃣ translations
-# ------------------------------------------------------------------
-echo "🔁 Run translations …"
-python manage.py compilemessages
-
-# ------------------------------------------------------------------
-# 5️⃣ Starte den eigentlichen Django-Befehl (z. B. runserver, gunicorn, …)
-# ------------------------------------------------------------------
 exec "$@"
