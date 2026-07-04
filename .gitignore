@@ -213,3 +213,4 @@ media/
 static/bootstrap5/
 .dockerignore
 container-compose.yaml
+container-compose-local.yaml

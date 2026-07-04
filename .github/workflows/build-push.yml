@@ -153,6 +153,7 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ env.BRANCH_TAG }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+          platforms: linux/arm64, linux/amd64
 
       # --------------------------------------------------------
       # 2.2.7  (Optional) – ausgeben, welcher Tag jetzt live ist
