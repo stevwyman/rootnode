@@ -1,6 +1,6 @@
 services:
   app:
-    image: stevwyman/rootnode
+    image: localhost/rootnode:latest
     container_name: genview
     ports:
       - 8003:8003

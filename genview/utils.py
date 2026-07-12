@@ -112,7 +112,7 @@ def geocode_place(query, limit=1, country_codes=None):
     if country_codes:
         params["countrycodes"] = country_codes   # z. B. "de" für Deutschland
 
-    # Nominatim verlangt einen User‑Agent‑Header – sonst 403
+    # Nominatim verlangt einen User-Agent-Header – sonst 403
     headers = {
         "User-Agent": "YourAppName/1.0 (+https://stevwyman.com)",
         "Accept-Language": "de",   # Ergebnis in Deutsch (optional)

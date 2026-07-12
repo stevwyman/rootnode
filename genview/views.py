@@ -1890,7 +1890,7 @@ class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
 
 class PlaceGeocodeView(TreeEditAccessMixin, View):
     """
-    Erwartet POST‑Parameter `place_id`.  Holt den Ort, fragt Nominatim,
+    Erwartet POST-Parameter `place_id`.  Holt den Ort, fragt Nominatim,
     speichert die ersten Koordinaten und gibt das Ergebnis als JSON zurück
     (für AJAX) oder leitet zurück zu `PlaceDetailView` (falls kein AJAX).
     """
@@ -1906,7 +1906,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
 
         place = get_object_or_404(Place, pk=place_id)
 
-        # Build die Such‑Query.  Priorität: address > name
+        # Build die Such-Query.  Priorität: address > name
         query = place.name
         if not query:
             messages.error(request, _("Ort hat weder Namen noch Adresse – kein Geocode möglich."))
@@ -1929,7 +1929,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
 
         logger.info(best)
 
-        # Wenn es ein AJAX‑Request ist, return JSON
+        # Wenn es ein AJAX-Request ist, return JSON
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
                 "status": "ok",
@@ -1938,7 +1938,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
                 "display_name": best["display_name"],
                 "message": _("Koordinaten für %(query)s wurden gefunden.") % {"query": query}
             })
-        # Sonst: normales Redirect + Django‑Message
+        # Sonst: normales Redirect + Django-Message
         messages.success(request,
                          _("Koordinaten (%(lat)s, %(lon)s) für „%(query)s“ gespeichert.") % {"lat": place.latitude, "lon": place.longitude, "query": query})
         return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))

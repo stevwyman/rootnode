@@ -1,13 +1,12 @@
 # --------------------------------------------------------------
 # 1️⃣ Builder-Stage – Dependencies, venv und Wheels bauen
 # --------------------------------------------------------------
-FROM python:3.13-slim AS builder
+FROM registry.access.redhat.com/hi/python:3.14-builder AS builder
+USER root
 WORKDIR /app
 
 # ---- System-Pakete (gettext + optional locales) ----------------
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gettext && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+RUN dnf install -y gettext && dnf clean all
 
 # ---- Python-Umgebung (virtualenv) ------------------------------
 RUN python -m venv /opt/venv
@@ -29,13 +28,12 @@ RUN groupadd -g ${APP_GID} appgroup && \
 # --------------------------------------------------------------
 # 2️⃣ Runtime-Stage – Minimal-Image, venv und App-Code
 # --------------------------------------------------------------
-FROM python:3.13-slim
+FROM registry.access.redhat.com/hi/python:3.14-builder
+USER root
 WORKDIR /app
 
 # ---- System-Pakete, die zur Laufzeit gebraucht werden ---------
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gettext && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+RUN dnf install -y gettext && dnf clean all
 
 # ---- Kopiere das vorbereitete venv und die Wheels ------------
 COPY --from=builder /opt/venv /opt/venv
