@@ -917,11 +917,9 @@
                 <div class="card-body p-0">
                     {% if family.husband == object and family.wife %}
                         <ul class="list-group list-group-flush">
-                            {% for sibling in object.siblings %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                    {% include "genview/_individual_mini.html" with individual=family.wife %}
-                                </li>
-                            {% endfor %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                                {% include "genview/_individual_mini.html" with individual=family.wife %}
+                            </li>
                         </ul>
                     {% elif family.wife == object and family.husband %}
                         <ul class="list-group list-group-flush">
