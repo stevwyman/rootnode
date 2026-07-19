@@ -76,3 +76,6 @@ DJANGO_SUPERUSER_PASSWORD=admin
 ```
 
 ## ToDos
+
+- [ ] use hardened images, i.e. by Red Hat
+- 
