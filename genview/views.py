@@ -59,7 +59,7 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
-from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place
+from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_individual_tree
 
 
 def home(request):
@@ -155,6 +155,29 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         # Eine Erfolgsmeldung für den Admin setzen
         messages.success(self.request, _("Der Stammbaum '%(name)s' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.") % {"name": tree.name})
         return super().form_valid(form)
+
+
+def family_tree_json(request, tree_id, individual_id):
+    """
+    Gibt ein **Array** von Knoten zurück, das exakt dem Beispiel‑Format entspricht.
+    Jeder Knoten hat:
+        - id (String oder Int)
+        - data (Dictionary mit beliebigen Personen‑Daten)
+        - rels (Dictionary mit "spouses", "children" bzw. "parents")
+    """
+    ind = get_object_or_404(Individual, pk=individual_id, gedcom_tree_id=tree_id)
+    result = build_individual_tree(ind, max_depth=4)   # depth nach Bedarf anpassen
+    return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
+
+
+def family_tree_view(request, tree_id, individual_id):
+    """
+    Rendert das HTML‑Template. Wir geben beide IDs an das Template weiter,
+    weil das JavaScript sie zum Abrufen der JSON‑Daten braucht.
+    """
+    # Optional: Berechtigung prüfen …
+    return render(request, 'genview/family_tree.html',
+                  {'tree_id': tree_id, 'individual_id': individual_id})
 
 
 def _split_search_terms(query: str) -> list[str]:

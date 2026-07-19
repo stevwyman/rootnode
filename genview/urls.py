@@ -19,6 +19,19 @@ urlpatterns = [
     # 4. match users to trees and enable/disable public flag 
     path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),
 
+        # Neue URL, die sowohl tree_id als auch individual_id erwartet
+    path(
+        'tree/<int:tree_id>/individual/<int:individual_id>/view/',
+        views.family_tree_view,
+        name='family_tree_view',
+    ),
+    # JSON‑Endpoint bekommt jetzt den gleichen Parameter‑Stamm
+    path(
+        'tree/<int:tree_id>/individual/<int:individual_id>/json/',
+        views.family_tree_json,
+        name='family_tree_json',
+    ),
+
     # ----------------------------------------------
     # --- persons / individuals
     # ----------------------------------------------

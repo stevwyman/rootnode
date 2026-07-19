@@ -620,6 +620,17 @@ class Family(MPTTModel, GedcomIdMixin):
             kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
         )
 
+    # -----------------------------------------------------------------
+    # Hilfsmethode: gibt den Partner zurück, wenn `person` einer der
+    # beiden Elternteile ist; sonst None.
+    # -----------------------------------------------------------------
+    def spouse_of(self, person: "Individual") -> "Individual | None":
+        if person == self.husband:
+            return self.wife
+        if person == self.wife:
+            return self.husband
+        return None
+
     # ------------------------------------------------------------------
     # Convenience-Methode – liefert ein QuerySet aller Kinder-Individuals
     # ------------------------------------------------------------------

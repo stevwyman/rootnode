@@ -1007,6 +1007,18 @@
     </div>
 </div>
 
+<div class="container py-4">
+    <h2>{{ object.first_name }} {{ object.last_name }}</h2>
+
+    <!-- Deine übrigen Detail‑Infos … -->
+
+    {% comment %}Link, der den Baum für dieses konkrete Individuum öffnet{% endcomment %}
+    <a href="{% url 'genview:family_tree_view' tree_id=object.gedcom_tree.id individual_id=object.id %}"
+       class="btn btn-outline-primary mt-3">
+        <i class="bi bi-tree"></i> {% trans "Stammbaum dieses Individuums" %}
+    </a>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
