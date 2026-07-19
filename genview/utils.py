@@ -199,6 +199,8 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
             initial = ind.given_name[0] if ind.given_name else "?"
             avatar_url = f"https://ui-avatars.com/api/?name={initial}&background=6c757d&color=ffffff"
 
+        
+
         node = {
             "id": str_id,
             "data": {
@@ -206,6 +208,7 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
                 "last name": ind.surname or "",
                 "birthday": getattr(ind, "birth_year", ""),
                 "avatar": avatar_url,
+                "detail_url": reverse('genview:individual-detail', kwargs={'tree_id': tree_id, 'pk': ind.pk}),
                 "gender": f3_gender
             },
             "rels": {}
