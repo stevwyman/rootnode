@@ -157,20 +157,31 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         return super().form_valid(form)
 
 
-def family_tree_json(request, tree_id, individual_id):
+class TreeJSONView(TreeAccessMixin, View):
     """
-    Gibt ein **Array** von Knoten zurück, das exakt dem Beispiel‑Format entspricht.
-    Jeder Knoten hat:
-        - id (String oder Int)
-        - data (Dictionary mit beliebigen Personen‑Daten)
-        - rels (Dictionary mit "spouses", "children" bzw. "parents")
+    Gibt ein flaches Array von Knoten für f3 (family-chart) zurück.
+    Liest optional die 'max_depth' aus den GET-Parametern aus.
     """
-    ind = get_object_or_404(Individual, pk=individual_id, gedcom_tree_id=tree_id)
-    
-    # Neues flaches Format abrufen
-    result = build_flat_family_tree(ind, max_depth=4)   
-    
-    return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
+    # Standardwert, falls das Frontend keinen Parameter mitschickt
+    default_max_depth = 4 
+
+    def get(self, request, tree_id, individual_id, *args, **kwargs):
+        # 1. Person sicher aus der Datenbank holen
+        ind = get_object_or_404(Individual, pk=individual_id, gedcom_tree_id=tree_id)
+        
+        # 2. Gewünschte Tiefe aus dem GET-Parameter der URL auslesen 
+        # (z.B. ?max_depth=2 oder Fallback auf default_max_depth)
+        try:
+            depth_param = request.GET.get('max_depth')
+            max_depth = int(depth_param) if depth_param else self.default_max_depth
+        except ValueError:
+            max_depth = self.default_max_depth
+        
+        # 3. Den Baum mit der dynamischen Tiefe aufbauen
+        result = build_flat_family_tree(tree_id, ind, max_depth=max_depth)   
+        
+        # 4. Als JSON zurückgeben
+        return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
 
 def family_tree_view(request, tree_id, individual_id):
     """

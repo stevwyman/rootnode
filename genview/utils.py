@@ -3,6 +3,7 @@ import requests
 from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
+from django.urls import reverse
 from .models import FaceTag, Place, Individual
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
@@ -138,7 +139,7 @@ def geocode_place(query, limit=1, country_codes=None):
     return normalized
 
 
-def build_flat_family_tree(root_individual, max_depth=4):
+def build_flat_family_tree(tree_id, root_individual, max_depth=4):
     """
     Erstellt ein flaches Array aller Personen im Baum bis zur max_depth.
     Stellt sicher, dass keine "Geister-IDs" (fehlende Personen) in den Relationen landen.
@@ -180,8 +181,23 @@ def build_flat_family_tree(root_individual, max_depth=4):
     
     for str_id, ind in collected_individuals.items():
         # Geschlecht bereinigen (f3 zwingt zu "M" oder "F")
-        gender_val = str(getattr(ind, "gender", "")).upper()
+        gender_val = str(getattr(ind, "sex", "")).upper()
         f3_gender = "F" if gender_val.startswith("W") or gender_val == "F" else "M"
+
+        avatar_url = ""
+
+        # 1. Prüfen, ob ein Profilbild existiert (genau wie in deinem Template)
+        if ind.profile_image and ind.profile_image.file:
+            # {% url 'genview:media-file' tree_id=tree_id pk=ind.profile_image.pk %} in Python:
+            avatar_url = reverse('genview:media-file', kwargs={
+                'tree_id': tree_id, 
+                'pk': ind.profile_image.pk
+            })
+        else:
+            # 2. Fallback: Wir ahmen deinen "bg-secondary text-white" div als echtes Bild nach!
+            # Bootstrap 'secondary' ist der Hex-Code 6c757d.
+            initial = ind.given_name[0] if ind.given_name else "?"
+            avatar_url = f"https://ui-avatars.com/api/?name={initial}&background=6c757d&color=ffffff"
 
         node = {
             "id": str_id,
@@ -189,7 +205,7 @@ def build_flat_family_tree(root_individual, max_depth=4):
                 "first name": ind.given_name or "",
                 "last name": ind.surname or "",
                 "birthday": getattr(ind, "birth_year", ""),
-                "avatar": getattr(ind, "avatar", ""),
+                "avatar": avatar_url,
                 "gender": f3_gender
             },
             "rels": {}

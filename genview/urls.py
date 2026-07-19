@@ -28,7 +28,7 @@ urlpatterns = [
     # JSON‑Endpoint bekommt jetzt den gleichen Parameter‑Stamm
     path(
         'tree/<int:tree_id>/individual/<int:individual_id>/json/',
-        views.family_tree_json,
+        views.TreeJSONView.as_view(),
         name='family_tree_json',
     ),
 

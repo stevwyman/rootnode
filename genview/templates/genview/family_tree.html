@@ -15,6 +15,20 @@
         stroke-width: 2px !important;
         opacity: 0.8 !important;
     }
+    /* Die Größe und Form des Profilbildes in der Karte anpassen */
+    #FamilyChart .card-image {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50% !important; /* Macht das Bild kreisrund */
+        object-fit: cover !important;  /* Verhindert, dass Bilder verzerrt werden */
+        border: 2px solid #ccc;        /* Ein dezenter Rand */
+        margin-right: 10px;            /* Abstand zum Text */
+    }
+
+    /* Falls f3 bei deiner Version das <image> Tag im SVG direkt nutzt: */
+    #FamilyChart image {
+        clip-path: circle(50% at 50% 50%); /* SVG-Methode für runde Bilder */
+    }
 </style>
 {% endblock %}
 
@@ -33,77 +47,103 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- D3 – das `family‑chart`‑Paket baut intern auf D3 v7 auf -->
-<script src="https://d3js.org/d3.v7.min.js"></script>
 
-<!-- UMD‑Build von family‑chart (statt `FamilyChart` das globale Objekt `f3`) -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <script type="module" src="{% static 'js/family-chart.umd.min.js' %}"></script>
 
 <script type="module">
 document.addEventListener('DOMContentLoaded', function () {
-    // -------------------------------------------------------------
-    // 1. Daten aus dem Django‑Template
-    // -------------------------------------------------------------
-    const language     = "{{ LANGUAGE_CODE|lower }}";   // „de“ oder „en“
-    const appName      = "genview";                     // Name deiner Django‑App
+    const language     = "{{ LANGUAGE_CODE|lower }}";
+    const appName      = "genview";
     const treeId       = {{ tree_id }};
-    const individualId = {{ individual_id }};
-    const startDepth   = 4;                              // initiale Rekursionstiefe
+    const startDepth   = 2; // Geringe Tiefe ist besser für den wachenden Baum
 
-    // -------------------------------------------------------------
-    // 2. Hilfs‑Funktionen
-    // -------------------------------------------------------------
     const messageDiv = document.getElementById('chart-message');
+    const chartContainer = document.getElementById('FamilyChart');
+    
+    // Globale Variablen für den Merge-Ansatz
+    let allTreeData = [];   
+    let f3Chart = null;     
 
     function showError(msg) {
-        document.getElementById('FamilyChart').innerHTML = '';
         messageDiv.innerHTML = `<p class="text-danger">${msg}</p>`;
     }
 
-    // URL‑Builder inklusive Sprach‑ und App‑Prefix
-    function buildUrl(depth) {
-        return `/${language}/${appName}/tree/${treeId}/individual/${individualId}/json/?max_depth=${depth}`;
+    function buildUrl(personId, depth) {
+        return `/${language}/${appName}/tree/${treeId}/individual/${personId}/json/?max_depth=${depth}`;
     }
 
-    // -------------------------------------------------------------
-    // 3. Laden & Rendern des Baums
-    // -------------------------------------------------------------
-    function loadTree(depth) {
-        // ggf. vorherige Meldungen entfernen
-        messageDiv.innerHTML = '';
-        document.getElementById('FamilyChart')
-                .innerHTML = `<p class="text-muted">{% trans "Lade Baum …" %}</p>`;
+    // --- Die Merge-Funktion (verschmilzt alte und neue Daten sicher) ---
+    function mergeData(newNodes) {
+        const dataMap = new Map();
+        allTreeData.forEach(node => dataMap.set(node.id, node));
 
-        fetch(buildUrl(depth), { credentials: 'same-origin' })
+        newNodes.forEach(rawNode => {
+            // SICHERHEITS-CHECK: Wir garantieren, dass 'rels' und alle Arrays IMMER existieren!
+            const newNode = rawNode;
+            if (!newNode.rels) newNode.rels = {};
+            newNode.rels.parents = newNode.rels.parents || [];
+            newNode.rels.spouses = newNode.rels.spouses || [];
+            newNode.rels.children = newNode.rels.children || [];
+
+            if (dataMap.has(newNode.id)) {
+                // Die Person existiert schon im Baum
+                const existingNode = dataMap.get(newNode.id);
+                
+                // Auch hier zur Sicherheit prüfen (falls beim Erst-Laden was fehlte)
+                if (!existingNode.rels) existingNode.rels = {};
+                existingNode.rels.parents = existingNode.rels.parents || [];
+                existingNode.rels.spouses = existingNode.rels.spouses || [];
+                existingNode.rels.children = existingNode.rels.children || [];
+                
+                // Hilfsfunktion, die zwei Arrays ohne Duplikate zusammenführt
+                const mergeArrays = (arr1, arr2) => Array.from(new Set([...arr1, ...arr2]));
+                
+                existingNode.rels.parents = mergeArrays(existingNode.rels.parents, newNode.rels.parents);
+                existingNode.rels.spouses = mergeArrays(existingNode.rels.spouses, newNode.rels.spouses);
+                existingNode.rels.children = mergeArrays(existingNode.rels.children, newNode.rels.children);
+            } else {
+                // Neue Person!
+                allTreeData.push(newNode);
+                dataMap.set(newNode.id, newNode);
+            }
+        });
+    }
+
+    // --- Die Lade-Funktion für den Merge ---
+    function loadTree(personIdToLoad, depth) {
+        messageDiv.innerHTML = '<span class="text-info">{% trans "Lade weitere Verwandte..." %}</span>';
+
+        fetch(buildUrl(personIdToLoad, depth), { credentials: 'same-origin' })
             .then(resp => {
-                if (!resp.ok) throw new Error(`Server‑Antwort ${resp.status}`);
+                if (!resp.ok) throw new Error(`Server-Antwort ${resp.status}`);
                 return resp.json();
             })
-            .then(data => {
-                if (data.error) throw new Error(data.error);
+            .then(newData => {
+                if (newData.error) throw new Error(newData.error);
 
-                document.getElementById('FamilyChart').innerHTML = '';
+                messageDiv.innerHTML = ''; 
 
-                // --- Zurück zu deiner korrekten API! ---
-                const f3Chart = f3.createChart('#FamilyChart', data);
+                // 1. Neue Daten in das globale Array mischen
+                mergeData(newData);
 
-                // Karte konfigurieren
-                const f3Card = f3Chart.setCardHtml()
-                    .setCardDisplay([
-                        ["first name", "last name"],
-                        ["birthday"]
-                    ]);
+                // 2. Chart initialisieren ODER updaten
+                if (!f3Chart) {
+                    // Erster Start
+                    chartContainer.innerHTML = ''; 
+                    f3Chart = f3.createChart('#FamilyChart', allTreeData);
+                    
+                    f3Chart.setCardHtml()
+                        .setCardDisplay([
+                            ["first name", "last name"],
+                            ["birthday"]
+                        ]);
 
-                // Baum initial rendern
-                f3Chart.updateTree({initial: true});
-
-                // --- "Mehr laden"-Logik bleibt erhalten ---
-                if (data.has_more) {
-                    const btn = document.createElement('button');
-                    btn.className = 'btn btn-outline-secondary mt-2';
-                    btn.textContent = '{% trans "Mehr laden" %}';
-                    btn.onclick = () => loadTree(depth + 2);   // 2 Ebenen nachladen
-                    messageDiv.appendChild(btn);
+                    f3Chart.updateTree({initial: true});
+                } else {
+                    // Update: Wir geben f3 das neue, größere Array und lassen es rendern
+                    f3Chart.store.state.data = allTreeData;
+                    f3Chart.updateTree(); // Das erzeugt die schöne Animation!
                 }
             })
             .catch(err => {
@@ -112,8 +152,32 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Erstes Laden mit der definierten Start‑Tiefe
-    loadTree(startDepth);
+    // --- Unsere robuste Rechtsklick-Erkennung ---
+    chartContainer.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        let currentElement = e.target;
+        let clickedPersonId = null;
+
+        while (currentElement && currentElement !== chartContainer) {
+            if (currentElement.__data__ && currentElement.__data__.data && currentElement.__data__.data.id) {
+                clickedPersonId = currentElement.__data__.data.id;
+                break; 
+            }
+            currentElement = currentElement.parentNode;
+        }
+
+        if (clickedPersonId) {
+            console.log("Rechtsklick! Erweitere Baum ab ID:", clickedPersonId);
+            // Wir feuern den API-Call ab, die Daten werden gemerged und D3 zeichnet neue Äste
+            loadTree(clickedPersonId, startDepth); 
+        }
+    }, true);
+
+    // Initialer Ladevorgang
+    loadTree({{ individual_id }}, startDepth);
 });
 </script>
+
 {% endblock %}
