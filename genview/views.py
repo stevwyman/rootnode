@@ -59,7 +59,7 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
-from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_individual_tree
+from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_flat_family_tree
 
 
 def home(request):
@@ -166,9 +166,11 @@ def family_tree_json(request, tree_id, individual_id):
         - rels (Dictionary mit "spouses", "children" bzw. "parents")
     """
     ind = get_object_or_404(Individual, pk=individual_id, gedcom_tree_id=tree_id)
-    result = build_individual_tree(ind, max_depth=4)   # depth nach Bedarf anpassen
+    
+    # Neues flaches Format abrufen
+    result = build_flat_family_tree(ind, max_depth=4)   
+    
     return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
-
 
 def family_tree_view(request, tree_id, individual_id):
     """

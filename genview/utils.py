@@ -138,96 +138,92 @@ def geocode_place(query, limit=1, country_codes=None):
     return normalized
 
 
-def build_individual_tree(
-    individual: Individual,
-    depth: int = 0,
-    max_depth: int = 3,
-) -> dict[str, any]:
+def build_flat_family_tree(root_individual, max_depth=4):
     """
-    Build a hierarchical node for *individual* that matches the
-    flat‑array structure you posted:
-
-    {
-        "id":   <pk>,
-        "data": {                # contains first name, last name, birthday, avatar, gender
-            "first name": "...",
-            "last name":  "...",
-            "birthday":   "...",
-            "avatar":     "...",
-            "gender":     "M|F"
-        },
-        "rels": {
-            "spouses":  [ <node>, … ],
-            "children": [ <node>, … ],
-            "parents":  [ <node>, … ]
-        }
-    }
+    Erstellt ein flaches Array aller Personen im Baum bis zur max_depth.
+    Stellt sicher, dass keine "Geister-IDs" (fehlende Personen) in den Relationen landen.
     """
-    # -----------------------------------------------------------------
-    # 1️⃣  Base payload (always present)
-    # -----------------------------------------------------------------
-    node: Dict[str, Any] = {
-        "id": individual.id,
-        "data": {
-            "first name": individual.given_name,
-            "last name":  individual.surname,
-            "birthday":   getattr(individual, "birth_year", ""),
-            "avatar":     getattr(individual, "avatar", ""),
-            "gender":     getattr(individual, "gender", "")
-        },
-        "rels": {
-            "spouses":  [],
-            "children": [],
-            "parents":  []
+    # PHASE 1: Alle Personen sammeln (bis max_depth)
+    collected_individuals = {}  # Dictionary (ID -> Personen-Objekt)
+
+    def traverse_and_collect(ind, current_depth):
+        str_id = str(ind.id)
+        if str_id in collected_individuals:
+            return
+        
+        collected_individuals[str_id] = ind
+
+        # Wenn wir noch tiefer dürfen, auch die Verwandten sammeln
+        if current_depth < max_depth:
+            # Eltern sammeln
+            for link in ind.parental_families.all():
+                fam = link.family
+                if getattr(fam, 'husband', None): 
+                    traverse_and_collect(fam.husband, current_depth + 1)
+                if getattr(fam, 'wife', None): 
+                    traverse_and_collect(fam.wife, current_depth + 1)
+            
+            # Partner und Kinder sammeln
+            partner_families = list(ind.families_as_husband.all()) + list(ind.families_as_wife.all())
+            for fam in partner_families:
+                partner = fam.spouse_of(ind)
+                if partner: 
+                    traverse_and_collect(partner, current_depth + 1)
+                for child in fam.children_links():
+                    traverse_and_collect(child, current_depth + 1)
+
+    # Rekursion starten
+    traverse_and_collect(root_individual, 0)
+
+    # PHASE 2: Das flache f3-Format bauen (mit strikter referenzieller Integrität)
+    nodes = []
+    
+    for str_id, ind in collected_individuals.items():
+        # Geschlecht bereinigen (f3 zwingt zu "M" oder "F")
+        gender_val = str(getattr(ind, "gender", "")).upper()
+        f3_gender = "F" if gender_val.startswith("W") or gender_val == "F" else "M"
+
+        node = {
+            "id": str_id,
+            "data": {
+                "first name": ind.given_name or "",
+                "last name": ind.surname or "",
+                "birthday": getattr(ind, "birth_year", ""),
+                "avatar": getattr(ind, "avatar", ""),
+                "gender": f3_gender
+            },
+            "rels": {}
         }
-    }
 
-    # -----------------------------------------------------------------
-    # 2️⃣  Stop recursion when depth limit is reached
-    # -----------------------------------------------------------------
-    if depth >= max_depth:
-        return node
+        parents = []
+        spouses = []
+        children = []
 
-    # -----------------------------------------------------------------
-    # 3️⃣  Spouses  – families where the person is husband or wife
-    # -----------------------------------------------------------------
-    partner_families = (
-        list(individual.families_as_husband.all()) +
-        list(individual.families_as_wife.all())
-    )
-    for fam in partner_families:
-        partner = fam.spouse_of(individual)          # defined in Family model
-        if partner:
-            node["rels"]["spouses"].append(
-                build_individual_tree(partner, depth + 1, max_depth)
-            )
+        # Eltern prüfen (NUR hinzufügen, wenn sie in collected_individuals sind!)
+        for link in ind.parental_families.all():
+            fam = link.family
+            if getattr(fam, 'husband', None) and str(fam.husband.id) in collected_individuals:
+                parents.append(str(fam.husband.id))
+            if getattr(fam, 'wife', None) and str(fam.wife.id) in collected_individuals:
+                parents.append(str(fam.wife.id))
 
-    # -----------------------------------------------------------------
-    # 4️⃣  Children  – families in which the person is a parent
-    # -----------------------------------------------------------------
-    for link in individual.parental_families.all():   # ChildFamilyLink objects
-        family: Family = link.family
-        for child in family.children_links():         # all Individual children
-            if child.id == individual.id:
-                continue                               # avoid self‑reference
-            node["rels"]["children"].append(
-                build_individual_tree(child, depth + 1, max_depth)
-            )
+        # Partner und Kinder prüfen
+        partner_families = list(ind.families_as_husband.all()) + list(ind.families_as_wife.all())
+        for fam in partner_families:
+            partner = fam.spouse_of(ind)
+            if partner and str(partner.id) in collected_individuals:
+                spouses.append(str(partner.id))
+            
+            for child in fam.children_links():
+                if str(child.id) in collected_individuals:
+                    children.append(str(child.id))
 
-    # -----------------------------------------------------------------
-    # 5️⃣  Parents  – families where the person is listed as a child
-    # -----------------------------------------------------------------
-    for link in individual.parental_families.all():      # Family objects (child side)
-        fam: Family = link.family
-        # mother (wife) if present
-        if fam.wife:
-            node["rels"]["parents"].append(
-                build_individual_tree(fam.wife, depth + 1, max_depth)
-            )
-        # father (husband) if present
-        if fam.husband:
-            node["rels"]["parents"].append(
-                build_individual_tree(fam.husband, depth + 1, max_depth)
-            )
+        # Relationen in den Node schreiben (list(set(...)) verhindert versehentliche Duplikate)
+        if parents: node["rels"]["parents"] = list(set(parents))
+        if spouses: node["rels"]["spouses"] = list(set(spouses))
+        if children: node["rels"]["children"] = list(set(children))
 
-    return node
+        nodes.append(node)
+
+    return nodes
+
