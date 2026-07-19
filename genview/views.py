@@ -59,7 +59,7 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
-from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place
+from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_individual_tree
 
 
 def home(request):
@@ -155,6 +155,29 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         # Eine Erfolgsmeldung für den Admin setzen
         messages.success(self.request, _("Der Stammbaum '%(name)s' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.") % {"name": tree.name})
         return super().form_valid(form)
+
+
+def family_tree_json(request, tree_id, individual_id):
+    """
+    Gibt ein **Array** von Knoten zurück, das exakt dem Beispiel‑Format entspricht.
+    Jeder Knoten hat:
+        - id (String oder Int)
+        - data (Dictionary mit beliebigen Personen‑Daten)
+        - rels (Dictionary mit "spouses", "children" bzw. "parents")
+    """
+    ind = get_object_or_404(Individual, pk=individual_id, gedcom_tree_id=tree_id)
+    result = build_individual_tree(ind, max_depth=4)   # depth nach Bedarf anpassen
+    return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
+
+
+def family_tree_view(request, tree_id, individual_id):
+    """
+    Rendert das HTML‑Template. Wir geben beide IDs an das Template weiter,
+    weil das JavaScript sie zum Abrufen der JSON‑Daten braucht.
+    """
+    # Optional: Berechtigung prüfen …
+    return render(request, 'genview/family_tree.html',
+                  {'tree_id': tree_id, 'individual_id': individual_id})
 
 
 def _split_search_terms(query: str) -> list[str]:
@@ -1890,7 +1913,7 @@ class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
 
 class PlaceGeocodeView(TreeEditAccessMixin, View):
     """
-    Erwartet POST‑Parameter `place_id`.  Holt den Ort, fragt Nominatim,
+    Erwartet POST-Parameter `place_id`.  Holt den Ort, fragt Nominatim,
     speichert die ersten Koordinaten und gibt das Ergebnis als JSON zurück
     (für AJAX) oder leitet zurück zu `PlaceDetailView` (falls kein AJAX).
     """
@@ -1906,7 +1929,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
 
         place = get_object_or_404(Place, pk=place_id)
 
-        # Build die Such‑Query.  Priorität: address > name
+        # Build die Such-Query.  Priorität: address > name
         query = place.name
         if not query:
             messages.error(request, _("Ort hat weder Namen noch Adresse – kein Geocode möglich."))
@@ -1929,7 +1952,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
 
         logger.info(best)
 
-        # Wenn es ein AJAX‑Request ist, return JSON
+        # Wenn es ein AJAX-Request ist, return JSON
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
                 "status": "ok",
@@ -1938,7 +1961,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
                 "display_name": best["display_name"],
                 "message": _("Koordinaten für %(query)s wurden gefunden.") % {"query": query}
             })
-        # Sonst: normales Redirect + Django‑Message
+        # Sonst: normales Redirect + Django-Message
         messages.success(request,
                          _("Koordinaten (%(lat)s, %(lon)s) für „%(query)s“ gespeichert.") % {"lat": place.latitude, "lon": place.longitude, "query": query})
         return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))

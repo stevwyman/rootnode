@@ -3,7 +3,7 @@ import requests
 from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
-from .models import FaceTag, Place
+from .models import FaceTag, Place, Individual
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
     """
@@ -112,7 +112,7 @@ def geocode_place(query, limit=1, country_codes=None):
     if country_codes:
         params["countrycodes"] = country_codes   # z. B. "de" für Deutschland
 
-    # Nominatim verlangt einen User‑Agent‑Header – sonst 403
+    # Nominatim verlangt einen User-Agent-Header – sonst 403
     headers = {
         "User-Agent": "YourAppName/1.0 (+https://stevwyman.com)",
         "Accept-Language": "de",   # Ergebnis in Deutsch (optional)
@@ -137,3 +137,97 @@ def geocode_place(query, limit=1, country_codes=None):
         })
     return normalized
 
+
+def build_individual_tree(
+    individual: Individual,
+    depth: int = 0,
+    max_depth: int = 3,
+) -> dict[str, any]:
+    """
+    Build a hierarchical node for *individual* that matches the
+    flat‑array structure you posted:
+
+    {
+        "id":   <pk>,
+        "data": {                # contains first name, last name, birthday, avatar, gender
+            "first name": "...",
+            "last name":  "...",
+            "birthday":   "...",
+            "avatar":     "...",
+            "gender":     "M|F"
+        },
+        "rels": {
+            "spouses":  [ <node>, … ],
+            "children": [ <node>, … ],
+            "parents":  [ <node>, … ]
+        }
+    }
+    """
+    # -----------------------------------------------------------------
+    # 1️⃣  Base payload (always present)
+    # -----------------------------------------------------------------
+    node: Dict[str, Any] = {
+        "id": individual.id,
+        "data": {
+            "first name": individual.given_name,
+            "last name":  individual.surname,
+            "birthday":   getattr(individual, "birth_year", ""),
+            "avatar":     getattr(individual, "avatar", ""),
+            "gender":     getattr(individual, "gender", "")
+        },
+        "rels": {
+            "spouses":  [],
+            "children": [],
+            "parents":  []
+        }
+    }
+
+    # -----------------------------------------------------------------
+    # 2️⃣  Stop recursion when depth limit is reached
+    # -----------------------------------------------------------------
+    if depth >= max_depth:
+        return node
+
+    # -----------------------------------------------------------------
+    # 3️⃣  Spouses  – families where the person is husband or wife
+    # -----------------------------------------------------------------
+    partner_families = (
+        list(individual.families_as_husband.all()) +
+        list(individual.families_as_wife.all())
+    )
+    for fam in partner_families:
+        partner = fam.spouse_of(individual)          # defined in Family model
+        if partner:
+            node["rels"]["spouses"].append(
+                build_individual_tree(partner, depth + 1, max_depth)
+            )
+
+    # -----------------------------------------------------------------
+    # 4️⃣  Children  – families in which the person is a parent
+    # -----------------------------------------------------------------
+    for link in individual.parental_families.all():   # ChildFamilyLink objects
+        family: Family = link.family
+        for child in family.children_links():         # all Individual children
+            if child.id == individual.id:
+                continue                               # avoid self‑reference
+            node["rels"]["children"].append(
+                build_individual_tree(child, depth + 1, max_depth)
+            )
+
+    # -----------------------------------------------------------------
+    # 5️⃣  Parents  – families where the person is listed as a child
+    # -----------------------------------------------------------------
+    for link in individual.parental_families.all():      # Family objects (child side)
+        fam: Family = link.family
+        # mother (wife) if present
+        if fam.wife:
+            node["rels"]["parents"].append(
+                build_individual_tree(fam.wife, depth + 1, max_depth)
+            )
+        # father (husband) if present
+        if fam.husband:
+            node["rels"]["parents"].append(
+                build_individual_tree(fam.husband, depth + 1, max_depth)
+            )
+
+    return node
