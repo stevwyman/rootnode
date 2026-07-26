@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
 from django.urls import reverse
-from .models import FaceTag, Place, Individual
+from .models import FaceTag, Place
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
     """

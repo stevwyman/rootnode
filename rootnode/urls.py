@@ -31,9 +31,6 @@ urlpatterns = [
     # api also goes here
 ]
 
-handler404 = 'genview.views.handle_404'   # 404-Handler
-handler403 = 'genview.views.handle_403'   # 403-Handler
-
 urlpatterns += i18n_patterns(
 
     # ------------------ Home / Startseite ------------------

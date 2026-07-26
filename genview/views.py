@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from datetime import date
 from itertools import chain
@@ -69,21 +68,6 @@ def home(request):
     """
     return render(request, "genview/home.html")
 
-
-def handle_404(request, exception):
-    from django.http import HttpResponseNotFound
-    logger.error("404 thrown, potential exception %s", exception)
-    return HttpResponseNotFound("/")    
-
-def handle_403(request, exception):
-    from django.http import HttpResponsePermanentRedirect
-    logger.info("403-Handler aufgerufen")
-    # .error nimmt die format-String-Syntax
-    logger.error("403 thrown, potential exception %s", exception)
-
-    # optional – falls du den kompletten Trace sehen willst:
-    logger.exception("403-Exception aufgetreten", exc_info=exception)
-    return HttpResponsePermanentRedirect("/")
 
 # ----------------------------------------------------------------------
 # 1️⃣ Trees
@@ -157,7 +141,7 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         return super().form_valid(form)
 
 
-class TreeJSONView(TreeAccessMixin, View):
+class TreeJSONView(LoginRequiredMixin, TreeAccessMixin, View):
     """
     Gibt ein flaches Array von Knoten für f3 (family-chart) zurück.
     Liest optional die 'max_depth' aus den GET-Parametern aus.
@@ -183,14 +167,31 @@ class TreeJSONView(TreeAccessMixin, View):
         # 4. Als JSON zurückgeben
         return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
 
-def family_tree_view(request, tree_id, individual_id):
+
+class FamilyTreeView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
     """
-    Rendert das HTML‑Template. Wir geben beide IDs an das Template weiter,
-    weil das JavaScript sie zum Abrufen der JSON‑Daten braucht.
+    Renderet das HTML-Template für den Familienstammbaum.
+    Die `tree_id` und `individual_id` werden als Kontext-Variablen
+    an das Template übergeben, weil das JavaScript sie zum Laden der
+    JSON-Daten benötigt.
     """
-    # Optional: Berechtigung prüfen …
-    return render(request, 'genview/family_tree.html',
-                  {'tree_id': tree_id, 'individual_id': individual_id})
+    template_name = "genview/family_tree.html"
+
+    # -----------------------------------------------------------------
+    # URL-Parameter in den Kontext übernehmen
+    # -----------------------------------------------------------------
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # `tree_id` und `individual_id` kommen aus den URL-Captures
+        context["tree_id"]       = self.kwargs.get("tree_id")
+        context["individual_id"] = self.kwargs.get("individual_id")
+
+        # optional: hier weitere Berechtigungs-Checks einbauen
+        # if not self.request.user.has_perm(...):
+        #     raise PermissionDenied
+
+        return context
 
 
 def _split_search_terms(query: str) -> list[str]:
