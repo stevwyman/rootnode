@@ -21,17 +21,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        qs = MediaObject.objects.exclude(file="").exclude(file__isnull=True)
+        qs = MediaObject.objects.exclude(file="").exclude(file__isnull=True).order_by("pk")
         if options["tree_id"] is not None:
             qs = qs.filter(gedcom_tree_id=options["tree_id"])
 
         force = options["all"]
-        total = qs.count()
+        # Materialize IDs first so updates during the run cannot affect iteration.
+        ids = list(qs.values_list("pk", flat=True))
+        total = len(ids)
         ok = failed = skipped = 0
 
         self.stdout.write(f"Processing {total} media object(s)…")
 
-        for media in qs.iterator():
+        for pk in ids:
+            media = MediaObject.objects.get(pk=pk)
             for size in ("mini", "small"):
                 field = getattr(media, f"thumb_{size}")
                 if not force and field and field.name:
@@ -41,7 +44,9 @@ class Command(BaseCommand):
                     generate_thumbnail_for_instance(media, size)
                     ok += 1
                     self.stdout.write(
-                        self.style.SUCCESS(f"  #{media.pk} {size}: {getattr(media, f'thumb_{size}').name}")
+                        self.style.SUCCESS(
+                            f"  #{media.pk} {size}: {getattr(media, f'thumb_{size}').name}"
+                        )
                     )
                 except Exception as exc:
                     failed += 1

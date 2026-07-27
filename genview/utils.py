@@ -4,7 +4,12 @@ from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
 from django.urls import reverse
-from .models import FaceTag, Place
+from .models import (
+    FaceTag,
+    Place,
+    tree_thumbs_mini_directory_path,
+    tree_thumbs_small_directory_path,
+)
 
 import io
 import os
@@ -314,18 +319,24 @@ def _save_image(img: Image.Image, dest_path: Path, quality: int = 85) -> None:
     img.save(str(dest_path), format="JPEG", quality=quality, optimize=True)
 
 
+_THUMB_UPLOAD_TO = {
+    "mini": tree_thumbs_mini_directory_path,
+    "small": tree_thumbs_small_directory_path,
+}
+
+
 def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
     """
     Generates and stores the requested thumbnail for a MediaObject instance.
-    Called from signals, management command or on-the-fly via
-    ``instance.get_thumbnail()``.
 
-    Uses the ImageField ``upload_to`` helpers so files land under:
-    ``trees/tree_<id>/thumbs/<size>/<aa>/<bb>/<name>``
-    and the relative path is persisted on ``thumb_mini`` / ``thumb_small``.
+    Important: persists the path with QuerySet.update() so post_save signals
+    are NOT re-entered (instance.save() would recurse into thumbnail generation).
     """
     if size not in THUMB_SIZES:
         raise ValueError("size must be 'mini' or 'small'")
+
+    if not instance.pk:
+        raise ValueError("MediaObject must be saved before thumbnails can be generated")
 
     if not instance.file or not instance.file.name:
         return
@@ -345,7 +356,6 @@ def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
     else:
         thumb_img = _resize_max(pil_img, (target_width, target_height))
 
-    # Encode to JPEG bytes, then let Django storage + upload_to place the file.
     buffer = io.BytesIO()
     thumb_img.save(buffer, format="JPEG", quality=85, optimize=True)
     buffer.seek(0)
@@ -354,14 +364,28 @@ def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
     thumb_name = f"{stem}_thumb_{size}.jpg"
     field_name = f"thumb_{size}"
     thumb_field = getattr(instance, field_name)
+    storage = thumb_field.storage
 
-    # Remove previous file (may live under an old flat path).
-    if thumb_field.name:
+    # Build destination via the same upload_to helper the ImageField uses.
+    rel_path = _THUMB_UPLOAD_TO[size](instance, thumb_name)
+
+    # Remove previous file only from storage (do NOT use FieldFile.delete(),
+    # which clears the model field and invites save/signal recursion).
+    old_name = thumb_field.name or ""
+    if old_name and old_name != rel_path:
         try:
-            thumb_field.delete(save=False)
+            storage.delete(old_name)
         except Exception:
             pass
 
-    # field.save() calls upload_to, writes via storage, and sets the DB path.
-    thumb_field.save(thumb_name, ContentFile(buffer.read()), save=False)
-    instance.save(update_fields=[field_name])
+    # Write bytes; allow overwrite of the same hashed path on regenerate.
+    if storage.exists(rel_path):
+        try:
+            storage.delete(rel_path)
+        except Exception:
+            pass
+    saved_name = storage.save(rel_path, ContentFile(buffer.read()))
+
+    # Persist without firing post_save (avoids endless regenerate loops).
+    type(instance).objects.filter(pk=instance.pk).update(**{field_name: saved_name})
+    setattr(instance, field_name, saved_name)

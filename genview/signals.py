@@ -42,27 +42,29 @@ def portrait_cleanup_on_save(sender, instance, created, **kwargs):
 @receiver(post_save, sender=MediaObject)
 def create_thumbnails_on_save(sender, instance, created, **kwargs):
     """
-    When a MediaObject is created or its file is changed, generate both
-    thumbnails (mini & small). Also backfills missing thumbnails on save.
+    Generate mini & small thumbnails when a MediaObject is created or its
+    file changes. Thumbnail persistence itself must not use instance.save()
+    (see generate_thumbnail_for_instance) so this handler does not re-enter.
     """
     if not instance.file:
         return
 
-    # Avoid recursion when generate_thumbnail_for_instance() saves thumb_* fields.
     update_fields = kwargs.get("update_fields")
-    if update_fields is not None and set(update_fields).issubset({"thumb_mini", "thumb_small"}):
-        return
+    if update_fields is not None:
+        # Ignore saves that only touch thumbnail fields or unrelated columns.
+        if not (set(update_fields) & {"file"}):
+            if not created:
+                return
 
     file_changed = False
     get_dirty_fields = getattr(instance, "get_dirty_fields", None)
     if callable(get_dirty_fields):
         file_changed = "file" in get_dirty_fields()
 
+    if not (created or file_changed):
+        return
+
     for size in ("mini", "small"):
-        thumb_field = getattr(instance, f"thumb_{size}")
-        missing = not thumb_field or not thumb_field.name
-        if not (created or file_changed or missing):
-            continue
         try:
             generate_thumbnail_for_instance(instance, size)
         except Exception as exc:
