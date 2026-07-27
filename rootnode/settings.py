@@ -75,7 +75,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'debug_toolbar',                    # TODO remove later
     'django_bootstrap5',
-    'genview',
+    'genview.apps.GenviewConfig',
     'django_otp',
     'django_otp.plugins.otp_totp',          # TOTP (Google-Authenticator)
     'django_otp.plugins.otp_static',        # Backup-Tokens
@@ -99,7 +99,7 @@ MIDDLEWARE = [
 ]
 
 # Schalte die automatische Anlage nur in den gewünschten Umgebungen an:
-CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev-settings.py
+CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev-settings.py
 
 ROOT_URLCONF = 'rootnode.urls'
 
@@ -214,7 +214,7 @@ LOGIN_REDIRECT_URL = 'genview:tree-list'   # Ziel nach erfolgreichem Login
 LOGOUT_REDIRECT_URL = 'two_factor:login'
 
 # Sicherheitsempfehlung
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 Tage (oder nach Bedarf)
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 Tage (oder nach Bedarf)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 # The URL path where files will be accessible in the browser

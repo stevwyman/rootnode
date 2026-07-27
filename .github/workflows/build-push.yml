@@ -10,7 +10,7 @@ on:
       - main          # bei jedem Push auf main (Produktions-Branch)
       - develop       # optional: auch für develop-Branch
     tags:
-      - 'v*'          # bei Release-Tags, z. B. v1.2.3
+      - 'v*'          # bei Release-Tags, z. B. v1.2.3
   pull_request:
     branches:
       - main
@@ -75,7 +75,7 @@ jobs:
           ALLOWED_HOSTS: "localhost,127.0.0.1"
           # ------------------- DB (SQLite) --------------------
           # Für PostgreSQL-Tests würdest du hier die Service-Variablen
-          # setzen (z. B. DATABASE_URL=postgres://...)
+          # setzen (z. B. DATABASE_URL=postgres://...)
         run: |
           # Datenbank-Migrations ausführen (erzeugt die SQLite-DB)
           python manage.py migrate --noinput
@@ -93,14 +93,14 @@ jobs:
 
     # --------------------------------------------------------
     # 2.2.1  Environment – definiere Variablen, die im Build
-    #        verwendet werden (z. B. Django-Settings)
+    #        verwendet werden (z. B. Django-Settings)
     # --------------------------------------------------------
     env:
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/rootnode   # -> Docker-Hub-Repo
       # Tag-Varianten:
       #   latest            (immer)
       #   sha-${GITHUB_SHA} (eindeutig pro Commit)
-      #   branch-${GITHUB_REF_NAME} (z. B. branch-develop)
+      #   branch-${GITHUB_REF_NAME} (z. B. branch-develop)
       LATEST_TAG: latest
       SHA_TAG: sha-${{ github.sha }}
       BRANCH_TAG: branch-${{ github.ref_name }}

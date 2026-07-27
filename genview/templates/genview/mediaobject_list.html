@@ -82,9 +82,9 @@
                 <div class="col">
                     <div class="card h-100 shadow-sm">
                         {% if item.file and item.file.name %}
-                            {% if item.is_image and item.file %}
+                            {% if item.is_image or item.is_pdf and item.file %}
                                 <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
-                                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" 
+                                    <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}" 
                                         class="card-img-top" 
                                         alt="{{ item.title }}" 
                                         style="object-fit: cover; height: 200px;">

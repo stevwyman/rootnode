@@ -4,7 +4,21 @@ from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
 from django.urls import reverse
-from .models import FaceTag, Place
+from .models import FaceTag, Place, tree_media_directory_path
+
+import io
+import os
+from pathlib import Path
+from typing import Tuple
+
+from django.core.files.base import ContentFile
+from django.conf import settings
+
+from PIL import Image, ImageOps
+
+# ---------- PDF handling – PyMuPDF (fitz) ----------
+# pip install "PyMuPDF>=1.22"
+import fitz  # noqa: E402
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
     """
@@ -111,9 +125,9 @@ def geocode_place(query, limit=1, country_codes=None):
         "limit": limit,
     }
     if country_codes:
-        params["countrycodes"] = country_codes   # z. B. "de" für Deutschland
+        params["countrycodes"] = country_codes   # z. B. "de" für Deutschland
 
-    # Nominatim verlangt einen User-Agent-Header – sonst 403
+    # Nominatim verlangt einen User-Agent-Header – sonst 403
     headers = {
         "User-Agent": "YourAppName/1.0 (+https://stevwyman.com)",
         "Accept-Language": "de",   # Ergebnis in Deutsch (optional)
@@ -246,3 +260,98 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
 
     return nodes
 
+
+# ------------------------------------------------------------------
+# Size definitions (width, height) – keep aspect ratio.
+# ------------------------------------------------------------------
+THUMB_SIZES = {
+    "mini":  (86, 86),   # square, center-cropped
+    "small": (200, 200), # max dimension, keep aspect ratio
+}
+
+
+def _open_image(file_path: Path) -> Image.Image:
+    """Open an image with Pillow, ensure RGB mode."""
+    img = Image.open(file_path)
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGB")
+    return img
+
+
+def _render_pdf_first_page(pdf_path: Path) -> Image.Image:
+    """Render first page of PDF to a Pillow Image (RGB)."""
+    doc = fitz.open(str(pdf_path))
+    if doc.page_count == 0:
+        raise ValueError("PDF contains no pages")
+    page = doc.load_page(0)               # 0-based index
+    pix = page.get_pixmap(dpi=150)        # reasonable resolution
+    img_bytes = pix.tobytes("png")
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    doc.close()
+    return img
+
+
+def _crop_center(img: Image.Image, size: Tuple[int, int]) -> Image.Image:
+    """Center-crop the image to exactly *size* (used for mini thumbs)."""
+    return ImageOps.fit(img, size, method=Image.LANCZOS, centering=(0.5, 0.5))
+
+
+def _resize_max(img: Image.Image, max_size: Tuple[int, int]) -> Image.Image:
+    """Resize image so that neither width nor height exceeds *max_size*."""
+    img.thumbnail(max_size, Image.LANCZOS)
+    return img
+
+
+def _save_image(img: Image.Image, dest_path: Path, quality: int = 85) -> None:
+    """Save Pillow image to *dest_path* (creates parent dirs)."""
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(str(dest_path), format="JPEG", quality=quality, optimize=True)
+
+
+def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
+    """
+    Generates and stores the requested thumbnail for a MediaObject instance.
+    Called from signals, management command or on-the-fly via
+    ``instance.get_thumbnail()``.
+    """
+    if size not in THUMB_SIZES:
+        raise ValueError("size must be 'mini' or 'small'")
+
+    # Determine source file (image or pdf)
+    source_path = Path(instance.file.path)
+
+    if instance.is_image:
+        pil_img = _open_image(source_path)
+    elif instance.is_pdf:
+        pil_img = _render_pdf_first_page(source_path)
+    else:
+        # Not a supported type – skip thumbnail creation
+        return
+
+    # ------------------------------------------------------------------
+    # Build thumbnail according to requested size
+    # ------------------------------------------------------------------
+    target_width, target_height = THUMB_SIZES[size]
+
+    if size == "mini":
+        thumb_img = _crop_center(pil_img, (target_width, target_height))
+    else:  # small
+        thumb_img = _resize_max(pil_img, (target_width, target_height))
+
+    # ------------------------------------------------------------------
+    # Destination filename: <original_name>_thumb_<size>.jpg
+    # ------------------------------------------------------------------
+    stem = source_path.stem
+    thumb_name = f"{stem}_thumb_{size}.jpg"
+    thumb_rel_path = tree_media_directory_path(instance, thumb_name)
+    thumb_abs_path = Path(settings.MEDIA_ROOT) / thumb_rel_path
+
+    # Save thumbnail to disk
+    _save_image(thumb_img, thumb_abs_path, quality=85)
+
+    # ------------------------------------------------------------------
+    # Update the model field (thumb_mini / thumb_small)
+    # ------------------------------------------------------------------
+    thumb_field = getattr(instance, f"thumb_{size}")
+    thumb_field.name = thumb_rel_path  # relative to MEDIA_ROOT
+    instance.save(update_fields=[f"thumb_{size}"])

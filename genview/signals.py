@@ -3,6 +3,8 @@ from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from .models import MediaObject
 
+from .utils import generate_thumbnail_for_instance
+
 
 @receiver(m2m_changed, sender=MediaObject.individuals.through)
 def ensure_single_portrait(sender, instance, action, pk_set, **kwargs):
@@ -35,3 +37,23 @@ def portrait_cleanup_on_save(sender, instance, created, **kwargs):
             MediaObject.objects.filter(individuals=person, is_portrait=True).exclude(
                 pk=instance.pk
             ).update(is_portrait=False)
+
+
+@receiver(post_save, sender=MediaObject)
+def create_thumbnails_on_save(sender, instance, created, **kwargs):
+    """
+    When a MediaObject is created or its file is changed, generate both
+    thumbnails (mini & small).  Existing thumbnails are regenerated only
+    if the file field has changed.
+    """
+    if not instance.file:
+        return
+
+    # If the instance is newly created OR the file was changed → (re)generate.
+    if created or "file" in instance.get_dirty_fields():   # optional: django-dirtyfields
+        for size in ("mini", "small"):
+            try:
+                generate_thumbnail_for_instance(instance, size)
+            except Exception as exc:      # never break the save transaction
+                # you may log the error or raise a custom warning
+                print(f"Thumbnail generation failed for {instance.id} ({size}): {exc}")

@@ -149,6 +149,12 @@ urlpatterns = [
         views.ProtectedMediaFileView.as_view(),
         name="media-file",
     ),
+    # Thumbnail-Variante (size = mini | small)
+    path(
+        "tree/<int:tree_id>/media/<int:pk>/thumb/<slug:size>/",
+        views.ProtectedMediaFileView.as_view(),
+        name="media-thumb",
+    ),
     path(
         'tree/<int:tree_id>/media/<int:pk>/', 
         views.MediaObjectDetailView.as_view(), 

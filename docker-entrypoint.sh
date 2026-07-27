@@ -4,8 +4,8 @@ set -e
 # ------------------------------------------------------------------
 # 1️⃣ UID/GID des momentan laufenden Users (appuser)
 # ------------------------------------------------------------------
-APP_UID=$(id -u)   # z. B. 1000
-APP_GID=$(id -g)   # z. B. 1000
+APP_UID=$(id -u)   # z. B. 1000
+APP_GID=$(id -g)   # z. B. 1000
 
 echo "🚀 Container startet als UID=${APP_UID} GID=${APP_GID}"
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 
 from datetime import date
 from typing import Optional
@@ -13,6 +14,7 @@ from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
 
@@ -30,6 +32,7 @@ def tree_media_directory_path(instance, filename):
     # Build the path: trees/tree_<id>/<filename>
     return f"trees/tree_{tree_id}/{filename}"
 
+
 def tree_annotated_media_directory_path(instance, filename):
     """
     Dynamically generates the upload path for a media file based on its Tree ID.
@@ -42,6 +45,34 @@ def tree_annotated_media_directory_path(instance, filename):
     # Build the path: trees/tree_<id>/<filename>
     return f"trees/tree_{tree_id}/annotated/{filename}"
 
+
+def tree_thumbs_mini_directory_path(instance, filename):
+    """
+    Erzeugt einen 2‑stufigen Hash‑Pfad (z. B. 9f/3a/…/original.jpg)
+    und legt die Datei in einen Jahres‑/Monats‑Ordner.
+    """
+    # Grab the tree ID. Fallback to 'unassigned' just in case,
+    # though your forms should prevent this.
+    tree_id = instance.gedcom_tree_id or "unassigned"
+    
+    # zufälliger, aber reproduzierbarer Hash aus Zeitstempel + Dateiname
+    raw = f"{timezone.now().timestamp()}-{filename}"
+    h = hashlib.md5(raw.encode()).hexdigest()   # 32 Zeichen
+    return f"trees/tree_{tree_id}/thumbs/mini/{h[:2]}/{h[2:4]}/{h[4:]}/{filename}"  
+
+def tree_thumbs_small_directory_path(instance, filename):
+    """
+    Erzeugt einen 2‑stufigen Hash‑Pfad (z. B. 9f/3a/…/original.jpg)
+    und legt die Datei in einen Jahres‑/Monats‑Ordner.
+    """
+    # Grab the tree ID. Fallback to 'unassigned' just in case,
+    # though your forms should prevent this.
+    tree_id = instance.gedcom_tree_id or "unassigned"
+    
+    # zufälliger, aber reproduzierbarer Hash aus Zeitstempel + Dateiname
+    raw = f"{timezone.now().timestamp()}-{filename}"
+    h = hashlib.md5(raw.encode()).hexdigest()   # 32 Zeichen
+    return f"trees/tree_{tree_id}/thumbs/small/{h[:2]}/{h[2:4]}/{h[4:]}/{filename}"      
 
 class Tree(models.Model):
     """Represents a distinct family tree (a GEDCOM file import)."""
@@ -990,6 +1021,24 @@ class MediaObject(GedcomIdMixin):
 
     is_private = models.BooleanField(default=False)
 
+    # ----------------------------------------------------------------
+    # Thumbnails – we store the relative path (same storage as `file`)
+    # ----------------------------------------------------------------
+    thumb_mini  = models.ImageField(
+        upload_to=tree_thumbs_mini_directory_path,
+        blank=True,
+        null=True,
+        editable=False,
+        help_text=_("Mini-Thumbnail (≈ 80 × 80 px)")
+    )
+    thumb_small = models.ImageField(
+        upload_to=tree_thumbs_small_directory_path,
+        blank=True,
+        null=True,
+        editable=False,
+        help_text=_("Small-Thumbnail (≈ 200 × 200 px)")
+    )
+
     # Beziehungen zu den anderen Entitäten
     individuals = models.ManyToManyField(
         Individual,
@@ -1040,6 +1089,29 @@ class MediaObject(GedcomIdMixin):
         return self.file.name.lower().endswith(
             (".png", ".jpg", ".jpeg", ".gif", ".webp")
         )
+
+    @property
+    def is_pdf(self) -> bool:
+        return self.file.name.lower().endswith('.pdf')
+
+    def get_thumbnail(self, size: str = "mini") -> str:
+        """
+        Returns the public URL of the requested thumbnail.
+        Size may be ``mini`` or ``small``.
+        If the thumbnail does not exist yet we create it on-the-fly.
+        """
+        if size not in ("mini", "small"):
+            raise ValueError("size must be 'mini' or 'small'")
+
+        thumb_field = getattr(self, f"thumb_{size}")
+        if thumb_field and thumb_field.name:
+            return thumb_field.url
+
+        # thumbnail not generated → create it now
+        from .utils import generate_thumbnail_for_instance
+        generate_thumbnail_for_instance(self, size)
+        thumb_field = getattr(self, f"thumb_{size}")
+        return thumb_field.url if thumb_field else ""
     
     @property
     def is_confidential(self):

@@ -12,4 +12,5 @@ python-gedcom
 qrcode
 requests
 whitenoise
+PyMuPDF>=1.22
 

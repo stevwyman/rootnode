@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import mimetypes
+from pathlib import Path
+
 from datetime import date
 from itertools import chain
 from django.contrib import messages
@@ -58,7 +61,7 @@ from .mixins import (
     SortableListViewMixin, 
     FilterableListViewMixin
 )
-from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_flat_family_tree
+from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_flat_family_tree, generate_thumbnail_for_instance
 
 
 def home(request):
@@ -1306,13 +1309,55 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
                 
         # ---------------------------------------------------------
 
-        # 3. Check if the file actually exists on the hard drive
-        if not media_obj.file or not os.path.exists(media_obj.file.path):
+        # -------------------------------------------------------------
+        # 3. Welches File soll ausgeliefert werden? --------------------
+        #   * Ohne `size`-Parameter → Original-File
+        #   * Mit `size=mini|small` → entsprechendes Thumbnail
+        # -------------------------------------------------------------
+        size = self.kwargs.get("size")          # z. B. "mini" oder "small"
+
+        if size in ("mini", "small"):
+            # ----- Thumbnail prüfen/erzeugen -----------------------
+            thumb_field = getattr(media_obj, f"thumb_{size}")
+
+            # Falls das Thumbnail noch nicht existiert, on-the-fly erzeugen
+            if not thumb_field or not thumb_field.name:
+                try:
+                    generate_thumbnail_for_instance(media_obj, size)
+                    # Nach dem Schreiben das Feld neu aus der DB holen,
+                    # sonst hat das Model noch keinen Namen.
+                    media_obj.refresh_from_db(fields=[f"thumb_{size}"])
+                    thumb_field = getattr(media_obj, f"thumb_{size}")
+                except Exception as exc:
+                    # Thumbnail-Erstellung schlug fehl → 404 zurückgeben
+                    raise Http404(f"Thumbnail-Erstellung fehlgeschlagen: {exc}")
+
+            # Pfad des Thumbnails verwenden
+            if not thumb_field or not thumb_field.name:
+                raise Http404("Thumbnail nicht gefunden.")
+            file_path = Path(media_obj.file.storage.path(thumb_field.name))
+        else:
+            # ----- Original-Datei ---------------------------------
+            if not media_obj.file or not os.path.exists(media_obj.file.path):
+                raise Http404("Datei nicht gefunden.")
+            file_path = Path(media_obj.file.path)
+
+        # -------------------------------------------------------------
+        # 4️⃣  Datei existiert? → FileResponse zurückgeben
+        # -------------------------------------------------------------
+        if not file_path.exists():
             raise Http404("Datei nicht gefunden.")
 
-        # 4. Serve the file securely
-        file_handle = open(media_obj.file.path, "rb")
-        return FileResponse(file_handle)
+        # richtiger MIME-Typ (bspw. image/jpeg, application/pdf)
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        mime_type = mime_type or "application/octet-stream"
+
+        file_handle = open(file_path, "rb")
+        response = FileResponse(file_handle, content_type=mime_type)
+
+        # Optional: Browser-Caching aktivieren (1 Tag)
+        response["Cache-Control"] = "public, max-age=86400"
+        return response
 
 
 class MediaObjectDetailView(TreeAccessMixin, DetailView):
@@ -1751,7 +1796,7 @@ class ToggleMediaCategoryView(LoginRequiredMixin, TreeEditAccessMixin, View):
         except Exception as e:
             return HttpResponseBadRequest(JsonResponse({"error": str(e)}))
 
-        # ggf. Berechtigungs-Check (z. B. nur Besitzer/Admin darf ändern)
+        # ggf. Berechtigungs-Check (z. B. nur Besitzer/Admin darf ändern)
         media = get_object_or_404(MediaObject, pk=media_id)
 
         # ---- Kategorie umschalten ----
