@@ -14,7 +14,6 @@ from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
 from django.dispatch import receiver
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
 
@@ -46,33 +45,28 @@ def tree_annotated_media_directory_path(instance, filename):
     return f"trees/tree_{tree_id}/annotated/{filename}"
 
 
-def tree_thumbs_mini_directory_path(instance, filename):
+def _hashed_thumb_directory_path(instance, filename, size: str) -> str:
     """
-    Erzeugt einen 2‑stufigen Hash‑Pfad (z. B. 9f/3a/…/original.jpg)
-    und legt die Datei in einen Jahres‑/Monats‑Ordner.
+    Two-level hash sharding so leaf folders stay small and lookups stay fast.
+
+    Example: trees/tree_5/thumbs/mini/9f/3a/photo_thumb_mini.jpg
+
+    The hash is derived from the original media path (stable across regenerations)
+    so re-creating a thumbnail overwrites the same location instead of orphaning files.
     """
-    # Grab the tree ID. Fallback to 'unassigned' just in case,
-    # though your forms should prevent this.
     tree_id = instance.gedcom_tree_id or "unassigned"
-    
-    # zufälliger, aber reproduzierbarer Hash aus Zeitstempel + Dateiname
-    raw = f"{timezone.now().timestamp()}-{filename}"
-    h = hashlib.md5(raw.encode()).hexdigest()   # 32 Zeichen
-    return f"trees/tree_{tree_id}/thumbs/mini/{h[:2]}/{h[2:4]}/{h[4:]}/{filename}"  
+    seed = instance.file.name if instance.file and instance.file.name else filename
+    h = hashlib.md5(seed.encode("utf-8")).hexdigest()
+    return f"trees/tree_{tree_id}/thumbs/{size}/{h[:2]}/{h[2:4]}/{filename}"
+
+
+def tree_thumbs_mini_directory_path(instance, filename):
+    return _hashed_thumb_directory_path(instance, filename, "mini")
+
 
 def tree_thumbs_small_directory_path(instance, filename):
-    """
-    Erzeugt einen 2‑stufigen Hash‑Pfad (z. B. 9f/3a/…/original.jpg)
-    und legt die Datei in einen Jahres‑/Monats‑Ordner.
-    """
-    # Grab the tree ID. Fallback to 'unassigned' just in case,
-    # though your forms should prevent this.
-    tree_id = instance.gedcom_tree_id or "unassigned"
-    
-    # zufälliger, aber reproduzierbarer Hash aus Zeitstempel + Dateiname
-    raw = f"{timezone.now().timestamp()}-{filename}"
-    h = hashlib.md5(raw.encode()).hexdigest()   # 32 Zeichen
-    return f"trees/tree_{tree_id}/thumbs/small/{h[:2]}/{h[2:4]}/{h[4:]}/{filename}"      
+    return _hashed_thumb_directory_path(instance, filename, "small")
+
 
 class Tree(models.Model):
     """Represents a distinct family tree (a GEDCOM file import)."""
@@ -1217,9 +1211,9 @@ class AlternativeName(models.Model):
 @receiver(post_delete, sender=MediaObject)
 def auto_delete_file_on_delete(sender, instance, **kwargs):
     """
-    Löscht die physische Datei vom Server, wenn das MediaObject
+    Löscht die physischen Dateien vom Server, wenn das MediaObject
     (z.B. durch das Löschen eines Stammbaums) aus der Datenbank entfernt wird.
     """
-    if instance.file:
-        if os.path.isfile(instance.file.path):
-            os.remove(instance.file.path)
+    for field in (instance.file, instance.thumb_mini, instance.thumb_small):
+        if field and field.name and os.path.isfile(field.path):
+            os.remove(field.path)

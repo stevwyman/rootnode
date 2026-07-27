@@ -43,17 +43,27 @@ def portrait_cleanup_on_save(sender, instance, created, **kwargs):
 def create_thumbnails_on_save(sender, instance, created, **kwargs):
     """
     When a MediaObject is created or its file is changed, generate both
-    thumbnails (mini & small).  Existing thumbnails are regenerated only
-    if the file field has changed.
+    thumbnails (mini & small). Also backfills missing thumbnails on save.
     """
     if not instance.file:
         return
 
-    # If the instance is newly created OR the file was changed → (re)generate.
-    if created or "file" in instance.get_dirty_fields():   # optional: django-dirtyfields
-        for size in ("mini", "small"):
-            try:
-                generate_thumbnail_for_instance(instance, size)
-            except Exception as exc:      # never break the save transaction
-                # you may log the error or raise a custom warning
-                print(f"Thumbnail generation failed for {instance.id} ({size}): {exc}")
+    # Avoid recursion when generate_thumbnail_for_instance() saves thumb_* fields.
+    update_fields = kwargs.get("update_fields")
+    if update_fields is not None and set(update_fields).issubset({"thumb_mini", "thumb_small"}):
+        return
+
+    file_changed = False
+    get_dirty_fields = getattr(instance, "get_dirty_fields", None)
+    if callable(get_dirty_fields):
+        file_changed = "file" in get_dirty_fields()
+
+    for size in ("mini", "small"):
+        thumb_field = getattr(instance, f"thumb_{size}")
+        missing = not thumb_field or not thumb_field.name
+        if not (created or file_changed or missing):
+            continue
+        try:
+            generate_thumbnail_for_instance(instance, size)
+        except Exception as exc:
+            print(f"Thumbnail generation failed for {instance.id} ({size}): {exc}")

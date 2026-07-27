@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from difflib import SequenceMatcher
 from django.db import transaction
 from django.urls import reverse
-from .models import FaceTag, Place, tree_media_directory_path
+from .models import FaceTag, Place
 
 import io
 import os
@@ -271,10 +271,16 @@ THUMB_SIZES = {
 
 
 def _open_image(file_path: Path) -> Image.Image:
-    """Open an image with Pillow, ensure RGB mode."""
+    """Open an image with Pillow and convert to RGB (JPEG-safe)."""
     img = Image.open(file_path)
-    if img.mode not in ("RGB", "RGBA"):
-        img = img.convert("RGB")
+    # JPEG cannot store alpha; flatten onto white when needed.
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        background = Image.new("RGB", rgba.size, (255, 255, 255))
+        background.paste(rgba, mask=rgba.split()[-1])
+        return background
+    if img.mode != "RGB":
+        return img.convert("RGB")
     return img
 
 
@@ -313,11 +319,17 @@ def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
     Generates and stores the requested thumbnail for a MediaObject instance.
     Called from signals, management command or on-the-fly via
     ``instance.get_thumbnail()``.
+
+    Uses the ImageField ``upload_to`` helpers so files land under:
+    ``trees/tree_<id>/thumbs/<size>/<aa>/<bb>/<name>``
+    and the relative path is persisted on ``thumb_mini`` / ``thumb_small``.
     """
     if size not in THUMB_SIZES:
         raise ValueError("size must be 'mini' or 'small'")
 
-    # Determine source file (image or pdf)
+    if not instance.file or not instance.file.name:
+        return
+
     source_path = Path(instance.file.path)
 
     if instance.is_image:
@@ -325,33 +337,31 @@ def generate_thumbnail_for_instance(instance, size: str = "mini") -> None:
     elif instance.is_pdf:
         pil_img = _render_pdf_first_page(source_path)
     else:
-        # Not a supported type – skip thumbnail creation
         return
 
-    # ------------------------------------------------------------------
-    # Build thumbnail according to requested size
-    # ------------------------------------------------------------------
     target_width, target_height = THUMB_SIZES[size]
-
     if size == "mini":
         thumb_img = _crop_center(pil_img, (target_width, target_height))
-    else:  # small
+    else:
         thumb_img = _resize_max(pil_img, (target_width, target_height))
 
-    # ------------------------------------------------------------------
-    # Destination filename: <original_name>_thumb_<size>.jpg
-    # ------------------------------------------------------------------
-    stem = source_path.stem
+    # Encode to JPEG bytes, then let Django storage + upload_to place the file.
+    buffer = io.BytesIO()
+    thumb_img.save(buffer, format="JPEG", quality=85, optimize=True)
+    buffer.seek(0)
+
+    stem = Path(instance.file.name).stem
     thumb_name = f"{stem}_thumb_{size}.jpg"
-    thumb_rel_path = tree_media_directory_path(instance, thumb_name)
-    thumb_abs_path = Path(settings.MEDIA_ROOT) / thumb_rel_path
+    field_name = f"thumb_{size}"
+    thumb_field = getattr(instance, field_name)
 
-    # Save thumbnail to disk
-    _save_image(thumb_img, thumb_abs_path, quality=85)
+    # Remove previous file (may live under an old flat path).
+    if thumb_field.name:
+        try:
+            thumb_field.delete(save=False)
+        except Exception:
+            pass
 
-    # ------------------------------------------------------------------
-    # Update the model field (thumb_mini / thumb_small)
-    # ------------------------------------------------------------------
-    thumb_field = getattr(instance, f"thumb_{size}")
-    thumb_field.name = thumb_rel_path  # relative to MEDIA_ROOT
-    instance.save(update_fields=[f"thumb_{size}"])
+    # field.save() calls upload_to, writes via storage, and sets the DB path.
+    thumb_field.save(thumb_name, ContentFile(buffer.read()), save=False)
+    instance.save(update_fields=[field_name])

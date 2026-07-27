@@ -82,6 +82,16 @@ DJANGO_SUPERUSER_PASSWORD=admin
 
 ## some tweaks
 
+### hashed subfolders thumbs
+
+As we have multiple small and mini thumbnail images in the different pages, we are using hashed folders.
+
+```sh
+python manage.py generate_thumbnails
+````
+
+Use --all to regenerate everything, or --tree-id 2 to limit scope. After that you should see files under thumbs/mini|small/<aa>/<bb>/ and paths filled in the MediaObject fields
+
 ### global tree view
 
 we have two different approaches to handle the tree view, here are two different javascript to render the tree either by merging new data, or by replacing. Both are triggered by double-click.
