@@ -208,9 +208,10 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
         # 1. Prüfen, ob ein Profilbild existiert (genau wie in deinem Template)
         if ind.profile_image and ind.profile_image.file:
             # {% url 'genview:media-file' tree_id=tree_id pk=ind.profile_image.pk %} in Python:
-            avatar_url = reverse('genview:media-file', kwargs={
+            avatar_url = reverse('genview:media-thumb', kwargs={
                 'tree_id': tree_id, 
-                'pk': ind.profile_image.pk
+                'pk': ind.profile_image.pk,
+                'size': 'mini'
             })
         else:
             # 2. Fallback: Wir ahmen deinen "bg-secondary text-white" div als echtes Bild nach!

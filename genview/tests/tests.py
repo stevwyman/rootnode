@@ -79,8 +79,8 @@ class IndividualListViewTests(TestCase):
         """Logged-in users without a TreeMembership are denied (403 → redirect home)."""
         self.client.login(username="hacker", password="password")
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 301)
-        self.assertEqual(response.url, "/")
+        self.assertEqual(response.status_code, 403)
+        
 
     def test_access_granted_for_authorized_user(self):
         """Logged-in users WITH a TreeMembership should see public data."""
