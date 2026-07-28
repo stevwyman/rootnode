@@ -515,7 +515,7 @@
                                     <div class="card h-100 shadow-sm">
                                         {% if media.file and media.file.name %}
                                             <a href="{% url 'genview:media-detail' tree_id media.pk %}">
-                                                <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="card-img-top" alt="{{ media.title }}">
+                                                <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='small' %}" class="card-img-top" alt="{{ media.title }}">
                                             </a>
                                         {% else %}
                                             <div class="bg-light text-center py-5 text-muted card-img-top">📷 Bild fehlt</div>
