@@ -139,24 +139,31 @@
                 })
                 .then(res => res.json())
                 .then(json => {
+                    resultDiv.replaceChildren();
+                    const box = document.createElement('div');
                     if (json.status === 'ok') {
-                        resultDiv.innerHTML = `
-                            <div class="alert alert-success">
-                                ${json.message}<br>
-                                Koordinaten: ${json.lat}, ${json.lon}
-                            </div>`;
+                        box.className = 'alert alert-success';
+                        box.append(document.createTextNode(String(json.message || '')));
+                        box.append(document.createElement('br'));
+                        box.append(document.createTextNode(
+                            `Koordinaten: ${json.lat}, ${json.lon}`
+                        ));
                     } else {
-                        resultDiv.innerHTML = `
-                            <div class="alert alert-danger">
-                                Fehler beim Geocode: ${json.error || 'Unbekannt'}
-                            </div>`;
+                        box.className = 'alert alert-danger';
+                        box.append(document.createTextNode(
+                            `Fehler beim Geocode: ${json.error || 'Unbekannt'}`
+                        ));
                     }
+                    resultDiv.append(box);
                 })
                 .catch(err => {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-danger">
-                            Netzwerk-/Server-Fehler: ${err}
-                        </div>`;
+                    resultDiv.replaceChildren();
+                    const box = document.createElement('div');
+                    box.className = 'alert alert-danger';
+                    box.append(document.createTextNode(
+                        `Netzwerk-/Server-Fehler: ${err}`
+                    ));
+                    resultDiv.append(box);
                 })
                 .finally(() => {
                     btn.disabled = false;

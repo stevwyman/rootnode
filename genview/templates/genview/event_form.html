@@ -107,7 +107,8 @@
                                         <div class="text-end text-nowrap ms-3">
                                             {% url 'genview:media-detail' tree_id=tree_id pk=media.pk as detail_url %}
                                             {% if media.file %}
-                                                {% action_buttons layout="labeled" detail_url=detail_url open_url=media.file.url open_new_tab=True %}
+                                                {% url 'genview:media-file' tree_id=tree_id pk=media.pk as open_url %}
+                                                {% action_buttons layout="labeled" detail_url=detail_url open_url=open_url open_new_tab=True %}
                                             {% else %}
                                                 {% action_buttons layout="labeled" detail_url=detail_url %}
                                             {% endif %}

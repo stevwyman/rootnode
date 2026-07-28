@@ -1,5 +1,7 @@
+from datetime import date
+
 from django.contrib.auth.mixins import UserPassesTestMixin
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 
 from .models import TreeMembership, Tree
@@ -10,6 +12,101 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_authenticated and self.request.user.is_superuser # type: ignore
     
+
+
+def filter_public_individuals(qs):
+    """
+    ORM approximation of Individual.is_confidential == False.
+    Slightly over-redacts edge cases (e.g. old marriage, no birth/death).
+    """
+    from genview.models import Event
+
+    today = date.today()
+    death_cutoff = date(today.year - 35, today.month, today.day)
+    birth_cutoff = date(today.year - 115, today.month, today.day)
+
+    has_public_death = Exists(
+        Event.objects.filter(
+            individual_id=OuterRef("pk"),
+            event_type__tag="DEAT",
+            parsed_date__lt=death_cutoff,
+        )
+    )
+    has_dated_death = Exists(
+        Event.objects.filter(
+            individual_id=OuterRef("pk"),
+            event_type__tag="DEAT",
+            parsed_date__isnull=False,
+        )
+    )
+    has_old_birth = Exists(
+        Event.objects.filter(
+            individual_id=OuterRef("pk"),
+            event_type__tag="BIRT",
+            parsed_date__lt=birth_cutoff,
+        )
+    )
+    return qs.annotate(
+        _has_public_death=has_public_death,
+        _has_dated_death=has_dated_death,
+        _has_old_birth=has_old_birth,
+    ).filter(
+        Q(_has_public_death=True)
+        | (Q(_has_dated_death=False) & Q(_has_old_birth=True))
+    )
+
+
+def apply_privacy_to_individual_qs(qs, apply_privacy: bool):
+    if not apply_privacy:
+        return qs
+    return filter_public_individuals(qs)
+
+
+def apply_privacy_to_family_qs(qs, apply_privacy: bool, tree_id):
+    if not apply_privacy:
+        return qs
+    from genview.models import Individual
+
+    public_ids = filter_public_individuals(
+        Individual.objects.filter(gedcom_tree_id=tree_id)
+    ).values_list("pk", flat=True)
+    return qs.filter(
+        (Q(husband__isnull=True) | Q(husband_id__in=public_ids))
+        & (Q(wife__isnull=True) | Q(wife_id__in=public_ids))
+    )
+
+
+def apply_privacy_to_media_qs(qs, apply_privacy: bool, tree_id):
+    if not apply_privacy:
+        return qs
+    from genview.models import Individual
+
+    confidential_ids = Individual.objects.filter(gedcom_tree_id=tree_id).exclude(
+        pk__in=filter_public_individuals(
+            Individual.objects.filter(gedcom_tree_id=tree_id)
+        ).values_list("pk", flat=True)
+    )
+    return qs.filter(is_private=False).exclude(individuals__in=confidential_ids).distinct()
+
+
+def apply_privacy_to_event_qs(qs, apply_privacy: bool, tree_id):
+    if not apply_privacy:
+        return qs
+    from genview.models import Individual
+
+    public_ids = filter_public_individuals(
+        Individual.objects.filter(gedcom_tree_id=tree_id)
+    ).values_list("pk", flat=True)
+    # Keep events for public individuals, or family events where both spouses are public/null
+    return qs.filter(
+        Q(individual_id__in=public_ids)
+        | (
+            Q(individual__isnull=True)
+            & (Q(family__husband__isnull=True) | Q(family__husband_id__in=public_ids))
+            & (Q(family__wife__isnull=True) | Q(family__wife_id__in=public_ids))
+        )
+    )
+
 
 class TreeAccessMixin(UserPassesTestMixin):
 
@@ -31,12 +128,10 @@ class TreeAccessMixin(UserPassesTestMixin):
                     gedcom_tree_id=tree_id
                 )
                 
-                # Voller Durchblick für alle Mitglieder (VIEWER, EDITOR, ADMIN): 
-                # Datenschutz aushebeln!
+                # EDITOR/ADMIN see unredacted data; VIEWER still gets privacy.
                 if membership.role in [
-                    TreeMembership.Role.VIEWER, 
-                    TreeMembership.Role.EDITOR, 
-                    TreeMembership.Role.ADMIN
+                    TreeMembership.Role.EDITOR,
+                    TreeMembership.Role.ADMIN,
                 ]:
                     return False
                     
@@ -149,26 +244,45 @@ class TreeAccessMixin(UserPassesTestMixin):
         return context
     
 
+def user_can_edit_tree(user, tree_id) -> bool:
+    """True if *user* may mutate data in the given tree (EDITOR/ADMIN/superuser)."""
+    if getattr(user, "is_superuser", False):
+        return True
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return TreeMembership.objects.filter(
+        user=user,
+        gedcom_tree_id=tree_id,
+        role__in=[TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN],
+    ).exists()
+
+
+def user_can_admin_tree(user, tree_id) -> bool:
+    """True if *user* may manage memberships / public flag for the tree."""
+    if getattr(user, "is_superuser", False):
+        return True
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return TreeMembership.objects.filter(
+        user=user,
+        gedcom_tree_id=tree_id,
+        role=TreeMembership.Role.ADMIN,
+    ).exists()
+
+
 class TreeEditAccessMixin(TreeAccessMixin):
     """
-    Sorgt dafür, dass man zum Erstellen/Bearbeiten/Löschen zwingend 
+    Sorgt dafür, dass man zum Erstellen/Bearbeiten/Löschen zwingend
     eingeloggt sein muss UND eine passende Rolle (EDITOR/ADMIN) benötigt.
     """
     def test_func(self):
-        if self.request.user.is_superuser:
-            return True
+        return user_can_edit_tree(self.request.user, self.kwargs.get("tree_id"))
 
-        tree_id = self.kwargs.get('tree_id')
-        
-        if self.request.user.is_authenticated:
-            return TreeMembership.objects.filter(
-                user=self.request.user, 
-                gedcom_tree_id=tree_id,
-                # Nur Editoren und Admins dürfen bearbeiten
-                role__in=[TreeMembership.Role.EDITOR, TreeMembership.Role.ADMIN]
-            ).exists()
 
-        return False
+class TreeAdminAccessMixin(TreeAccessMixin):
+    """Requires login + tree ADMIN (or superuser) for membership / visibility mgmt."""
+    def test_func(self):
+        return user_can_admin_tree(self.request.user, self.kwargs.get("tree_id"))
 
 
 class SortableListViewMixin:

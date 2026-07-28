@@ -20,8 +20,6 @@ from django.conf.urls.i18n import i18n_patterns
 from genview import views as genview_views
 from two_factor.urls import urlpatterns as tf_urls
 
-from debug_toolbar.toolbar import debug_toolbar_urls # TODO remove later
-
 urlpatterns = [
 
     # 2FA-Routen (vor allen anderen geschützten Routen)
@@ -42,5 +40,6 @@ urlpatterns += i18n_patterns(
 # -------------------------------------------------
 # DEBUG-Toolbar nur aktivieren, wenn DEBUG=True
 if settings.DEBUG:
+    from debug_toolbar.toolbar import debug_toolbar_urls
     urlpatterns += debug_toolbar_urls()
 

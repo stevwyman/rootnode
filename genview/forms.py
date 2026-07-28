@@ -70,8 +70,16 @@ class IndividualForm(ModelForm):
     # --------------------------------------------------------------
     # Initial-Daten für die virtuellen Felder befüllen
     # --------------------------------------------------------------
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, tree_id=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        current_tree_id = tree_id
+        if not current_tree_id and self.instance and self.instance.pk:
+            current_tree_id = self.instance.gedcom_tree_id
+        if current_tree_id and "sources" in self.fields:
+            self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+        elif "sources" in self.fields:
+            self.fields["sources"].queryset = Source.objects.none()
 
         # 1. Ist es eine komplett neue Person? 
         # (Bei existierenden Personen zum Bearbeiten ist der primary key (pk) bereits gesetzt)
@@ -254,11 +262,25 @@ class FamilyForm(ModelForm):
         if not current_tree_id and self.instance and self.instance.pk:
             current_tree_id = self.instance.gedcom_tree_id
 
-        # 3. Dropdown befüllen!
-        if current_tree_id and 'marriage_place' in self.fields:
-            self.fields['marriage_place'].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
-        elif 'marriage_place' in self.fields:
-            self.fields['marriage_place'].queryset = Place.objects.none()
+        # 3. Dropdowns auf den aktuellen Baum beschränken (kein Cross-Tree-POST)
+        if current_tree_id:
+            self.fields["husband"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            self.fields["wife"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            if "parent" in self.fields:
+                self.fields["parent"].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
+            if "sources" in self.fields:
+                self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
+            if "marriage_place" in self.fields:
+                self.fields["marriage_place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
+        else:
+            self.fields["husband"].queryset = Individual.objects.none()
+            self.fields["wife"].queryset = Individual.objects.none()
+            if "parent" in self.fields:
+                self.fields["parent"].queryset = Family.objects.none()
+            if "sources" in self.fields:
+                self.fields["sources"].queryset = Source.objects.none()
+            if "marriage_place" in self.fields:
+                self.fields["marriage_place"].queryset = Place.objects.none()
 
         if self.instance.pk:
             ev = self.instance.marriage_event
@@ -323,6 +345,22 @@ class ChildFamilyLinkForm(ModelForm):
             "family": forms.Select(attrs={"class": "form-select"}),
             "relationship_type": forms.Select(attrs={"class": "form-select"}),
         }
+
+    def __init__(self, *args, tree_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        current_tree_id = tree_id
+        if not current_tree_id and self.instance and self.instance.pk:
+            # Prefer family tree, fall back to child tree
+            if self.instance.family_id:
+                current_tree_id = self.instance.family.gedcom_tree_id
+            elif self.instance.child_id:
+                current_tree_id = self.instance.child.gedcom_tree_id
+        if current_tree_id:
+            self.fields["child"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            self.fields["family"].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
+        else:
+            self.fields["child"].queryset = Individual.objects.none()
+            self.fields["family"].queryset = Family.objects.none()
 
 
 # ----------------------------------------------------------------------
@@ -462,6 +500,51 @@ class MediaObjectForm(forms.ModelForm):
                     ).exclude(pk=media.pk).update(is_portrait=False)
 
         return media
+
+
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MiB
+
+    MAX_IMAGE_PIXELS = 40_000_000  # ~40 megapixels
+    MAX_IMAGE_EDGE = 10_000
+
+    def clean_file(self):
+        f = self.cleaned_data.get("file")
+        if not f:
+            return f
+        name = getattr(f, "name", "") or ""
+        ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
+        if ext not in self.ALLOWED_EXTENSIONS:
+            raise forms.ValidationError(
+                _("Nur Bilder (JPG, PNG, GIF, WEBP) oder PDF sind erlaubt.")
+            )
+        size = getattr(f, "size", None)
+        if size is not None and size > self.MAX_UPLOAD_BYTES:
+            raise forms.ValidationError(_("Datei ist zu groß (max. 20 MiB)."))
+
+        if ext != ".pdf":
+            from PIL import Image
+
+            try:
+                # Decompression-bomb protection
+                Image.MAX_IMAGE_PIXELS = self.MAX_IMAGE_PIXELS
+                pos = f.tell() if hasattr(f, "tell") else None
+                with Image.open(f) as img:
+                    width, height = img.size
+                if hasattr(f, "seek"):
+                    f.seek(pos or 0)
+                if width > self.MAX_IMAGE_EDGE or height > self.MAX_IMAGE_EDGE:
+                    raise forms.ValidationError(
+                        _("Bildabmessungen sind zu groß (max. %(max)s px Kantenlänge).")
+                        % {"max": self.MAX_IMAGE_EDGE}
+                    )
+                if width * height > self.MAX_IMAGE_PIXELS:
+                    raise forms.ValidationError(_("Bild hat zu viele Pixel."))
+            except forms.ValidationError:
+                raise
+            except Exception:
+                raise forms.ValidationError(_("Datei ist kein gültiges Bild."))
+        return f
 
 
 class AddExistingMediaForm(forms.Form):
@@ -689,3 +772,11 @@ class TreeMembershipForm(forms.ModelForm):
         widgets = {
             'role': forms.Select(attrs={'class': 'form-select form-select-sm'}),
         }
+
+    def clean_role(self):
+        role = self.cleaned_data.get("role")
+        valid = {c.value for c in TreeMembership.Role}
+        if role not in valid:
+            raise forms.ValidationError(_("Ungültige Rolle."))
+        return role
+

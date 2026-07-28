@@ -9,6 +9,7 @@ from itertools import chain
 from django.contrib import messages
 from django.utils.translation import gettext as _
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Subquery, OuterRef, Prefetch
@@ -54,12 +55,18 @@ from .forms import (
     PlaceForm
 )
 from .mixins import (
-    SuperuserRequiredMixin, 
-    UserPassesTestMixin, 
-    TreeAccessMixin, 
-    TreeEditAccessMixin, 
-    SortableListViewMixin, 
-    FilterableListViewMixin
+    SuperuserRequiredMixin,
+    UserPassesTestMixin,
+    TreeAccessMixin,
+    TreeEditAccessMixin,
+    TreeAdminAccessMixin,
+    user_can_edit_tree,
+    apply_privacy_to_individual_qs,
+    apply_privacy_to_family_qs,
+    apply_privacy_to_media_qs,
+    apply_privacy_to_event_qs,
+    SortableListViewMixin,
+    FilterableListViewMixin,
 )
 from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_flat_family_tree, generate_thumbnail_for_instance
 
@@ -163,9 +170,15 @@ class TreeJSONView(LoginRequiredMixin, TreeAccessMixin, View):
             max_depth = int(depth_param) if depth_param else self.default_max_depth
         except ValueError:
             max_depth = self.default_max_depth
-        
-        # 3. Den Baum mit der dynamischen Tiefe aufbauen
-        result = build_flat_family_tree(tree_id, ind, max_depth=max_depth)   
+        max_depth = max(1, min(max_depth, 10))
+
+        # 3. Den Baum mit der dynamischen Tiefe aufbauen (PII redaction when privacy applies)
+        result = build_flat_family_tree(
+            tree_id,
+            ind,
+            max_depth=max_depth,
+            apply_privacy=self.get_apply_privacy(),
+        )
         
         # 4. Als JSON zurückgeben
         return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
@@ -399,7 +412,6 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
             else:
                 # Aufsteigend sortieren, leere Werte ans Ende!
                 qs = qs.order_by(F(ordering).asc(nulls_last=True))
-            
 
         return qs.distinct()
 
@@ -564,7 +576,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             # Avatar-URL holen (falls vorhanden)
             avatar_url = ""
             if p.profile_image and p.profile_image.file:
-                avatar_url = reverse("genview:media-file", kwargs={"tree_id": tree_id, "pk": p.profile_image.id})
+                avatar_url = reverse("genview:media-thumb", kwargs={"tree_id": tree_id, "pk": p.profile_image.id, "size": 'mini'})
                 #avatar_url = p.profile_image.file.url
 
             # Wir übergeben den Namen und das JSON für die kleinen Knoten
@@ -695,6 +707,11 @@ class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Individual
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
 
     def get_initial(self):
         initial = super().get_initial()
@@ -832,6 +849,14 @@ class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     form_class = IndividualForm
     template_name = "genview/individual_form.html"
 
+    def get_queryset(self):
+        return Individual.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
     def form_valid(self, form):
         response = super().form_valid(form)
         messages.success(self.request, _("Personendaten wurden gespeichert."))  # optional
@@ -847,6 +872,9 @@ class IndividualUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
 class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Individual
     template_name = "genview/individual_confirm_delete.html"
+
+    def get_queryset(self):
+        return Individual.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
 
     def get_success_url(self):
         # Nach dem Löschen leiten wir den Nutzer zurück zur Personen-Liste
@@ -883,7 +911,8 @@ class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
     # QuerySet filtern – case-insensitive, mehrere Felder
     # ------------------------------------------------------------------
     def get_queryset(self):
-        qs = super().get_queryset()
+        tree_id = self.kwargs.get("tree_id")
+        qs = Individual.objects.filter(gedcom_tree_id=tree_id).order_by(*self.ordering)
         query = self.request.GET.get("q", "").strip()
 
         if query:
@@ -953,7 +982,7 @@ class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return JsonResponse({"table": table_html, "pager": pager_html})
 
 
-class IndividualAddExistingMediaView(TreeAccessMixin, FormView):
+class IndividualAddExistingMediaView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -1070,8 +1099,10 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
     context_object_name = "family"
 
     def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
         return (
-            Family.objects.select_related("husband", "wife")
+            Family.objects.filter(gedcom_tree_id=tree_id)
+            .select_related("husband", "wife")
             .prefetch_related(
                 # 1. Kinder-Links inkl. zugehörigem Child-Individual
                 # 🔥 UPDATE: Wir hängen hier direkt .prefetch_related("child__media_objects") an, 
@@ -1113,9 +1144,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
     # Security Check for Data Privacy
     # -----------------------------------------------------------------
     def get_object(self, queryset=None):
-        # 1. Hole die Person wie gewohnt aus der Datenbank.
-        # (Hier greift bereits die Basis-Absicherung deines TreeAccessMixin,
-        # dass die Person überhaupt zu diesem Stammbaum gehört!)
+        # Object is tree-scoped via get_queryset(); privacy still applies below.
         family = super().get_object(queryset)
 
         # 2. Nutze die neue Helfermethode aus unserem Mixin (Variante 1 von vorhin)
@@ -1164,17 +1193,24 @@ class FamilyCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
+        form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, _("Familie angelegt."))
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("genview:family-detail", kwargs={"pk": self.object.pk})
+        return reverse_lazy(
+            "genview:family-detail",
+            kwargs={"tree_id": self.object.gedcom_tree_id, "pk": self.object.pk},
+        )
 
 
 class FamilyUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = Family
     form_class = FamilyForm
     template_name = "genview/family_form.html"
+
+    def get_queryset(self):
+        return Family.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
 
     def get_form_kwargs(self):
         # Holt die Standard-Argumente (wie instance, data etc.)
@@ -1198,6 +1234,9 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Family
     template_name = "genview/family_confirm_delete.html"
 
+    def get_queryset(self):
+        return Family.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
+
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, _("Familie und zugehörige Verknüpfungen erfolgreich gelöscht."))
@@ -1205,7 +1244,7 @@ class FamilyDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:family-list", kwargs={"tree_id": tree_id})
 
 
-class FamilyAddExistingMediaView(TreeAccessMixin, FormView):
+class FamilyAddExistingMediaView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -1249,10 +1288,19 @@ class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateV
     form_class = ChildFamilyLinkForm
     template_name = "genview/childfamilylink_form.html"
 
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
     def get_success_url(self):
         return reverse_lazy(
             "genview:family-detail",
-            kwargs={"pk": self.object.family.pk},
+            kwargs={"tree_id": self.kwargs.get("tree_id"), "pk": self.object.family.pk},
         )
 
 
@@ -1260,10 +1308,14 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
     model = ChildFamilyLink
     template_name = "genview/childfamilylink_confirm_delete.html"
 
+    def get_queryset(self):
+        tree_id = self.kwargs.get("tree_id")
+        return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
+
     def get_success_url(self):
         return reverse_lazy(
             "genview:family-detail",
-            kwargs={"pk": self.object.family.pk},
+            kwargs={"tree_id": self.kwargs.get("tree_id"), "pk": self.object.family.pk},
         )
 
 
@@ -1355,8 +1407,15 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
         file_handle = open(file_path, "rb")
         response = FileResponse(file_handle, content_type=mime_type)
 
-        # Optional: Browser-Caching aktivieren (1 Tag)
-        response["Cache-Control"] = "public, max-age=86400"
+        # Images may render inline; everything else downloads (blocks HTML/SVG XSS).
+        safe_name = file_path.name.replace('"', "")
+        if mime_type.startswith("image/"):
+            response["Content-Disposition"] = f'inline; filename="{safe_name}"'
+        else:
+            response["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+
+        response["Cache-Control"] = "private, max-age=3600"
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 
@@ -1401,9 +1460,9 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         
         # ACHTUNG: Bei sehr großen Bäumen (Tausende Personen) sollte das im 
         # Frontend perspektivisch durch ein AJAX-Suchfeld (Select2) ersetzt werden!
-        ctx['individuals'] = Individual.objects.filter(
-            gedcom_tree=self.kwargs.get('tree_id')
-        ).only('id', 'given_name', 'surname') # .only() spart massiv Arbeitsspeicher!
+        inds = Individual.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
+        inds = apply_privacy_to_individual_qs(inds, self.get_apply_privacy())
+        ctx["individuals"] = inds.only("id", "given_name", "surname")
         
         return ctx
     
@@ -1411,6 +1470,14 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # POST – Router für Aktionen
     # -------------------------------------------------
     def post(self, request, *args, **kwargs):
+        # GET stays readable for public/viewer access; mutations need EDITOR/ADMIN.
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not user_can_edit_tree(request.user, self.kwargs.get("tree_id")):
+            raise PermissionDenied(
+                "Nur Editoren und Admins dürfen Medien bearbeiten oder OCR/Gesichtserkennung ausführen."
+            )
+
         media = self.get_object()
 
         if "detect" in request.POST:
@@ -1528,7 +1595,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         tag = get_object_or_404(FaceTag, pk=tag_id, media=media)
 
         if indiv_id:
-            individual = get_object_or_404(Individual, pk=indiv_id)
+            tree_id = self.kwargs.get("tree_id")
+            individual = get_object_or_404(Individual, pk=indiv_id, gedcom_tree_id=tree_id)
             tag.individual = individual
             tag.save()
             messages.success(request, _("Gesicht erfolgreich mit %(person)s verknüpft.") % {"person": individual})
@@ -1563,7 +1631,6 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         # 3. Die Sortierung aus dem Mixin anwenden
         qs = qs.order_by(self.get_ordering())
         
-        # 4. Performance-Boost: Falls du in der Liste anzeigst, mit wem das Bild verknüpft ist
         return qs.prefetch_related('individuals', 'families', 'events')
 
     def get_context_data(self, **kwargs):
@@ -1722,7 +1789,7 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
         return reverse_lazy("genview:tree-list")
 
 
-class BulkMediaUploadView(TreeAccessMixin, TemplateView):
+class BulkMediaUploadView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
     template_name = "genview/bulk_media_upload.html"
 
     def get_context_data(self, **kwargs):
@@ -1745,22 +1812,36 @@ class BulkMediaUploadView(TreeAccessMixin, TemplateView):
         matched_count = 0
         unmatched_count = 0
 
+        allowed_ext = MediaObjectForm.ALLOWED_EXTENSIONS
+        max_bytes = MediaObjectForm.MAX_UPLOAD_BYTES
+
         for uploaded_file in files:
             filename = uploaded_file.name
-            
-            # MAGIE: Wir suchen Datensätze, die noch leer sind (file='')
-            # UND deren alter GEDCOM-Pfad mit dem hochgeladenen Dateinamen endet.
-            # iendswith = Case Insensitive (ignoriert Groß-/Kleinschreibung)
+            ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+            if ext not in allowed_ext:
+                unmatched_count += 1
+                continue
+            if getattr(uploaded_file, "size", 0) > max_bytes:
+                unmatched_count += 1
+                continue
+
+            # Exact basename match only (avoid photo.jpg matching old_photo.jpg).
+            from pathlib import PurePath
+            basename = PurePath(filename).name
             media_objs = MediaObject.objects.filter(
                 gedcom_tree_id=tree_id,
-                file=''
-            ).filter(gedcom_original_filepath__iendswith=filename)
+                file="",
+            ).filter(
+                Q(gedcom_original_filepath__iexact=basename)
+                | Q(gedcom_original_filepath__iendswith="/" + basename)
+                | Q(gedcom_original_filepath__iendswith="\\" + basename)
+            )
 
-            if media_objs.exists():
-                for media in media_objs:
-                    media.file = uploaded_file
-                    media.save()
-                    matched_count += 1
+            if media_objs.count() == 1:
+                media = media_objs.first()
+                media.file = uploaded_file
+                media.save()
+                matched_count += 1
             else:
                 unmatched_count += 1
 
@@ -1796,8 +1877,8 @@ class ToggleMediaCategoryView(LoginRequiredMixin, TreeEditAccessMixin, View):
         except Exception as e:
             return HttpResponseBadRequest(JsonResponse({"error": str(e)}))
 
-        # ggf. Berechtigungs-Check (z. B. nur Besitzer/Admin darf ändern)
-        media = get_object_or_404(MediaObject, pk=media_id)
+        tree_id = self.kwargs.get("tree_id")
+        media = get_object_or_404(MediaObject, pk=media_id, gedcom_tree_id=tree_id)
 
         # ---- Kategorie umschalten ----
         if media.category == MediaObject.Category.PHOTO:
@@ -1925,7 +2006,7 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
-class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
+class PlaceDeduplicationView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
     template_name = "genview/place_deduplication.html"
 
     def get_context_data(self, **kwargs):
@@ -1970,7 +2051,7 @@ class PlaceDeduplicationView(TreeAccessMixin, TemplateView):
         return redirect(request.path)
 
 
-class PlaceGeocodeView(TreeEditAccessMixin, View):
+class PlaceGeocodeView(LoginRequiredMixin, TreeEditAccessMixin, View):
     """
     Erwartet POST-Parameter `place_id`.  Holt den Ort, fragt Nominatim,
     speichert die ersten Koordinaten und gibt das Ergebnis als JSON zurück
@@ -1978,7 +2059,8 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
     """
     def post(self, request, *args, **kwargs):
         place_id = request.POST.get("place_id")
-        tree_id = request.POST.get("tree_id")
+        # Prefer URL tree_id; ignore spoofed POST tree_id when they disagree.
+        tree_id = self.kwargs.get("tree_id") or request.POST.get("tree_id")
 
         if not tree_id:
             return HttpResponseBadRequest("Missing tree_id")
@@ -1986,7 +2068,7 @@ class PlaceGeocodeView(TreeEditAccessMixin, View):
         if not place_id:
             return HttpResponseBadRequest("Missing place_id")
 
-        place = get_object_or_404(Place, pk=place_id)
+        place = get_object_or_404(Place, pk=place_id, gedcom_tree_id=tree_id)
 
         # Build die Such-Query.  Priorität: address > name
         query = place.name
@@ -2241,7 +2323,7 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         return context
 
 
-class AddExistingMediaToEventView(TreeAccessMixin, FormView):
+class AddExistingMediaToEventView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -2281,6 +2363,9 @@ class AddExistingMediaToEventView(TreeAccessMixin, FormView):
 class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
     model = Event
     template_name = "genview/event_confirm_delete.html"
+
+    def get_queryset(self):
+        return Event.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
@@ -2397,7 +2482,7 @@ class SourceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         messages.success(self.request, _("Quelle aktualisiert."))
         return reverse_lazy("genview:source-list", kwargs={"tree_id": tree_id})
 
-class AddExistingMediaToSourceView(TreeAccessMixin, FormView):
+class AddExistingMediaToSourceView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -2469,7 +2554,16 @@ class GenericSelect2APIView(TreeAccessMixin, View):
             
         # 1. Auf den aktuellen Stammbaum filtern
         qs = self.model.objects.filter(gedcom_tree_id=tree_id)
-        
+        apply_privacy = self.get_apply_privacy()
+        if self.model is Individual:
+            qs = apply_privacy_to_individual_qs(qs, apply_privacy)
+        elif self.model is Family:
+            qs = apply_privacy_to_family_qs(qs, apply_privacy, tree_id)
+        elif self.model is MediaObject:
+            qs = apply_privacy_to_media_qs(qs, apply_privacy, tree_id)
+        elif self.model is Event:
+            qs = apply_privacy_to_event_qs(qs, apply_privacy, tree_id)
+
         # 2. Dynamisch nach allen definierten Feldern suchen (mit ODER verknüpft)
         if self.search_fields:
             q_objects = Q()
@@ -2565,30 +2659,36 @@ class PlaceSearchAPIView(GenericSelect2APIView):
         return obj.name
 
 
-class UserSearchAPIView(View):
+class UserSearchAPIView(LoginRequiredMixin, View):
     """
-    AJAX-Endpoint für Select2, um Benutzer nach Username, 
-    E-Mail oder Vor-/Nachname im gesamten System zu suchen.
+    AJAX endpoint for Select2 user search (membership management).
+    Restricted to tree admins / superusers; returns minimal fields.
     """
     def get(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            is_tree_admin = TreeMembership.objects.filter(
+                user=request.user,
+                role=TreeMembership.Role.ADMIN,
+            ).exists()
+            if not is_tree_admin:
+                raise PermissionDenied("Nur Stammbaum-Admins dürfen Benutzer suchen.")
+
         query = request.GET.get('q', '').strip()
-        
         if len(query) < 2:
             return JsonResponse({'results': []})
-            
-        # Suche nach Username, E-Mail, Vorname oder Nachname
+
         users = User.objects.filter(
             Q(username__icontains=query) |
-            Q(email__icontains=query) |
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query)
-        ).exclude(is_superuser=True)[:20] # Superadmins müssen meist nicht verwaltet werden
-        
+        ).exclude(is_superuser=True)[:20]
+
         results = []
         for u in users:
-            display = f"{u.username} ({u.get_full_name() or u.email})"
+            full = u.get_full_name().strip()
+            display = f"{u.username} ({full})" if full else u.username
             results.append({'id': u.id, 'text': display})
-            
+
         return JsonResponse({'results': results})
 
 # --------------------------------------------------------------
@@ -2605,6 +2705,8 @@ class RegisterView(CreateView):
     form_class = UserRegisterForm
     template_name = 'genview/register.html'
     success_url = reverse_lazy('two_factor:login') # Nach Erfolg zurück zum Login
+    RATE_LIMIT = 5
+    RATE_WINDOW_SECONDS = 3600
 
     def dispatch(self, request, *args, **kwargs):
         # Wenn ein bereits eingeloggter User versucht sich zu registrieren,
@@ -2614,6 +2716,19 @@ class RegisterView(CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
+        from django.core.cache import cache
+
+        ip = self.request.META.get("REMOTE_ADDR", "unknown")
+        key = f"register_rate:{ip}"
+        count = cache.get(key, 0)
+        if count >= self.RATE_LIMIT:
+            messages.error(
+                self.request,
+                _("Zu viele Registrierungsversuche. Bitte später erneut versuchen."),
+            )
+            return redirect(self.success_url)
+        cache.set(key, count + 1, self.RATE_WINDOW_SECONDS)
+
         # Formular validieren, aber noch nicht final in die DB schreiben
         user = form.save(commit=False)
         
@@ -2731,14 +2846,14 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
         except Exception as exc:                 # catch any DB-/Import-Fehler
             messages.error(self.request,
                 _("Import fehlgeschlagen: %(detail)s") % {"detail": exc})
-            # Aufräumen, dann zum Formular zurück
-            os.remove(tmp_path)
             return self.form_invalid(form)
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
-        # 3️⃣ Aufräumen (Temp-File löschen)
-        os.remove(tmp_path)
-
-        # 4️⃣ Erfolgsmeldung
+        # 4️⃣ Erfolgsmeldung (temp file already removed in finally)
         messages.success(self.request,
             _("GEDCOM-Datei erfolgreich importiert – Stammbaum „%(name)s“ angelegt.") % {"name": tree_name})
         return super().form_valid(form)
@@ -2757,7 +2872,7 @@ class GedcomImportView(SuperuserRequiredMixin, FormView):
         return self._stderr_buf
 
 
-class TreeMembershipManageView(TreeEditAccessMixin, View): 
+class TreeMembershipManageView(LoginRequiredMixin, TreeAdminAccessMixin, View):
     template_name = "genview/tree_membership_manage.html"
 
     def get_formset(self, tree, post_data=None):
@@ -2799,6 +2914,11 @@ class TreeMembershipManageView(TreeEditAccessMixin, View):
         new_user_role = request.POST.get('new_user_role')
         
         if new_user_id and new_user_role:
+            valid_roles = {c.value for c in TreeMembership.Role}
+            if new_user_role not in valid_roles:
+                messages.error(request, _("Ungültige Rolle."))
+                return redirect('genview:manage-memberships', tree_id=tree.id)
+
             new_user = get_object_or_404(User, pk=new_user_id)
             # unique_together absichern mit get_or_create
             membership, created = TreeMembership.objects.get_or_create(

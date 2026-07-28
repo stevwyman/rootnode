@@ -368,7 +368,7 @@
                                                             {% for media in event.media_objects.all %}
                                                                 {% if media.file %}
                                                                     <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" target="_blank" title="{{ media.title|default:'Medium ansehen' }}">
-                                                                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" alt="{{ media.title }}" class="rounded shadow-sm" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #ddd;">
+                                                                        <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='mini' %}" alt="{{ media.title }}" class="rounded shadow-sm" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #ddd;">
                                                                     </a>
                                                                 {% endif %}
                                                             {% endfor %}
@@ -427,7 +427,7 @@
                                         <div class="card h-100 shadow-sm border-0 bg-light">
                                             {% if media.file and media.file.name %}
                                                 <a href="{% url 'genview:media-detail' tree_id media.pk %}">
-                                                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="card-img-top rounded-top" alt="{{ media.title }}" style="height: 160px; object-fit: cover;">
+                                                    <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='small' %}" class="card-img-top rounded-top" alt="{{ media.title }}" style="height: 160px; object-fit: cover;">
                                                 </a>
                                                 <div class="card-body p-3 d-flex flex-column justify-content-between">
                                                     <h6 class="card-title fw-bold text-truncate mb-3" title="{{ media.title|default:'Unbenannt' }}">
@@ -540,7 +540,7 @@
                                         {% if media.file and media.file.name %}
                                             <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" target="_blank">
                                                 {% if media.is_image %}
-                                                    <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="card-img-top" alt="{{ media.title }}">
+                                                    <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='small' %}" class="card-img-top" alt="{{ media.title }}">
                                                 {% else %}
                                                     <div class="bg-light text-center py-5 text-secondary card-img-top fs-1">📑</div>
                                                 {% endif %}

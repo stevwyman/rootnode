@@ -158,10 +158,11 @@ def geocode_place(query, limit=1, country_codes=None):
     return normalized
 
 
-def build_flat_family_tree(tree_id, root_individual, max_depth=4):
+def build_flat_family_tree(tree_id, root_individual, max_depth=4, apply_privacy=False):
     """
     Erstellt ein flaches Array aller Personen im Baum bis zur max_depth.
     Stellt sicher, dass keine "Geister-IDs" (fehlende Personen) in den Relationen landen.
+    When *apply_privacy* is True, confidential individuals are redacted in the payload.
     """
     # PHASE 1: Alle Personen sammeln (bis max_depth)
     collected_individuals = {}  # Dictionary (ID -> Personen-Objekt)
@@ -208,9 +209,10 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
         # 1. Prüfen, ob ein Profilbild existiert (genau wie in deinem Template)
         if ind.profile_image and ind.profile_image.file:
             # {% url 'genview:media-file' tree_id=tree_id pk=ind.profile_image.pk %} in Python:
-            avatar_url = reverse('genview:media-file', kwargs={
+            avatar_url = reverse('genview:media-thumb', kwargs={
                 'tree_id': tree_id, 
-                'pk': ind.profile_image.pk
+                'pk': ind.profile_image.pk,
+                'size': 'mini'
             })
         else:
             # 2. Fallback: Wir ahmen deinen "bg-secondary text-white" div als echtes Bild nach!
@@ -220,18 +222,37 @@ def build_flat_family_tree(tree_id, root_individual, max_depth=4):
 
         
 
-        node = {
-            "id": str_id,
-            "data": {
-                "first name": ind.given_name or "",
-                "last name": ind.surname or "",
-                "birthday": getattr(ind, "birth_year", ""),
-                "avatar": avatar_url,
-                "detail_url": reverse('genview:individual-detail', kwargs={'tree_id': tree_id, 'pk': ind.pk}),
-                "gender": f3_gender
-            },
-            "rels": {}
-        }
+        if apply_privacy and getattr(ind, "is_confidential", False):
+            # Keep chart structure, but hide PII for living / private persons.
+            initial = "?"
+            avatar_url = f"https://ui-avatars.com/api/?name={initial}&background=6c757d&color=ffffff"
+            node = {
+                "id": str_id,
+                "data": {
+                    "first name": "Privat",
+                    "last name": "",
+                    "birthday": "",
+                    "avatar": avatar_url,
+                    "detail_url": "",
+                    "gender": f3_gender,
+                    "confidential": True,
+                },
+                "rels": {},
+            }
+        else:
+            node = {
+                "id": str_id,
+                "data": {
+                    "first name": ind.given_name or "",
+                    "last name": ind.surname or "",
+                    "birthday": getattr(ind, "birth_year", ""),
+                    "avatar": avatar_url,
+                    "detail_url": reverse('genview:individual-detail', kwargs={'tree_id': tree_id, 'pk': ind.pk}),
+                    "gender": f3_gender,
+                    "confidential": False,
+                },
+                "rels": {},
+            }
 
         parents = []
         spouses = []

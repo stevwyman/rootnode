@@ -66,7 +66,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let f3Chart = null;     
 
     function showError(msg) {
-        messageDiv.innerHTML = `<p class="text-danger">${msg}</p>`;
+        messageDiv.replaceChildren();
+        const p = document.createElement('p');
+        p.className = 'text-danger';
+        p.textContent = String(msg);
+        messageDiv.append(p);
     }
 
     function buildUrl(personId, depth) {
@@ -112,7 +116,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Die Lade-Funktion für den Merge ---
     function loadTree(personIdToLoad, depth) {
-        messageDiv.innerHTML = '<span class="text-info">{% trans "Lade weitere Verwandte..." %}</span>';
+        messageDiv.replaceChildren();
+        const loading = document.createElement('span');
+        loading.className = 'text-info';
+        loading.textContent = '{% trans "Lade weitere Verwandte..." %}';
+        messageDiv.append(loading);
 
         fetch(buildUrl(personIdToLoad, depth), { credentials: 'same-origin' })
             .then(resp => {
@@ -122,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(newData => {
                 if (newData.error) throw new Error(newData.error);
 
-                messageDiv.innerHTML = ''; 
+                messageDiv.replaceChildren(); 
 
                 // 1. Neue Daten in das globale Array mischen
                 mergeData(newData);
@@ -130,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 // 2. Chart initialisieren ODER updaten
                 if (!f3Chart) {
                     // Erster Start
-                    chartContainer.innerHTML = ''; 
+                    chartContainer.replaceChildren(); 
                     f3Chart = f3.createChart('#FamilyChart', allTreeData);
                     
                     f3Chart.setCardHtml()

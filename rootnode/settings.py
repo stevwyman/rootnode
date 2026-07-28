@@ -29,11 +29,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('1', 'true', 'yes')
+# True while running manage.py test / pytest (relaxes some fail-closed checks).
+TESTING = any(
+    arg == 'test' or arg.endswith('pytest') or 'pytest' in arg
+    for arg in __import__('sys').argv
+)
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', False)
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-change-me"
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG is False")
+elif not DEBUG and str(SECRET_KEY).startswith("django-insecure"):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("Insecure SECRET_KEY is not allowed when DEBUG is False")
 
 ah_raw = os.getenv('ALLOWED_HOSTS')
 if ah_raw:
@@ -41,6 +55,9 @@ if ah_raw:
     ALLOWED_HOSTS = [origin.strip() for origin in ah_raw.split(',') if origin.strip()]
 else:
     ALLOWED_HOSTS = []
+if not DEBUG and not ALLOWED_HOSTS:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("ALLOWED_HOSTS must be set when DEBUG is False")
 logger.info("--- Allowed Hosts ---")
 logger.info(ALLOWED_HOSTS)
 logger.info("---------------------")
@@ -73,7 +90,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'debug_toolbar',                    # TODO remove later
     'django_bootstrap5',
     'genview.apps.GenviewConfig',
     'django_otp',
@@ -83,6 +99,10 @@ INSTALLED_APPS = [
     'two_factor',  
     'two_factor.plugins.email',
 ]
+
+
+if DEBUG:
+    INSTALLED_APPS.append("debug_toolbar")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -95,8 +115,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_otp.middleware.OTPMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware', # TODO remove later
 ]
+
+if DEBUG:
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
 
 # Schalte die automatische Anlage nur in den gewünschten Umgebungen an:
 CREATE_SUPERUSER_ON_STARTUP = True   # z. B. in dev-settings.py
@@ -198,10 +220,26 @@ STATICFILES_DIRS = [BASE_DIR / 'static']      # dein lokaler Entwicklungs-Ordner
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # ------------------------------------------------------------------
-# Optional: weitere Sicherheitseinstellungen
+# Security headers / cookies
 # ------------------------------------------------------------------
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_BROWSER_XSS_FILTER = True
+SECURE_BROWSER_XSS_FILTER = True  # obsolete in modern browsers; harmless if set
+
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14  # 14 days
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Production-only TLS hardening (keep local HTTP working when DEBUG=True)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 
 # Default primary key field type
@@ -210,12 +248,8 @@ SECURE_BROWSER_XSS_FILTER = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'two_factor:login'              # Name der 2FA-Login-View
-LOGIN_REDIRECT_URL = 'genview:tree-list'   # Ziel nach erfolgreichem Login            
+LOGIN_REDIRECT_URL = 'genview:tree-list'   # Ziel nach erfolgreichem Login
 LOGOUT_REDIRECT_URL = 'two_factor:login'
-
-# Sicherheitsempfehlung
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 Tage (oder nach Bedarf)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 # The URL path where files will be accessible in the browser
 MEDIA_URL = '/media/'
@@ -224,10 +258,19 @@ MEDIA_URL = '/media/'
 # MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_ROOT = GENVIEW / 'media'
 
+# Cap in-memory uploads (DoS mitigation); forms also enforce 20 MiB.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
+
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "suppress_client_error_traceback": {
+            "()": "rootnode.logging_filters.SuppressClientErrorTracebackFilter",
+        },
+    },
     "formatters": {
         "extended": {
             "format": "{levelname} {asctime} {name} {funcName} {process:d} {thread:d} {message}",
@@ -246,10 +289,30 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+            "filters": ["suppress_client_error_traceback"],
         },
     },
     "root": {
         "handlers": ["console"],
         "level": "DEBUG",
+    },
+    # Override Django's DEFAULT_LOGGING handlers (which have no filter and
+    # print PermissionDenied with a full stack before our root handler runs).
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }

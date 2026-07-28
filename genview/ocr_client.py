@@ -5,6 +5,7 @@ import os
 from typing import Any, TypedDict
 
 import requests
+from django.conf import settings
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,11 @@ def extract_text_via_api(image_path: str) -> OcrExtractResult:
     means the request succeeded but no text was detected.
     """
     result: OcrExtractResult = {"text": "", "error": None}
+
+    if not API_KEY and not settings.DEBUG and not getattr(settings, "TESTING", False):
+        result["error"] = "OCR-API-Schlüssel ist nicht konfiguriert."
+        logger.error(result["error"])
+        return result
 
     if not image_path or not str(image_path).strip():
         result["error"] = "Kein Bildpfad angegeben."

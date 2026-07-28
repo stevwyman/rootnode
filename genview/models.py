@@ -1090,22 +1090,23 @@ class MediaObject(GedcomIdMixin):
 
     def get_thumbnail(self, size: str = "mini") -> str:
         """
-        Returns the public URL of the requested thumbnail.
-        Size may be ``mini`` or ``small``.
-        If the thumbnail does not exist yet we create it on-the-fly.
+        Returns the authenticated media-thumb URL for *size* (mini|small).
+        Generates the thumbnail on-the-fly when missing.
         """
         if size not in ("mini", "small"):
             raise ValueError("size must be 'mini' or 'small'")
 
         thumb_field = getattr(self, f"thumb_{size}")
-        if thumb_field and thumb_field.name:
-            return thumb_field.url
+        if not thumb_field or not thumb_field.name:
+            from .utils import generate_thumbnail_for_instance
+            generate_thumbnail_for_instance(self, size)
 
-        # thumbnail not generated → create it now
-        from .utils import generate_thumbnail_for_instance
-        generate_thumbnail_for_instance(self, size)
-        thumb_field = getattr(self, f"thumb_{size}")
-        return thumb_field.url if thumb_field else ""
+        if not self.pk or not self.gedcom_tree_id:
+            return ""
+        return reverse(
+            "genview:media-thumb",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk, "size": size},
+        )
     
     @property
     def is_confidential(self):

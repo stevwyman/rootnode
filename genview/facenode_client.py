@@ -5,6 +5,7 @@ import os
 from typing import Any, TypedDict
 
 import requests
+from django.conf import settings
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,11 @@ def detect_faces_via_api(image_path: str) -> FaceDetectResult:
     means the request succeeded but no valid faces were detected.
     """
     result: FaceDetectResult = {"faces": [], "error": None}
+
+    if not API_KEY and not settings.DEBUG and not getattr(settings, "TESTING", False):
+        result["error"] = "FaceNode-API-Schlüssel ist nicht konfiguriert."
+        logger.error(result["error"])
+        return result
 
     if not image_path or not str(image_path).strip():
         result["error"] = "Kein Bildpfad angegeben."

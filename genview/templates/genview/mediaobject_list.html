@@ -68,101 +68,96 @@
         </a>
     </div>
 
-    <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
+    <div class="media-gallery">
         {% for item in media %}
             {% if apply_privacy and item.is_confidential or apply_privacy and item.is_private %}
-                <div class="col">
-                    <div class="card h-100 shadow-sm bg-light border-0">
-                        <div class="card-body d-flex align-items-center justify-content-center text-muted fst-italic" style="min-height: 200px;">
-                            🔒 Vertraulich
-                        </div>
+                <div class="card h-100 shadow-sm bg-light border-0">
+                    <div class="card-body media-gallery__placeholder d-flex align-items-center justify-content-center text-muted fst-italic">
+                        🔒 Vertraulich
                     </div>
                 </div>
             {% else %}
-                <div class="col">
-                    <div class="card h-100 shadow-sm">
-                        {% if item.file and item.file.name %}
-                            {% if item.is_image or item.is_pdf and item.file %}
-                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
-                                    <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}" 
-                                        class="card-img-top" 
-                                        alt="{{ item.title }}" 
-                                        style="object-fit: cover; height: 200px;">
-                                </a>
-                            {% else %}
-                                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
-                                    <span class="text-muted fs-1">📄 Dokument</span>
-                                </div>
-                            {% endif %}
+                <div class="card h-100 shadow-sm">
+                    {% if item.file and item.file.name %}
+                        {% if item.is_image or item.is_pdf and item.file %}
+                            <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
+                                <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}"
+                                    class="card-img-top"
+                                    alt="{{ item.title }}">
+                            </a>
                         {% else %}
-                            <div class="p-3 bg-light border rounded text-center text-muted">
-                                <div class="fs-1 mb-2">📷</div>
-                                <strong>Bild fehlt</strong><br>
-                                <small>{{ item.title|default:"Ohne Titel" }}</small>
-                                
-                                {% if item.gedcom_original_filepath %}
-                                    <hr class="my-2">
-                                    <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
-                                        Pfad: {{ item.gedcom_original_filepath }}
-                                    </small>
-                                {% endif %}
+                            <div class="card-img-top media-gallery__placeholder bg-light d-flex align-items-center justify-content-center">
+                                <span class="text-muted fs-1">📄 Dokument</span>
                             </div>
                         {% endif %}
+                    {% else %}
+                        <div class="p-3 bg-light border-bottom text-center text-muted">
+                            <div class="fs-1 mb-2">📷</div>
+                            <strong>Bild fehlt</strong><br>
+                            <small>{{ item.title|default:"Ohne Titel" }}</small>
 
-                        <div class="card-body d-flex flex-column">
-                            <h5 class="card-title">{{ item.title }}</h5>
-                            
-                            {% if item.description %}
-                                <p class="card-text text-muted small">{{ item.description|truncatewords:15 }}</p>
-                            {% endif %}
-
-                            {% if item.individuals.all %}
-                                <div class="mt-auto mb-2 small">
-                                    <strong>Personen:</strong>
-                                    <ul class="list-unstyled mb-0">
-                                        {% for person in item.individuals.all|slice:":3" %}
-                                            <li><a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}">{{ person.given_name }} {{ person.surname }}</a></li>
-                                        {% endfor %}
-                                        {% if item.individuals.count > 3 %}
-                                            <li><em>... und {{ item.individuals.count|add:"-3" }} weitere</em></li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
+                            {% if item.gedcom_original_filepath %}
+                                <hr class="my-2">
+                                <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
+                                    Pfad: {{ item.gedcom_original_filepath }}
+                                </small>
                             {% endif %}
                         </div>
+                    {% endif %}
 
-                        <div class="card-footer bg-white border-top-0 d-flex justify-content-between">
-                            {% if not item.is_image and item.file %}
-                                <a href="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Öffnen</a>
-                            {% else %}
-                                <div></div> 
-                            {% endif %}
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title text-truncate" title="{{ item.title }}">{{ item.title }}</h5>
 
-                            {% if can_edit %}
-                            {% url 'genview:media-edit' tree_id=tree_id pk=item.pk as edit_url %}
-                            {% url 'genview:media-delete' tree_id=tree_id pk=item.pk as delete_url %}
-                            {% action_buttons edit_url=edit_url delete_url=delete_url %}
-                            <div>
-                                <button
-                                    class="btn btn-sm btn-outline-primary toggle-category"
-                                    data-id="{{ item.id }}"
-                                    title="Kategorie umschalten">
-                                    
-                                    {% if item.category == 'PHOTO' %}
-                                        📷 → 📄
-                                    {% else %}
-                                        📄 → 📷
+                        {% if item.description %}
+                            <p class="card-text text-muted small">{{ item.description|truncatewords:15 }}</p>
+                        {% endif %}
+
+                        {% if item.individuals.all %}
+                            <div class="mt-auto mb-2 small">
+                                <strong>Personen:</strong>
+                                <ul class="list-unstyled mb-0">
+                                    {% for person in item.individuals.all|slice:":3" %}
+                                        <li><a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}">{{ person.given_name }} {{ person.surname }}</a></li>
+                                    {% endfor %}
+                                    {% if item.individuals.count > 3 %}
+                                        <li><em>... und {{ item.individuals.count|add:"-3" }} weitere</em></li>
                                     {% endif %}
-                                </button>
+                                </ul>
                             </div>
-                            {% endif %}
+                        {% endif %}
+                    </div>
+
+                    <div class="card-footer bg-white border-top-0 d-flex justify-content-between flex-wrap gap-1">
+                        {% if not item.is_image and item.file %}
+                            <a href="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Öffnen</a>
+                        {% else %}
+                            <div></div>
+                        {% endif %}
+
+                        {% if can_edit %}
+                        {% url 'genview:media-edit' tree_id=tree_id pk=item.pk as edit_url %}
+                        {% url 'genview:media-delete' tree_id=tree_id pk=item.pk as delete_url %}
+                        {% action_buttons edit_url=edit_url delete_url=delete_url %}
+                        <div>
+                            <button
+                                class="btn btn-sm btn-outline-primary toggle-category"
+                                data-id="{{ item.id }}"
+                                title="Kategorie umschalten">
+
+                                {% if item.category == 'PHOTO' %}
+                                    📷 → 📄
+                                {% else %}
+                                    📄 → 📷
+                                {% endif %}
+                            </button>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}
 
         {% empty %}
-            <div class="col-12 text-center py-5">
+            <div class="media-gallery__empty text-center py-5">
                 <h3 class="text-muted">Noch keine Medien vorhanden.</h3>
                 <p>Lade das erste Bild oder Dokument für diesen Stammbaum hoch!</p>
             </div>
