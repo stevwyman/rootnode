@@ -54,7 +54,10 @@ COPY --from=builder /etc/group  /etc/group
 COPY . /usr/src/app
 WORKDIR /usr/src/app
 
-RUN python manage.py compilemessages
+# Settings fail-closed when DEBUG=False; compilemessages only needs Django loaded.
+RUN SECRET_KEY=build-time-only-not-for-runtime \
+    ALLOWED_HOSTS=localhost \
+    python manage.py compilemessages
 
 # ---- Volume (nur im finalen Image) ---------------------------
 VOLUME /data/genview
