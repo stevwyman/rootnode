@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 API_BASE = os.getenv("OCR_RECOGNITION_URL", "http://localhost:8000/api/v1")
-API_KEY = os.getenv("OCR_RECOGNITION_API_KEY", "")
+API_KEY = os.getenv("OCR_RECOGNITION_API_KEY", "API_KEY")
 HEADERS = {"X-API-Key": API_KEY} if API_KEY else {}
 
 REQUEST_TIMEOUT = 120
