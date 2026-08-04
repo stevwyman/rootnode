@@ -4,6 +4,7 @@ django-debug-toolbar
 python-dateutil
 django-mptt
 django-two-factor-auth
+gunicorn
 numpy
 pillow
 pytest
