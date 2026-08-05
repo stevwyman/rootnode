@@ -28,6 +28,8 @@ RUN SECRET_KEY=build-time-only-not-for-runtime \
     ALLOWED_HOSTS=localhost \
     python manage.py compilemessages
 
+RUN mkdir -p /data/genview
+
 # ==========================================
 # Stage 2️⃣ Final (Rootless & Hardened)
 # ==========================================
@@ -47,10 +49,7 @@ COPY --from=builder --chown=1001:0 /opt/venv /opt/venv
 COPY --from=builder --chown=1001:0 /app /usr/src/app
 
 # Set up the volume mount point with correct permissions
-RUN mkdir -p /data/genview && chown -R 1001:0 /data/genview
-
-# Explicitly make the Python entrypoint executable
-RUN chmod +x docker-entrypoint.py
+COPY --from=builder --chown=1001:0 /data/genview /data/genview
 
 # Switch to the default rootless user provided by Red Hat
 USER 1001
@@ -59,5 +58,6 @@ VOLUME /data/genview
 
 # Execute the entrypoint via the venv's Python binary
 ENTRYPOINT ["python", "docker-entrypoint.py"]
+
 #CMD ["python", "manage.py", "runserver", "0.0.0.0:8003"]
 CMD ["gunicorn", "rootnode.wsgi:application", "--bind", "0.0.0.0:8003", "--workers", "3", "--access-logfile", "-", "--error-logfile", "-"]
