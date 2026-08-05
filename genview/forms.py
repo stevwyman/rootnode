@@ -112,16 +112,23 @@ class IndividualForm(ModelForm):
     # Hilfsmethode: Event holen (oder neu anlegen)
     # --------------------------------------------------------------
     @staticmethod
-    def _get_or_create_event(person: Individual, ev_type: str) -> Event:
+    def _get_or_create_event(person: Individual, tag: str) -> Event:
         """
-        Liefert das vorhandene Event vom Typ ``ev_type`` (BIRT/DEAT) oder legt
-        ein neues an, wenn keins existiert.
+        Liefert das vorhandene Event mit GEDCOM-Tag ``tag`` (BIRT/DEAT)
+        oder legt ein neues an, wenn keins existiert.
         """
-        event = person.events.filter(event_type=ev_type).first()
+        event = person.events.filter(event_type__tag=tag).first()
         if not event:
+            event_type, _ = EventType.objects.get_or_create(
+                tag=tag,
+                defaults={
+                    "name": "Birth" if tag == "BIRT" else "Death",
+                    "category": EventType.Category.INDIVIDUAL,
+                },
+            )
             event = Event.objects.create(
                 individual=person,
-                event_type=ev_type,
+                event_type=event_type,
                 gedcom_tree=person.gedcom_tree,
             )
         return event
@@ -146,7 +153,7 @@ class IndividualForm(ModelForm):
         birth_raw = self.cleaned_data.get("birth_date_raw")
         birth_parsed = self.cleaned_data.get("birth_date_parsed")
         if birth_raw or birth_parsed:
-            birth_evt = self._get_or_create_event(individual, event_type__tag='BIRT')
+            birth_evt = self._get_or_create_event(individual, "BIRT")
             birth_evt.raw_date = birth_raw or ""
             birth_evt.parsed_date = birth_parsed
             birth_evt.save()
@@ -154,7 +161,7 @@ class IndividualForm(ModelForm):
             # wenn beide Felder leer sind, löschen wir ggf. das Event
             Event.objects.filter(
                 individual=individual,
-                event_type__tag='BIRT',
+                event_type__tag="BIRT",
             ).delete()
 
         # ----------------------------------------------------------
@@ -163,14 +170,14 @@ class IndividualForm(ModelForm):
         death_raw = self.cleaned_data.get("death_date_raw")
         death_parsed = self.cleaned_data.get("death_date_parsed")
         if death_raw or death_parsed:
-            death_evt = self._get_or_create_event(individual, event_type__tag='DEAT')
+            death_evt = self._get_or_create_event(individual, "DEAT")
             death_evt.raw_date = death_raw or ""
             death_evt.parsed_date = death_parsed
             death_evt.save()
         else:
             Event.objects.filter(
                 individual=individual,
-                event_type__tag='DEAT',
+                event_type__tag="DEAT",
             ).delete()
 
         return individual
@@ -294,11 +301,19 @@ class FamilyForm(ModelForm):
     # --------------------------------------------------------------
     @staticmethod
     def _get_or_create_marriage_event(family: Family) -> Event:
-        ev = family.events.filter(event_type__tag='MARR').first()
+        ev = family.events.filter(event_type__tag="MARR").first()
         if not ev:
+            event_type, _ = EventType.objects.get_or_create(
+                tag="MARR",
+                defaults={
+                    "name": "Marriage",
+                    "category": EventType.Category.FAMILY,
+                },
+            )
             ev = Event.objects.create(
                 family=family,
-                event_type__tag='MARR',
+                event_type=event_type,
+                gedcom_tree=family.gedcom_tree,
             )
         return ev
 
@@ -321,7 +336,7 @@ class FamilyForm(ModelForm):
             ev = self._get_or_create_marriage_event(family)
             ev.raw_date = raw or ""
             ev.parsed_date = parsed
-            ev.place = place or ""
+            ev.place = place  # FK — None clears; never assign ""
             ev.save()
         else:
             # wenn alle Felder leer sind, entfernen wir ggf. das Event

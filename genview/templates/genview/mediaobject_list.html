@@ -80,18 +80,32 @@
                 <div class="card h-100 shadow-sm">
                     {% if item.file and item.file.name %}
                         {% if item.is_image or item.is_pdf and item.file %}
-                            <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
-                                <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}"
-                                    class="card-img-top"
-                                    alt="{{ item.title }}">
-                            </a>
+                            <div class="media-gallery__thumb position-relative">
+                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
+                                    <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}"
+                                        class="card-img-top"
+                                        alt="{{ item.title }}">
+                                </a>
+                                {% if item.identified_face_count %}
+                                    <span class="media-gallery__faces badge text-bg-dark"
+                                          title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
+                                        👤 {{ item.identified_face_count }}
+                                    </span>
+                                {% endif %}
+                            </div>
                         {% else %}
-                            <div class="card-img-top media-gallery__placeholder bg-light d-flex align-items-center justify-content-center">
+                            <div class="card-img-top media-gallery__placeholder bg-light d-flex align-items-center justify-content-center position-relative">
                                 <span class="text-muted fs-1">📄 Dokument</span>
+                                {% if item.identified_face_count %}
+                                    <span class="media-gallery__faces badge text-bg-dark"
+                                          title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
+                                        👤 {{ item.identified_face_count }}
+                                    </span>
+                                {% endif %}
                             </div>
                         {% endif %}
                     {% else %}
-                        <div class="p-3 bg-light border-bottom text-center text-muted">
+                        <div class="p-3 bg-light border-bottom text-center text-muted position-relative">
                             <div class="fs-1 mb-2">📷</div>
                             <strong>Bild fehlt</strong><br>
                             <small>{{ item.title|default:"Ohne Titel" }}</small>
@@ -101,6 +115,12 @@
                                 <small class="text-break" title="Originaler Dateipfad auf dem Rechner">
                                     Pfad: {{ item.gedcom_original_filepath }}
                                 </small>
+                            {% endif %}
+                            {% if item.identified_face_count %}
+                                <span class="media-gallery__faces badge text-bg-dark"
+                                      title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
+                                    👤 {{ item.identified_face_count }}
+                                </span>
                             {% endif %}
                         </div>
                     {% endif %}

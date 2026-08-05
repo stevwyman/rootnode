@@ -12,7 +12,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Subquery, OuterRef, Prefetch
+from django.db.models import Count, Subquery, OuterRef, Prefetch, Value, IntegerField
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.forms import modelformset_factory
@@ -1630,6 +1630,23 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         
         # 3. Die Sortierung aus dem Mixin anwenden
         qs = qs.order_by(self.get_ordering())
+
+        # Faces assigned to a person (Subquery avoids inflate from M2M search joins)
+        identified_faces = (
+            FaceTag.objects.filter(
+                media_id=OuterRef("pk"),
+                individual_id__isnull=False,
+            )
+            .values("media_id")
+            .annotate(_c=Count("id"))
+            .values("_c")[:1]
+        )
+        qs = qs.annotate(
+            identified_face_count=Coalesce(
+                Subquery(identified_faces, output_field=IntegerField()),
+                Value(0),
+            )
+        )
         
         return qs.prefetch_related('individuals', 'families', 'events')
 

@@ -25,3 +25,17 @@
 .media-gallery__placeholder {
     object-fit: unset;
 }
+
+.media-gallery__thumb .card-img-top {
+    display: block;
+}
+
+.media-gallery__faces {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    opacity: 0.92;
+    pointer-events: none;
+}
