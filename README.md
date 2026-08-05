@@ -15,6 +15,7 @@ Main features:
 - two factor authorizations
 - multi language support
 - face detection support (would need [facenode](https://github.com/stevwyman/facenode))
+- ocr support (would need [textnode](https://github.com/stevwyman/textnode))
 
 The main driver of initiating this project has been to focus on security. This type of information can be very sensitive and therefore **privacy** needs attention. On the other hand you want to share as much as possible to either help others or to get others information, if they have same.
 
@@ -39,6 +40,48 @@ The above values can be of course configured.
 python manage.py import_gedcom pfad/zur/datei.ged --tree-name "Familie Müller"
 ```
 
+## architecture
+
+This section outlines the architecture, communication flow, and data storage strategy for the containerized application stack.
+
+### 1. System Overview & Communication
+
+The system utilizes a **Hub-and-Spoke** microservices architecture. The containers communicate over an internal network, with only the main application exposed to the end user.
+
+```text
+ ┌─────────────────────────────────────────────────────────┐
+ │                   User / Web Browser                    │
+ └────────────────────────────┬────────────────────────────┘
+                              │ HTTP Request
+                              ▼ (Port 8003)
+ ┌─────────────────────────────────────────────────────────┐
+ │                      ROOTNODE                           │
+ │                (Main Django Application)                │
+ │                                                         │
+ │  • Handles UI, Auth, and Business Logic                 │
+ │  • Gunicorn Production Server                           │
+ │  • Mounts: /data/genview (SQLite, Media, Static)        │
+ └──────┬───────────────────────────────────────────┬──────┘
+        │                                           │
+        │ HTTP POST (File Upload)                   │ HTTP POST (Image Upload)
+        │                                           │
+        ▼ (Port 8000)                               ▼ (Port 8000)
+ ┌──────────────────────────┐             ┌──────────────────────────┐
+ │        TEXTNODE          │             │        FACENODE          │
+ │   (EasyOCR & PyMuPDF)    │             │  (DeepFace & RetinaFace) │
+ │                          │             │                          │
+ │ • Extracts text / OCR    │             │ • Bounding boxes         │
+ │ • Renders PDFs in memory │             │ • 512d Face Embeddings   │
+ │ • Stateless (No Volumes) │             │ • Mounts: /app/.deepface │
+ └──────────────────────────┘             └──────────────────────────┘
+```
+
+### Component Roles
+
+-**Rootnode (The Hub)**: Receives the initial user request. When a user uploads a document or photo, the Rootnode holds it in memory (or saves it to its local volume) and acts as an HTTP client, delegating heavy machine-learning tasks by making POST requests to the internal endpoints of the other two nodes.
+-**Textnode (The OCR Spoke)**: Receives a file from the Rootnode, checks if it is a PDF or image, processes it purely in RAM, and returns a JSON string of the extracted text. It is entirely stateless.
+-**Facenode (The Vision Spoke)**: Receives an image from the Rootnode, aligns the face, calculates the vector embedding, and returns a JSON payload containing facial coordinates and the 512-dimension array. It immediately forgets the image after processing.
+
 ### deployment
 
 Right now the default configuration is based on a local db.sqlite3
@@ -46,20 +89,60 @@ You might want to provide an volume to store the database and the stored data,
 such as photos or documents.
 
 ```yaml
+networks:
+  backend_net:
+    name: genview_network
+
+volumes:
+  models_data:
+    name: shared_ml_models
+  genview_data:
+    name: static_pictures_data
+
 services:
-  app:
+  # -------------------------------------------------
+  # 1️⃣ TEXTNODE (Isolated)
+  # -------------------------------------------------
+  textnode:
+    image: localhost/textnode:latest
+    container_name: textnode
+    restart: unless-stopped
+    volumes:
+      - models_data:/app/.EasyOCR
+    networks:
+      - backend_net
+
+  # -------------------------------------------------
+  # 2️⃣ FACENODE (Isolated)
+  # -------------------------------------------------
+  facenode:
+    image: localhost/facenode:latest
+    container_name: facenode
+    restart: unless-stopped
+    volumes:
+      - models_data:/app/.deepface
+    networks:
+      - backend_net
+
+  # -------------------------------------------------
+  # 3️⃣ ROOTNODE (Public Facing)
+  # -------------------------------------------------
+  rootnode:
     image: localhost/rootnode:latest
-    container_name: genview
+    container_name: rootnode
+    restart: unless-stopped
     ports:
       - 8003:8003
     volumes:
-      - data:/data/genview:z
+      - genview_data:/data/genview:z
+    networks:
+      - backend_net
     env_file:
       - .env
-      
-volumes:
-  data:
-    name: genview_data
+    depends_on:
+      - textnode
+      - facenode
+
 ```
 
 You can also provide configuration data using an .env file. Currently the following
@@ -73,6 +156,9 @@ DEBUG=True
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_EMAIL=admin@example.com
 DJANGO_SUPERUSER_PASSWORD=admin
+
+FACE_RECOGNITION_URL=http://facenode:8000/detect
+OCR_RECOGNITION_URL=http://textnode:8000/extract
 ```
 
 ## ToDos
