@@ -203,4 +203,51 @@ class GlobalSearchViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         person_results = [r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"]
         self.assertEqual(person_results[0].pk, self.jane_doe.pk)
-        self.assertFalse(any(getattr(r, "search_match", None) for r in person_results))
+        exact = [r for r in person_results if getattr(r, "search_match", None) is None]
+        self.assertTrue(exact)
+        self.assertEqual(exact[0].pk, self.jane_doe.pk)
+
+    def test_phonetic_and_before_exact_or(self):
+        """'Hans Schmitt' finds phonetic Hans Schmidt (AND) before OR-only hits."""
+        hans_schmidt = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Hans",
+            surname="Schmidt",
+        )
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Hans Schmitt"})
+
+        self.assertEqual(response.status_code, 200)
+        person_results = [r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"]
+
+        phonetic_and = [r for r in person_results if getattr(r, "search_match", None) == "and_phonetic"]
+        or_results = [r for r in person_results if getattr(r, "search_match", None) == "or"]
+
+        self.assertTrue(any(r.pk == hans_schmidt.pk for r in phonetic_and))
+        if or_results:
+            self.assertLess(
+                person_results.index(phonetic_and[0]),
+                person_results.index(or_results[0]),
+            )
+
+    def test_single_word_phonetic_after_exact(self):
+        schmitt = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Anna",
+            surname="Schmitt",
+        )
+        schmidt = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Bernd",
+            surname="Schmidt",
+        )
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Schmitt"})
+
+        person_results = [r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"]
+        exact = [r for r in person_results if getattr(r, "search_match", None) is None]
+        phonetic = [r for r in person_results if getattr(r, "search_match", None) == "phonetic"]
+
+        self.assertTrue(any(r.pk == schmitt.pk for r in exact))
+        self.assertTrue(any(r.pk == schmidt.pk for r in phonetic))
+        self.assertLess(person_results.index(exact[0]), person_results.index(phonetic[0]))

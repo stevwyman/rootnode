@@ -12,7 +12,6 @@ from .models import (
 )
 
 import io
-import os
 from pathlib import Path
 from typing import Tuple
 
@@ -21,9 +20,7 @@ from django.conf import settings
 
 from PIL import Image, ImageOps
 
-# ---------- PDF handling – PyMuPDF (fitz) ----------
-# pip install "PyMuPDF>=1.22"
-import fitz  # noqa: E402
+import pymupdf
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
     """
@@ -62,6 +59,78 @@ def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
             best_individual = tag.individual
 
     return best_individual
+
+
+def detect_and_save_faces(media, tree_id: int) -> dict:
+    """
+    Run FaceNode detection on *media* and replace FaceTag rows.
+
+    Returns a result dict:
+      ok, error, faces_found, linked, title, media_id
+    """
+    from .facenode_client import detect_faces_via_api
+
+    result = {
+        "ok": False,
+        "error": None,
+        "faces_found": 0,
+        "linked": 0,
+        "title": media.title or f"Media {media.pk}",
+        "media_id": media.pk,
+    }
+
+    if not media.file or not media.file.name:
+        result["error"] = "Keine Bilddatei vorhanden."
+        return result
+
+    try:
+        with Image.open(media.file.path) as img:
+            img_width, img_height = img.size
+    except OSError as exc:
+        result["error"] = f"Bild konnte nicht gelesen werden: {exc}"
+        return result
+
+    if img_width <= 0 or img_height <= 0:
+        result["error"] = "Ungültige Bildabmessungen."
+        return result
+
+    response = detect_faces_via_api(media.file.path)
+    if response["error"]:
+        result["error"] = response["error"]
+        return result
+
+    faces = response["faces"]
+    if not faces:
+        result["ok"] = True
+        return result
+
+    media.facetags.all().delete()
+
+    linked = 0
+    for face in faces:
+        x_pct = (face["x"] / img_width) * 100
+        y_pct = (face["y"] / img_height) * 100
+        w_pct = (face["width"] / img_width) * 100
+        h_pct = (face["height"] / img_height) * 100
+        embedding = face["embedding"]
+        individual = find_best_match_for_face(embedding, tree_id)
+        if individual:
+            linked += 1
+        FaceTag.objects.create(
+            media=media,
+            x_percent=x_pct,
+            y_percent=y_pct,
+            width_percent=w_pct,
+            height_percent=h_pct,
+            confidence=face["confidence"],
+            embedding=embedding,
+            individual=individual,
+        )
+
+    result["ok"] = True
+    result["faces_found"] = len(faces)
+    result["linked"] = linked
+    return result
 
 
 def get_similar_place_clusters(tree_id, threshold=0.80):
@@ -312,7 +381,7 @@ def _open_image(file_path: Path) -> Image.Image:
 
 def _render_pdf_first_page(pdf_path: Path) -> Image.Image:
     """Render first page of PDF to a Pillow Image (RGB)."""
-    doc = fitz.open(str(pdf_path))
+    doc = pymupdf.open(str(pdf_path))
     if doc.page_count == 0:
         raise ValueError("PDF contains no pages")
     page = doc.load_page(0)               # 0-based index

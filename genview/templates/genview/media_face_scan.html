@@ -1,0 +1,221 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Gesichter scannen" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 720px;">
+    <h2>👤 {% trans "Gesichter scannen" %}</h2>
+    <p class="text-muted">
+        {% trans "Durchläuft alle Fotos (keine Dokumente), die noch nicht gescannt wurden oder noch nicht zugeordnete Gesichter haben. Jedes Bild wird einzeln verarbeitet – der Fortschritt aktualisiert sich schrittweise, ohne dass die Seite hängen bleibt." %}
+    </p>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <p class="mb-2">
+                <strong>{% trans "Offene Bilder:" %}</strong>
+                <span id="face-scan-total">{{ candidate_count }}</span>
+            </p>
+
+            {% if candidate_count %}
+            <div class="progress mb-3" style="height: 1.75rem;" role="progressbar"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="face-scan-bar" class="progress-bar progress-bar-striped"
+                     style="width: 0%">0%</div>
+            </div>
+            <p class="small text-muted mb-3" id="face-scan-status">
+                {% trans "Bereit. Klicke auf Start, um die Erkennung zu beginnen." %}
+            </p>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" id="face-scan-start" class="btn btn-primary">
+                    ▶ {% trans "Scan starten" %}
+                </button>
+                <button type="button" id="face-scan-stop" class="btn btn-outline-secondary" disabled>
+                    ⏸ {% trans "Pause" %}
+                </button>
+                <a href="{% url 'genview:media-list' tree_id %}" class="btn btn-outline-primary">
+                    {% trans "Zur Medien-Galerie" %}
+                </a>
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-0">
+                🎉 {% trans "Alles erledigt – keine Fotos mit offenen Gesichtern gefunden." %}
+            </div>
+            <a href="{% url 'genview:media-list' tree_id %}" class="btn btn-outline-primary mt-3">
+                {% trans "Zur Medien-Galerie" %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">{% trans "Protokoll" %}</div>
+        <ul id="face-scan-log" class="list-group list-group-flush small"
+            style="max-height: 28rem; overflow-y: auto;">
+            {% if not candidate_count %}
+            <li class="list-group-item text-muted">{% trans "Nichts zu tun." %}</li>
+            {% endif %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if candidate_count %}
+{{ candidates_json|json_script:"face-scan-candidates" }}
+<script>
+(function () {
+    const candidates = JSON.parse(document.getElementById("face-scan-candidates").textContent);
+    const processUrl = "{% url 'genview:media-face-scan-process' tree_id %}";
+    const csrfToken = "{{ csrf_token }}";
+
+    const bar = document.getElementById("face-scan-bar");
+    const statusEl = document.getElementById("face-scan-status");
+    const logEl = document.getElementById("face-scan-log");
+    const startBtn = document.getElementById("face-scan-start");
+    const stopBtn = document.getElementById("face-scan-stop");
+    const progressWrap = bar.closest(".progress");
+
+    let index = 0;
+    let running = false;
+    let stopRequested = false;
+    let stats = { ok: 0, faces: 0, linked: 0, errors: 0, empty: 0 };
+
+    function steppedPercent(done, total) {
+        if (total <= 0) return 100;
+        if (done >= total) return 100;
+        return Math.floor((done / total) * 20) * 5;
+    }
+
+    function setProgress(done, total) {
+        const pct = steppedPercent(done, total);
+        bar.style.width = pct + "%";
+        bar.textContent = pct + "%";
+        bar.setAttribute("aria-valuenow", String(pct));
+        if (progressWrap) progressWrap.setAttribute("aria-valuenow", String(pct));
+        statusEl.textContent =
+            done + " / " + total + " — " +
+            stats.ok + " ok, " +
+            stats.faces + " Gesichter, " +
+            stats.linked + " verknüpft, " +
+            stats.empty + " ohne Treffer, " +
+            stats.errors + " Fehler";
+    }
+
+    function appendLog(item, cssClass) {
+        const li = document.createElement("li");
+        li.className = "list-group-item " + (cssClass || "");
+        if (item.url) {
+            const a = document.createElement("a");
+            a.href = item.url;
+            a.textContent = item.title || ("#" + item.id);
+            a.target = "_blank";
+            li.appendChild(a);
+            li.appendChild(document.createTextNode(" — " + item.message));
+        } else {
+            li.textContent = item.message;
+        }
+        logEl.prepend(li);
+    }
+
+    async function processOne(candidate) {
+        const response = await fetch(processUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+            },
+            body: JSON.stringify({ media_id: candidate.id }),
+            credentials: "same-origin",
+        });
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = { ok: false, error: "Ungültige Serverantwort", title: candidate.title, media_id: candidate.id };
+        }
+        return data;
+    }
+
+    async function runLoop() {
+        const total = candidates.length;
+        running = true;
+        stopRequested = false;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        bar.classList.add("progress-bar-animated");
+
+        while (index < total && !stopRequested) {
+            const candidate = candidates[index];
+            try {
+                const data = await processOne(candidate);
+                if (data.error) {
+                    stats.errors += 1;
+                    appendLog({
+                        title: data.title || candidate.title,
+                        url: data.detail_url,
+                        id: candidate.id,
+                        message: "Fehler: " + data.error,
+                    }, "list-group-item-danger");
+                } else if (!data.faces_found) {
+                    stats.ok += 1;
+                    stats.empty += 1;
+                    appendLog({
+                        title: data.title || candidate.title,
+                        url: data.detail_url,
+                        id: candidate.id,
+                        message: "Keine Gesichter erkannt",
+                    }, "list-group-item-light");
+                } else {
+                    stats.ok += 1;
+                    stats.faces += data.faces_found;
+                    stats.linked += data.linked || 0;
+                    appendLog({
+                        title: data.title || candidate.title,
+                        url: data.detail_url,
+                        id: candidate.id,
+                        message: data.faces_found + " Gesicht(er), " + (data.linked || 0) + " verknüpft",
+                    }, "list-group-item-success");
+                }
+            } catch (err) {
+                stats.errors += 1;
+                appendLog({
+                    title: candidate.title,
+                    id: candidate.id,
+                    message: "Netzwerkfehler: " + err,
+                }, "list-group-item-danger");
+            }
+            index += 1;
+            setProgress(index, total);
+        }
+
+        bar.classList.remove("progress-bar-animated");
+        running = false;
+        stopBtn.disabled = true;
+
+        if (index >= total) {
+            startBtn.disabled = true;
+            startBtn.textContent = "✓ Fertig";
+            bar.classList.add("bg-success");
+            statusEl.textContent =
+                "Abgeschlossen: " + total + " Bilder — " +
+                stats.faces + " Gesichter, " + stats.linked + " verknüpft, " +
+                stats.errors + " Fehler.";
+        } else {
+            startBtn.disabled = false;
+            startBtn.textContent = "▶ Weiter";
+            statusEl.textContent = "Pausiert bei " + index + " / " + total + ".";
+        }
+    }
+
+    startBtn.addEventListener("click", function () {
+        if (!running) runLoop();
+    });
+    stopBtn.addEventListener("click", function () {
+        stopRequested = true;
+        stopBtn.disabled = true;
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -245,33 +245,100 @@ def _annotate_individual_search_result(individual, apply_privacy, match: str | N
         individual.search_url = individual.get_absolute_url()
 
 
-def _search_individuals(tree_id, query: str, apply_privacy, *, limit_and=20, limit_or=20):
+def _iter_phonetic_candidates(base_qs, exclude_pks):
+    """Prefetch name fields for in-Python phonetic matching."""
+    qs = base_qs.exclude(pk__in=exclude_pks).prefetch_related("alternative_names")
+    return qs.only(
+        "id",
+        "given_name",
+        "surname",
+        "gedcom_id",
+        "gedcom_tree_id",
+    )
+
+
+def _search_individuals(
+    tree_id,
+    query: str,
+    apply_privacy,
+    *,
+    limit_and=20,
+    limit_or=20,
+    limit_phonetic_and=20,
+    limit_phonetic_or=20,
+):
+    """
+    Ranked person search:
+      1. exact AND  2. phonetic AND  3. exact OR  4. phonetic OR
+    Single-term queries use exact then phonetic only.
+    """
+    from .phonetics import (
+        individual_matches_all_phonetic,
+        individual_matches_any_phonetic,
+        individual_matches_phonetic_term,
+    )
+
     terms = _split_search_terms(query)
     if not terms:
         return []
 
     base = Individual.objects.filter(gedcom_tree_id=tree_id)
     results = []
+    seen: set[int] = set()
 
+    def _add(ind, match: str | None):
+        if ind.pk in seen:
+            return False
+        seen.add(ind.pk)
+        _annotate_individual_search_result(ind, apply_privacy, match=match)
+        results.append(ind)
+        return True
+
+    # ---------- single term: exact → phonetic ----------
     if len(terms) == 1:
-        for ind in base.filter(_individual_name_q(terms[0])).distinct()[:limit_and]:
-            _annotate_individual_search_result(ind, apply_privacy)
-            results.append(ind)
+        term = terms[0]
+        for ind in base.filter(_individual_name_q(term)).distinct()[:limit_and]:
+            _add(ind, None)
+
+        phonetic_added = 0
+        for ind in _iter_phonetic_candidates(base, seen):
+            if phonetic_added >= limit_phonetic_and:
+                break
+            if individual_matches_phonetic_term(ind, term) and _add(ind, "phonetic"):
+                phonetic_added += 1
         return results
 
-    and_pks = set()
+    # ---------- 1) exact AND ----------
     for ind in base.filter(_individual_and_q(terms)).distinct()[:limit_and]:
-        and_pks.add(ind.pk)
-        _annotate_individual_search_result(ind, apply_privacy, match="and")
-        results.append(ind)
+        _add(ind, "and")
 
+    # ---------- 2) phonetic AND ----------
+    phonetic_and_added = 0
+    for ind in _iter_phonetic_candidates(base, seen):
+        if phonetic_and_added >= limit_phonetic_and:
+            break
+        if individual_matches_all_phonetic(ind, terms) and _add(ind, "and_phonetic"):
+            phonetic_and_added += 1
+
+    # ---------- 3) exact OR ----------
     or_q = Q()
     for term in terms:
         or_q |= _individual_name_q(term)
 
-    for ind in base.filter(or_q).exclude(pk__in=and_pks).distinct()[:limit_or]:
-        _annotate_individual_search_result(ind, apply_privacy, match="or")
-        results.append(ind)
+    or_added = 0
+    for ind in base.filter(or_q).exclude(pk__in=seen).distinct()[:limit_or]:
+        if _add(ind, "or"):
+            or_added += 1
+            if or_added >= limit_or:
+                break
+
+    # ---------- 4) phonetic OR ----------
+    phonetic_or_added = 0
+    for ind in _iter_phonetic_candidates(base, seen):
+        if phonetic_or_added >= limit_phonetic_or:
+            break
+        if individual_matches_any_phonetic(ind, terms) and _add(ind, "or_phonetic"):
+            phonetic_or_added += 1
 
     return results
 
@@ -1516,72 +1583,37 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     # Action-Handler 1: Erkennung & Prozentrechnung
     # -------------------------------------------------
     def _handle_detection(self, request, media):
-        from .facenode_client import detect_faces_via_api
-        from .utils import find_best_match_for_face
+        from .utils import detect_and_save_faces
 
         tree_id = self.kwargs.get("tree_id")
+        result = detect_and_save_faces(media, tree_id)
 
-        if not media.file or not media.file.name:
-            messages.error(request, _("Keine Bilddatei vorhanden."))
-            return redirect(request.path)
-
-        try:
-            with Image.open(media.file.path) as img:
-                img_width, img_height = img.size
-        except OSError as exc:
-            messages.error(request, _("Bild konnte nicht gelesen werden: %(detail)s") % {"detail": exc})
-            return redirect(request.path)
-
-        if img_width <= 0 or img_height <= 0:
-            messages.error(request, _("Ungültige Bildabmessungen."))
-            return redirect(request.path)
-
-        response = detect_faces_via_api(media.file.path)
-
-        if response["error"]:
-            messages.error(request, _("Erkennungs-Fehler: %(detail)s") % {"detail": response["error"]})
-            return redirect(request.path)
-
-        faces = response["faces"]
-        if not faces:
-            messages.info(request, _("Keine Gesichter im Bild erkannt. Bestehende Markierungen bleiben erhalten."))
-            return redirect(request.path)
-
-        media.facetags.all().delete()
-
-        auto_match_count = 0
-        saved_count = 0
-
-        for face in faces:
-            x_pct = (face["x"] / img_width) * 100
-            y_pct = (face["y"] / img_height) * 100
-            w_pct = (face["width"] / img_width) * 100
-            h_pct = (face["height"] / img_height) * 100
-            detected_embedding = face["embedding"]
-
-            auto_assigned_individual = find_best_match_for_face(detected_embedding, tree_id)
-            if auto_assigned_individual:
-                auto_match_count += 1
-
-            FaceTag.objects.create(
-                media=media,
-                x_percent=x_pct,
-                y_percent=y_pct,
-                width_percent=w_pct,
-                height_percent=h_pct,
-                confidence=face["confidence"],
-                embedding=detected_embedding,
-                individual=auto_assigned_individual,
+        if result["error"]:
+            messages.error(
+                request,
+                _("Erkennungs-Fehler: %(detail)s") % {"detail": result["error"]},
             )
-            saved_count += 1
+            return redirect(request.path)
 
-        if auto_match_count > 0:
+        if result["faces_found"] == 0:
+            messages.info(
+                request,
+                _("Keine Gesichter im Bild erkannt. Bestehende Markierungen bleiben erhalten."),
+            )
+            return redirect(request.path)
+
+        if result["linked"] > 0:
             messages.success(
                 request,
-                _("%(saved)s Gesicht(er) erkannt, davon %(matched)s automatisch zugeordnet.") % {"saved": saved_count, "matched": auto_match_count},
+                _("%(saved)s Gesicht(er) erkannt, davon %(matched)s automatisch zugeordnet.")
+                % {"saved": result["faces_found"], "matched": result["linked"]},
             )
         else:
-            messages.success(request, _("%(count)s Gesicht(er) erkannt und gespeichert.") % {"count": saved_count})
+            messages.success(
+                request,
+                _("%(count)s Gesicht(er) erkannt und gespeichert.")
+                % {"count": result["faces_found"]},
+            )
 
         return redirect(request.path)
 
@@ -1627,12 +1659,17 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         
         # 2. Die Filter (Suche & Kategorie) aus dem Mixin anwenden
         qs = qs.filter(self.get_queryset_filters()).distinct()
+
+        # 3. Optional: nur Medien mit noch nicht verknüpften Gesichtern
+        faces_filter = self.request.GET.get("faces", "").strip()
+        if faces_filter == "unlinked":
+            qs = qs.filter(facetags__individual__isnull=True).distinct()
         
-        # 3. Die Sortierung aus dem Mixin anwenden
+        # 4. Die Sortierung aus dem Mixin anwenden
         qs = qs.order_by(self.get_ordering())
 
-        # Faces assigned to a person (Subquery avoids inflate from M2M search joins)
-        identified_faces = (
+        # Face tags: linked vs still unassigned (Subquery avoids M2M search inflate)
+        linked_faces = (
             FaceTag.objects.filter(
                 media_id=OuterRef("pk"),
                 individual_id__isnull=False,
@@ -1641,11 +1678,24 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
             .annotate(_c=Count("id"))
             .values("_c")[:1]
         )
-        qs = qs.annotate(
-            identified_face_count=Coalesce(
-                Subquery(identified_faces, output_field=IntegerField()),
-                Value(0),
+        unlinked_faces = (
+            FaceTag.objects.filter(
+                media_id=OuterRef("pk"),
+                individual_id__isnull=True,
             )
+            .values("media_id")
+            .annotate(_c=Count("id"))
+            .values("_c")[:1]
+        )
+        qs = qs.annotate(
+            linked_face_count=Coalesce(
+                Subquery(linked_faces, output_field=IntegerField()),
+                Value(0),
+            ),
+            unlinked_face_count=Coalesce(
+                Subquery(unlinked_faces, output_field=IntegerField()),
+                Value(0),
+            ),
         )
         
         return qs.prefetch_related('individuals', 'families', 'events')
@@ -1656,8 +1706,87 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         
         # Damit das Dropdown im Template die echten Kategorien kennt (Foto, Dokument)
         context['category_choices'] = MediaObject.Category.choices
+        context['current_filter_faces'] = self.request.GET.get('faces', '')
         
         return context
+
+
+def _face_scan_candidate_qs(tree_id):
+    """Photos that still need face detection (never scanned or have unlinked faces)."""
+    return (
+        MediaObject.objects.filter(
+            gedcom_tree_id=tree_id,
+            category=MediaObject.Category.PHOTO,
+        )
+        .exclude(file="")
+        .exclude(file__isnull=True)
+        .filter(
+            Q(facetags__isnull=True) | Q(facetags__individual__isnull=True)
+        )
+        .distinct()
+        .order_by("id")
+    )
+
+
+class MediaFaceScanView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+    """Landing page: lists pending photos and drives one-by-one AJAX progress."""
+
+    template_name = "genview/media_face_scan.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tree_id = self.kwargs["tree_id"]
+        candidates = list(
+            _face_scan_candidate_qs(tree_id).values("id", "title")
+        )
+        ctx["tree_id"] = tree_id
+        ctx["candidate_count"] = len(candidates)
+        ctx["candidates_json"] = candidates
+        return ctx
+
+
+class MediaFaceScanProcessView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    """Process a single media object; called repeatedly by the progress UI."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        import json
+
+        tree_id = self.kwargs["tree_id"]
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": "Ungültige Anfrage."}, status=400)
+
+        media_id = payload.get("media_id")
+        if not media_id:
+            return JsonResponse({"ok": False, "error": "media_id fehlt."}, status=400)
+
+        media = get_object_or_404(
+            MediaObject,
+            pk=media_id,
+            gedcom_tree_id=tree_id,
+            category=MediaObject.Category.PHOTO,
+        )
+
+        from .utils import detect_and_save_faces
+
+        result = detect_and_save_faces(media, tree_id)
+        return JsonResponse(
+            {
+                "ok": result["ok"],
+                "error": result["error"],
+                "media_id": result["media_id"],
+                "title": result["title"],
+                "faces_found": result["faces_found"],
+                "linked": result["linked"],
+                "detail_url": reverse(
+                    "genview:media-detail",
+                    kwargs={"tree_id": tree_id, "pk": media.pk},
+                ),
+            }
+        )
 
 
 class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):

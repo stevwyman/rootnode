@@ -1,0 +1,16 @@
+{% if item.unlinked_face_count or item.linked_face_count %}
+<div class="media-gallery__faces" aria-label="Gesichter">
+    {% if item.unlinked_face_count %}
+    <span class="badge media-gallery__faces-badge media-gallery__faces-badge--unlinked"
+          title="{% if item.unlinked_face_count == 1 %}1 erkanntes Gesicht ohne Zuordnung{% else %}{{ item.unlinked_face_count }} erkannte Gesichter ohne Zuordnung{% endif %}">
+        👤 {{ item.unlinked_face_count }}
+    </span>
+    {% endif %}
+    {% if item.linked_face_count %}
+    <span class="badge media-gallery__faces-badge media-gallery__faces-badge--linked"
+          title="{% if item.linked_face_count == 1 %}1 Gesicht einer Person zugeordnet{% else %}{{ item.linked_face_count }} Gesichter Personen zugeordnet{% endif %}">
+        👤 {{ item.linked_face_count }}
+    </span>
+    {% endif %}
+</div>
+{% endif %}

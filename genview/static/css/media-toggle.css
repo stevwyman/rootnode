@@ -34,8 +34,26 @@
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    pointer-events: none;
+}
+
+.media-gallery__faces-badge {
     font-weight: 600;
     letter-spacing: 0.02em;
-    opacity: 0.92;
-    pointer-events: none;
+    opacity: 0.95;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.media-gallery__faces-badge--unlinked {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+.media-gallery__faces-badge--linked {
+    background-color: #198754;
+    color: #fff;
 }

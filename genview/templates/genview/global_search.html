@@ -23,11 +23,25 @@
                                 <div class="list-group-item list-group-item-secondary py-2 small fw-semibold">
                                     {% trans "Personen mit allen Suchbegriffen" %}
                                 </div>
+                            {% elif obj.search_match == "and_phonetic" %}
+                                <div class="list-group-item list-group-item-secondary py-2 small fw-semibold">
+                                    {% trans "Phonetische Treffer (alle Suchbegriffe)" %}
+                                </div>
                             {% elif obj.search_match == "or" %}
                                 <div class="list-group-item list-group-item-secondary py-2 small fw-semibold">
                                     {% trans "Weitere Personen (einzelne Suchbegriffe)" %}
                                 </div>
+                            {% elif obj.search_match == "or_phonetic" %}
+                                <div class="list-group-item list-group-item-secondary py-2 small fw-semibold">
+                                    {% trans "Weitere phonetische Treffer" %}
+                                </div>
                             {% endif %}
+                        {% endifchanged %}
+                    {% elif not search_multi_word and obj.search_match == "phonetic" %}
+                        {% ifchanged obj.search_match %}
+                            <div class="list-group-item list-group-item-secondary py-2 small fw-semibold">
+                                {% trans "Phonetische Treffer" %}
+                            </div>
                         {% endifchanged %}
                     {% endif %}
                     {% if obj.search_url %}

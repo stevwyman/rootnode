@@ -5,6 +5,7 @@ python-dateutil
 django-mptt
 django-two-factor-auth
 gunicorn
+jellyfish
 numpy
 pillow
 pytest

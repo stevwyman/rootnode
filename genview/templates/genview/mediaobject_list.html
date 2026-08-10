@@ -27,14 +27,14 @@
                 <input type="hidden" name="sort" value="{{ current_sort }}">
                 <input type="hidden" name="dir" value="{{ current_dir }}">
 
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <div class="input-group">
                         <span class="input-group-text">🔍</span>
                         <input type="text" name="q" class="form-control" placeholder="Titel, Beschriebung ..." value="{{ current_search }}">
                     </div>
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select name="category" class="form-select">
                         <option value="">Alle Kategorien</option>
                         {% for cat_value, cat_label in category_choices %}
@@ -43,10 +43,18 @@
                             </option>
                         {% endfor %}
                     </select>
-
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <select name="faces" class="form-select" title="Gesichts-Zuordnung">
+                        <option value="">Alle Gesichter</option>
+                        <option value="unlinked" {% if current_filter_faces == "unlinked" %}selected{% endif %}>
+                            👤 Ohne Personen-Zuordnung
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
                     <button type="submit" class="btn btn-primary">Suchen & Filtern</button>
                     <a href="?" class="btn btn-outline-secondary">Zurücksetzen</a>
                 </div>
@@ -59,11 +67,11 @@
     <div class="d-flex gap-3 mb-3 small text-muted">
         <strong>Sortieren nach:</strong>
         
-        <a href="?q={{ current_search }}&category={{ current_filter_category }}&sort=title&dir={% if current_sort == 'title' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'title' %}fw-bold text-primary{% else %}text-muted{% endif %}">
+        <a href="?q={{ current_search }}&category={{ current_filter_category }}&faces={{ current_filter_faces }}&sort=title&dir={% if current_sort == 'title' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'title' %}fw-bold text-primary{% else %}text-muted{% endif %}">
             Titel {% if current_sort == 'title' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
         </a>
 
-        <a href="?q={{ current_search }}&category={{ current_filter_category }}&sort=category&dir={% if current_sort == 'category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'category' %}fw-bold text-primary{% else %}text-muted{% endif %}">
+        <a href="?q={{ current_search }}&category={{ current_filter_category }}&faces={{ current_filter_faces }}&sort=category&dir={% if current_sort == 'category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none {% if current_sort == 'category' %}fw-bold text-primary{% else %}text-muted{% endif %}">
             Kategorie {% if current_sort == 'category' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
         </a>
     </div>
@@ -86,22 +94,12 @@
                                         class="card-img-top"
                                         alt="{{ item.title }}">
                                 </a>
-                                {% if item.identified_face_count %}
-                                    <span class="media-gallery__faces badge text-bg-dark"
-                                          title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
-                                        👤 {{ item.identified_face_count }}
-                                    </span>
-                                {% endif %}
+                                {% include "genview/_media_face_badges.html" %}
                             </div>
                         {% else %}
                             <div class="card-img-top media-gallery__placeholder bg-light d-flex align-items-center justify-content-center position-relative">
                                 <span class="text-muted fs-1">📄 Dokument</span>
-                                {% if item.identified_face_count %}
-                                    <span class="media-gallery__faces badge text-bg-dark"
-                                          title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
-                                        👤 {{ item.identified_face_count }}
-                                    </span>
-                                {% endif %}
+                                {% include "genview/_media_face_badges.html" %}
                             </div>
                         {% endif %}
                     {% else %}
@@ -116,12 +114,7 @@
                                     Pfad: {{ item.gedcom_original_filepath }}
                                 </small>
                             {% endif %}
-                            {% if item.identified_face_count %}
-                                <span class="media-gallery__faces badge text-bg-dark"
-                                      title="{% if item.identified_face_count == 1 %}1 zugeordnetes Gesicht{% else %}{{ item.identified_face_count }} zugeordnete Gesichter{% endif %}">
-                                    👤 {{ item.identified_face_count }}
-                                </span>
-                            {% endif %}
+                            {% include "genview/_media_face_badges.html" %}
                         </div>
                     {% endif %}
 

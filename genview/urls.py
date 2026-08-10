@@ -187,6 +187,16 @@ urlpatterns = [
     ),
     path('tree/<int:tree_id>/media/bulk-upload/', views.BulkMediaUploadView.as_view(), name='bulk-media-upload'),
     path(
+        "tree/<int:tree_id>/media/face-scan/",
+        views.MediaFaceScanView.as_view(),
+        name="media-face-scan",
+    ),
+    path(
+        "tree/<int:tree_id>/media/face-scan/process/",
+        views.MediaFaceScanProcessView.as_view(),
+        name="media-face-scan-process",
+    ),
+    path(
         "tree/<int:tree_id>/media/toggle-category/",
         views.ToggleMediaCategoryView.as_view(),
         name="media-toggle-category",

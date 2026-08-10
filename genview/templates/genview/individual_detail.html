@@ -255,6 +255,11 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab">
+                            📝 {% trans "Notizen" %}
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link" id="media-tab" data-bs-toggle="tab" data-bs-target="#media" type="button" role="tab">
                             🖼️ Galerie
                         </button>
@@ -403,6 +408,29 @@
                                 </div>
                             {% endfor %}
                         </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="notes" role="tabpanel" aria-labelledby="notes-tab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="mb-0">📝 {% trans "Notizen & Kommentare" %}</h4>
+                            {% if can_edit %}
+                            <a href="{% url 'genview:individual-edit' tree_id person.pk %}" class="btn btn-sm btn-outline-primary shadow-sm">
+                                {% include "genview/_action_icon.html" with action="edit" %}
+                                <span class="ms-1">{% trans "Bearbeiten" %}</span>
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        {% if person.notes %}
+                            <div class="bg-light border rounded p-4 shadow-sm">
+                                <div class="text-body" style="white-space: pre-wrap;">{{ person.notes|linebreaksbr }}</div>
+                            </div>
+                        {% else %}
+                            <div class="text-center text-muted p-5 bg-light rounded">
+                                <i class="fs-1">📝</i>
+                                <p class="mt-2 mb-0">{% trans "Keine Notizen für diese Person hinterlegt." %}</p>
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div class="tab-pane fade" id="media" role="tabpanel" aria-labelledby="media-tab">
