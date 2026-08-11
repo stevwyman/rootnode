@@ -36,6 +36,19 @@
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{% trans "Daten" %}</a>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
+                                    {% if tree.starting_individual_id %}
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}">
+                                            🌳 {% trans "Baumansicht starten" %}
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual_id %}">
+                                            ⭐ {% trans "Startperson" %}
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% endif %}
                                     <li><a class="dropdown-item" href="{% url 'genview:individual-list' tree_id %}">👤 {% trans "Personen" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:family-list' tree_id %}">👪 {% trans "Familien" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:event-list' tree_id %}">📅 {% trans "Ereignisse" %}</a></li>

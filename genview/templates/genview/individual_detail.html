@@ -116,6 +116,11 @@
                                 <span class="badge bg-secondary text-light shadow-sm">
                                     ID: {{ object.gedcom_id|default:"Unbekannt" }}
                                 </span>
+                                {% if tree.starting_individual_id == person.pk %}
+                                <span class="badge bg-warning text-dark shadow-sm ms-1">
+                                    ⭐ {% trans "Startperson" %}
+                                </span>
+                                {% endif %}
                             </div>
 
                             <div class="dropdown mb-3">
@@ -139,12 +144,13 @@
                             </div>
 
 
-                            {% if can_edit %}
+                            {% if can_edit or is_tree_admin %}
                             <div class="dropdown ms-3">
                                 <button class="btn btn-outline-primary btn-sm dropdown-toggle shadow-sm px-3" type="button" id="profileActions" data-bs-toggle="dropdown" aria-expanded="false">
                                     ⚙️ Aktionen
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1" aria-labelledby="profileActions">
+                                    {% if can_edit %}
                                     <li>
                                         <a class="dropdown-item py-2" href="{% url 'genview:individual-edit' tree_id person.pk %}">
                                             {% include "genview/_action_icon.html" with action="edit" %}
@@ -156,6 +162,32 @@
                                             📷 Portrait hinzufügen / ändern
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if is_tree_admin %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% if tree.starting_individual_id == person.pk %}
+                                    <li>
+                                        <form method="post" action="{% url 'genview:set-starting-individual' tree_id=tree_id pk=person.pk %}" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="clear">
+                                            <button type="submit" class="dropdown-item py-2">
+                                                ☆ {% trans "Als Startperson entfernen" %}
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% else %}
+                                    <li>
+                                        <form method="post" action="{% url 'genview:set-starting-individual' tree_id=tree_id pk=person.pk %}" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="set">
+                                            <button type="submit" class="dropdown-item py-2">
+                                                ⭐ {% trans "Als Startperson festlegen" %}
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% if can_edit %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item py-2 text-danger" href="{% url 'genview:individual-delete' tree_id=tree_id pk=object.pk %}">
@@ -163,6 +195,7 @@
                                             <span class="ms-1">{% trans "Person löschen" %}</span>
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                             {% endif %}

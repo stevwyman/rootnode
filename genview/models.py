@@ -79,6 +79,15 @@ class Tree(models.Model):
         verbose_name="Öffentlicher Stammbaum",
         help_text="Wenn aktiviert, kann jeder den Baum sehen, ohne Membership."
     )
+    starting_individual = models.ForeignKey(
+        "Individual",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Startperson",
+        help_text="Person für Schnellzugriff und Start der interaktiven Baumansicht.",
+    )
 
     def __str__(self):
         return self.name

@@ -124,7 +124,7 @@ class TreeListView(ListView):
             qs = qs.annotate(user_role=Subquery(membership_role))
 
         # Neueste Bäume zuerst anzeigen
-        return qs.order_by('-id')
+        return qs.select_related("starting_individual").order_by('-id')
 
 
 class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
@@ -948,6 +948,40 @@ class IndividualDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, _("Person erfolgreich gelöscht."))
         return reverse_lazy("genview:individual-list", kwargs={"tree_id": tree_id})
+
+
+class SetTreeStartingIndividualView(LoginRequiredMixin, TreeAdminAccessMixin, View):
+    """Tree admin / superuser: set or clear the tree's starting individual."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs["tree_id"]
+        tree = get_object_or_404(Tree, pk=tree_id)
+        person = get_object_or_404(Individual, pk=self.kwargs["pk"], gedcom_tree_id=tree_id)
+        action = request.POST.get("action", "set")
+
+        if action == "clear":
+            tree.starting_individual = None
+            tree.save(update_fields=["starting_individual"])
+            messages.success(
+                request,
+                _("Startperson entfernt. Schnellzugriffe auf die Baumansicht sind deaktiviert."),
+            )
+        else:
+            tree.starting_individual = person
+            tree.save(update_fields=["starting_individual"])
+            messages.success(
+                request,
+                _("„%(name)s“ ist jetzt die Startperson für diesen Stammbaum.")
+                % {"name": person.full_name()},
+            )
+
+        return redirect(
+            "genview:individual-detail",
+            tree_id=tree_id,
+            pk=person.pk,
+        )
 
 
 class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):

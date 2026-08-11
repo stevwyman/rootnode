@@ -24,6 +24,15 @@
                         <p class="text-muted text-center small mb-4">
                             ID: {{ tree.pk }} | 🌳 {% trans "Erstellt" %}: {% if tree.created_at %}{{ tree.created_at|date:"d.m.Y" }}{% else %}{% trans "Unbekannt" %}{% endif %}
                         </p>
+
+                        {% if tree.starting_individual %}
+                        <div class="alert alert-light border text-center mb-3 py-2">
+                            <div class="small text-muted text-uppercase fw-semibold mb-1">{% trans "Startperson" %}</div>
+                            <a href="{% url 'genview:individual-detail' tree_id=tree.pk pk=tree.starting_individual.pk %}" class="fw-semibold text-decoration-none">
+                                ⭐ {{ tree.starting_individual.full_name }}
+                            </a>
+                        </div>
+                        {% endif %}
                         
                         <div class="row text-center mb-3">
                             <div class="col-4">
@@ -43,6 +52,15 @@
                     
                     <div class="card-footer bg-light border-top-0 p-3">
                         <div class="d-grid gap-2">
+                            {% if tree.starting_individual %}
+                            <a href="{% url 'genview:family_tree_view' tree_id=tree.pk individual_id=tree.starting_individual.pk %}" class="btn btn-primary">
+                                🌳 {% trans "Baumansicht starten" %}
+                            </a>
+                            <a href="{% url 'genview:individual-detail' tree_id=tree.pk pk=tree.starting_individual.pk %}" class="btn btn-outline-primary">
+                                ⭐ {% trans "Zur Startperson" %}
+                            </a>
+                            {% endif %}
+
                             <a href="{% url 'genview:individual-list' tree_id=tree.pk %}" class="btn btn-outline-primary">
                                 👥 {% trans "Personen anzeigen" %}
                             </a>

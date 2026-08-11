@@ -46,6 +46,11 @@ urlpatterns = [
         name="individual-detail",
     ),
     path(
+        "tree/<int:tree_id>/people/<int:pk>/set-starting/",
+        views.SetTreeStartingIndividualView.as_view(),
+        name="set-starting-individual",
+    ),
+    path(
         "tree/<int:tree_id>/people/add/",
         views.IndividualCreateView.as_view(),
         name="individual-add",
