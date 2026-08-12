@@ -57,16 +57,33 @@
                     {% endfor %}
                     
                 </div>
+            {% elif media.is_pdf and media.file %}
+                <div class="pdf-preview w-100 text-start">
+                    <iframe
+                        src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}"
+                        class="w-100 rounded shadow-sm border bg-white"
+                        style="height: 75vh; min-height: 420px;"
+                        title="{{ media.title }}">
+                    </iframe>
+                    <div class="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                        <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener">
+                            {% trans "PDF in neuem Tab öffnen" %}
+                        </a>
+                        <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="btn btn-primary btn-sm" download>
+                            {% trans "Herunterladen" %}
+                        </a>
+                    </div>
+                </div>
             {% elif media.file %}
                 <div class="py-5">
                     <h1 class="display-1 text-muted">📄</h1>
-                    <p class="lead">Dieses Dokument kann nicht direkt im Browser angezeigt werden.</p>
+                    <p class="lead">{% trans "Dieses Dokument kann nicht direkt im Browser angezeigt werden." %}</p>
                     <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="btn btn-primary btn-lg mt-3" target="_blank">
-                        Datei öffnen / Herunterladen
+                        {% trans "Datei öffnen / Herunterladen" %}
                     </a>
                 </div>
             {% else %}
-                <p class="text-danger mt-5">Keine Datei gefunden.</p>
+                <p class="text-danger mt-5">{% trans "Keine Datei gefunden." %}</p>
             {% endif %}
         </div>
 

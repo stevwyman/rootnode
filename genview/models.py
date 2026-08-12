@@ -1095,7 +1095,9 @@ class MediaObject(GedcomIdMixin):
 
     @property
     def is_pdf(self) -> bool:
-        return self.file.name.lower().endswith('.pdf')
+        if not self.file or not self.file.name:
+            return False
+        return self.file.name.lower().endswith(".pdf")
 
     def get_thumbnail(self, size: str = "mini") -> str:
         """

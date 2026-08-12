@@ -18,13 +18,12 @@ from django.db.models.functions import Coalesce
 from django.forms import modelformset_factory
 from django.http import JsonResponse, FileResponse, Http404, HttpResponseBadRequest
 from django.views import View
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.views.generic.edit import UpdateView, FormView
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
-
-from PIL import Image
 
 from logging import getLogger
 
@@ -229,6 +228,59 @@ def _individual_and_q(terms: list[str]) -> Q:
     for term in terms:
         combined &= _individual_name_q(term)
     return combined
+
+
+def _term_q(term: str, fields: list[str]) -> Q:
+    """Match *term* in any of the given ORM lookup fields."""
+    q = Q()
+    for field in fields:
+        q |= Q(**{f"{field}__icontains": term})
+    return q
+
+
+def _and_terms_q(terms: list[str], fields: list[str]) -> Q:
+    """Every token must match somewhere (across fields)."""
+    combined = Q()
+    for term in terms:
+        combined &= _term_q(term, fields)
+    return combined
+
+
+def _or_terms_q(terms: list[str], fields: list[str]) -> Q:
+    """Any token may match anywhere."""
+    combined = Q()
+    for term in terms:
+        combined |= _term_q(term, fields)
+    return combined
+
+
+def _search_queryset_by_tokens(qs, query: str, search_fields: list[str], limit: int = 30):
+    """
+  Ranked token search for Select2: AND matches first, then OR (up to *limit*).
+    """
+    terms = _split_search_terms(query)
+    if not terms or not search_fields:
+        return []
+
+    if len(terms) == 1:
+        return list(qs.filter(_term_q(terms[0], search_fields)).distinct()[:limit])
+
+    and_pks = list(
+        qs.filter(_and_terms_q(terms, search_fields)).distinct().values_list("pk", flat=True)[:limit]
+    )
+    remaining = limit - len(and_pks)
+    or_pks: list[int] = []
+    if remaining > 0:
+        or_pks = list(
+            qs.filter(_or_terms_q(terms, search_fields))
+            .exclude(pk__in=and_pks)
+            .distinct()
+            .values_list("pk", flat=True)[:remaining]
+        )
+
+    ordered_pks = and_pks + or_pks
+    by_pk = {obj.pk: obj for obj in qs.filter(pk__in=ordered_pks)}
+    return [by_pk[pk] for pk in ordered_pks if pk in by_pk]
 
 
 def _annotate_individual_search_result(individual, apply_privacy, match: str | None = None):
@@ -1438,6 +1490,7 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
         tree_id = self.kwargs.get("tree_id")
         return MediaObject.objects.filter(gedcom_tree_id=tree_id)
 
+    @xframe_options_sameorigin
     def get(self, request, *args, **kwargs):
         # 1. get_object() automatically applies the get_queryset() filter
         # and the TreeAccessMixin automatically checks basic tree access.
@@ -1446,11 +1499,7 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
         # ---------------------------------------------------------
         # 🔒 2. DATENSCHUTZ-PRÜFUNG (NEU)
         # ---------------------------------------------------------
-        # Hier musst du deine bestehende Logik für 'apply_privacy' einsetzen.
-        # (z.B. prüfen, ob der User nur die Rolle "VIEWER" hat).
-        # Beispiel: apply_privacy = request.tree_membership.role == 'VIEWER'
-        
-        apply_privacy = self.get_apply_privacy()  # ERSETZE DIES durch deine echte Rollen-Prüfung!
+        apply_privacy = self.get_apply_privacy()
 
         if apply_privacy and media_obj.is_confidential:
             # Blockiert den Download mit einem 403 Forbidden Fehler
@@ -1508,9 +1557,9 @@ class ProtectedMediaFileView(TreeAccessMixin, DetailView):
         file_handle = open(file_path, "rb")
         response = FileResponse(file_handle, content_type=mime_type)
 
-        # Images may render inline; everything else downloads (blocks HTML/SVG XSS).
+        # Inline for images and PDFs (embed in gallery/detail); attachment for other types.
         safe_name = file_path.name.replace('"', "")
-        if mime_type.startswith("image/"):
+        if mime_type.startswith("image/") or mime_type == "application/pdf":
             response["Content-Disposition"] = f'inline; filename="{safe_name}"'
         else:
             response["Content-Disposition"] = f'attachment; filename="{safe_name}"'
@@ -2744,22 +2793,16 @@ class GenericSelect2APIView(TreeAccessMixin, View):
         elif self.model is Event:
             qs = apply_privacy_to_event_qs(qs, apply_privacy, tree_id)
 
-        # 2. Dynamisch nach allen definierten Feldern suchen (mit ODER verknüpft)
+        # 2. Token search: AND matches first, then OR (e.g. "Max Werner" → Werner Max)
         if self.search_fields:
-            q_objects = Q()
-            for field in self.search_fields:
-                # Baut dynamisch z.B. Q(given_name__icontains=query)
-                q_objects |= Q(**{f"{field}__icontains": query})
-            
-            qs = qs.filter(q_objects)
-            
-        # 3. Auf 30 Treffer limitieren für maximale Performance
-        qs = qs[:30]
+            objects = _search_queryset_by_tokens(qs, query, self.search_fields, limit=30)
+        else:
+            objects = []
         
         # 4. JSON zusammenbauen
         results = [
             {'id': obj.id, 'text': self.get_display_text(obj)} 
-            for obj in qs
+            for obj in objects
         ]
         
         return JsonResponse({'results': results})
@@ -2767,7 +2810,13 @@ class GenericSelect2APIView(TreeAccessMixin, View):
 # --- Die API für Personen ---
 class IndividualSearchAPIView(GenericSelect2APIView):
     model = Individual
-    search_fields = ['given_name', 'surname', 'gedcom_id']
+    search_fields = [
+        "given_name",
+        "surname",
+        "gedcom_id",
+        "alternative_names__given_name",
+        "alternative_names__surname",
+    ]
     
     def get_display_text(self, obj):
         return f"{obj.given_name} {obj.surname} ({obj.gedcom_id})"
@@ -2857,11 +2906,9 @@ class UserSearchAPIView(LoginRequiredMixin, View):
         if len(query) < 2:
             return JsonResponse({'results': []})
 
-        users = User.objects.filter(
-            Q(username__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query)
-        ).exclude(is_superuser=True)[:20]
+        users_qs = User.objects.exclude(is_superuser=True)
+        user_fields = ["username", "first_name", "last_name"]
+        users = _search_queryset_by_tokens(users_qs, query, user_fields, limit=20)
 
         results = []
         for u in users:

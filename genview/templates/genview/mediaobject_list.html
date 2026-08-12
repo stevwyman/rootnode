@@ -87,13 +87,16 @@
             {% else %}
                 <div class="card h-100 shadow-sm">
                     {% if item.file and item.file.name %}
-                        {% if item.is_image or item.is_pdf and item.file %}
+                        {% if item.is_image or item.is_pdf %}
                             <div class="media-gallery__thumb position-relative">
                                 <a href="{% url 'genview:media-detail' tree_id=tree_id pk=item.pk %}">
                                     <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=item.pk size='small' %}"
                                         class="card-img-top"
                                         alt="{{ item.title }}">
                                 </a>
+                                {% if item.is_pdf %}
+                                <span class="badge bg-danger position-absolute top-0 start-0 m-2 shadow-sm">PDF</span>
+                                {% endif %}
                                 {% include "genview/_media_face_badges.html" %}
                             </div>
                         {% else %}
@@ -141,7 +144,7 @@
                     </div>
 
                     <div class="card-footer bg-white border-top-0 d-flex justify-content-between flex-wrap gap-1">
-                        {% if not item.is_image and item.file %}
+                        {% if not item.is_image and not item.is_pdf and item.file %}
                             <a href="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Öffnen</a>
                         {% else %}
                             <div></div>
