@@ -518,6 +518,10 @@ def create_portrait_from_crop(
         portrait.file.save(filename, ContentFile(buffer.read()), save=True)
         portrait.individuals.add(individual)
 
+    for size in ("mini", "small"):
+        generate_thumbnail_for_instance(portrait, size)
+
+    portrait.refresh_from_db()
     return portrait
 
 

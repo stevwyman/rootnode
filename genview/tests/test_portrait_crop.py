@@ -60,7 +60,11 @@ class PortraitCropUtilsTests(TestCase):
             title="Alt",
             category=MediaObject.Category.PHOTO,
             is_portrait=True,
-            file=SimpleUploadedFile("old.jpg", b"jpeg", content_type="image/jpeg"),
+            file=SimpleUploadedFile(
+                "old.jpg",
+                _make_group_photo_bytes(),
+                content_type="image/jpeg",
+            ),
         )
         old_portrait.individuals.add(self.person)
 
@@ -80,7 +84,8 @@ class PortraitCropUtilsTests(TestCase):
         old_portrait.refresh_from_db()
         self.assertFalse(old_portrait.is_portrait)
 
-        self.assertTrue(portrait.thumb_mini or portrait.thumb_small)
+        self.assertTrue(portrait.thumb_mini.name)
+        self.assertTrue(portrait.thumb_small.name)
 
 
 class PortraitCropViewTests(TestCase):
