@@ -1,0 +1,267 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}🌳 {{ tree.name }} — {% trans "Übersicht" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="mb-1">🌳 {{ tree.name }}</h1>
+            {% if tree.description %}
+                <p class="text-muted mb-0">{{ tree.description }}</p>
+            {% endif %}
+            <small class="text-muted">
+                {% trans "Erstellt" %}: {{ tree.created_at|date:"d.m.Y" }}
+            </small>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'genview:global-search' tree_id=tree_id %}" class="btn btn-outline-primary">
+                🔍 {% trans "Suche" %}
+            </a>
+            {% if tree.starting_individual_id %}
+            <a href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}" class="btn btn-primary">
+                🌳 {% trans "Baumansicht" %}
+            </a>
+            {% endif %}
+            <a href="{% url 'genview:individual-list' tree_id=tree_id %}" class="btn btn-outline-secondary">
+                👥 {% trans "Personen" %}
+            </a>
+        </div>
+    </div>
+
+    {% if tree.starting_individual %}
+    <div class="alert alert-light border shadow-sm mb-4 py-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                <span class="text-muted small text-uppercase fw-semibold">{% trans "Startperson" %}</span>
+                <div class="fw-semibold fs-5">
+                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual.pk %}" class="text-decoration-none">
+                        ⭐ {{ tree.starting_individual.full_name }}
+                    </a>
+                </div>
+            </div>
+            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual.pk %}" class="btn btn-sm btn-outline-primary">
+                {% trans "Profil öffnen" %}
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-6 g-3 mb-4">
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-primary">{{ stat_individuals }}</div>
+                <small class="text-muted">👥 {% trans "Personen" %}</small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-danger">{{ stat_families }}</div>
+                <small class="text-muted">👪 {% trans "Familien" %}</small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-success">{{ stat_places }}</div>
+                <small class="text-muted">🌍 {% trans "Orte" %}</small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-secondary">{{ stat_events }}</div>
+                <small class="text-muted">📅 {% trans "Ereignisse" %}</small>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-info">{{ stat_media }}</div>
+                <small class="text-muted">📷 {% trans "Medien" %}</small>
+                {% if stat_media %}
+                <small class="text-muted d-block" style="font-size: 0.7rem;">
+                    {{ stat_media_photos }} {% trans "Fotos" %} · {{ stat_media_documents }} {% trans "Dok." %}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-dark">{{ stat_sources }}</div>
+                <small class="text-muted">📚 {% trans "Quellen" %}</small>
+            </div>
+        </div>
+    </div>
+
+    {% if show_living_stats %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <span>🧑 {% trans "Vermutlich lebend" %}</span>
+                    <span class="badge bg-success fs-6">{{ stat_living }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <span>🪦 {% trans "Mit Sterbedatum" %}</span>
+                    <span class="badge bg-secondary fs-6">{{ stat_deceased }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0">📅 {% trans "In den nächsten 30 Tagen" %}</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if calendar_today %}
+            <div class="px-3 pt-3 pb-2">
+                <div class="small text-uppercase text-muted fw-semibold mb-2">{% trans "Heute" %}</div>
+                <div class="list-group list-group-flush">
+                    {% for item in calendar_today %}
+                    <div class="list-group-item d-flex align-items-center gap-3 py-3">
+                        {% if item.thumb_url %}
+                        <img src="{{ item.thumb_url }}" alt="" class="rounded-circle border flex-shrink-0" style="width: 44px; height: 44px; object-fit: cover;">
+                        {% else %}
+                        <span class="flex-shrink-0 fs-4" style="width: 44px; text-align: center;">
+                            {% if item.kind == "birthday" %}🎂{% else %}💍{% endif %}
+                        </span>
+                        {% endif %}
+                        <div class="flex-grow-1 min-width-0">
+                            {% if item.url %}
+                            <a href="{{ item.url }}" class="fw-semibold text-decoration-none text-dark">{{ item.title }}</a>
+                            {% else %}
+                            <span class="fw-semibold">{{ item.title }}</span>
+                            {% endif %}
+                            <div class="small text-muted">
+                                {% if item.kind == "birthday" %}{% trans "Geburtstag" %}{% else %}{% trans "Hochzeitstag" %}{% endif %}
+                                · {{ item.subtitle }}
+                            </div>
+                        </div>
+                        <span class="badge bg-primary">{% trans "Heute" %}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if calendar_upcoming %}
+            <div class="px-3 {% if calendar_today %}pt-2{% else %}pt-3{% endif %} pb-3">
+                {% if calendar_today %}
+                <div class="small text-uppercase text-muted fw-semibold mb-2">{% trans "Demnächst" %}</div>
+                {% endif %}
+                <div class="list-group list-group-flush">
+                    {% for item in calendar_upcoming %}
+                    <div class="list-group-item d-flex align-items-center gap-3 py-3">
+                        <div class="flex-shrink-0 text-center" style="width: 52px;">
+                            <div class="fw-bold">{{ item.when|date:"d." }}</div>
+                            <small class="text-muted">{{ item.when|date:"M" }}</small>
+                        </div>
+                        {% if item.thumb_url %}
+                        <img src="{{ item.thumb_url }}" alt="" class="rounded-circle border flex-shrink-0" style="width: 44px; height: 44px; object-fit: cover;">
+                        {% else %}
+                        <span class="flex-shrink-0 fs-4" style="width: 44px; text-align: center;">
+                            {% if item.kind == "birthday" %}🎂{% else %}💍{% endif %}
+                        </span>
+                        {% endif %}
+                        <div class="flex-grow-1 min-width-0">
+                            {% if item.url %}
+                            <a href="{{ item.url }}" class="fw-semibold text-decoration-none text-dark">{{ item.title }}</a>
+                            {% else %}
+                            <span class="fw-semibold">{{ item.title }}</span>
+                            {% endif %}
+                            <div class="small text-muted">
+                                {% if item.kind == "birthday" %}{% trans "Geburtstag" %}{% else %}{% trans "Hochzeitstag" %}{% endif %}
+                                · {{ item.subtitle }}
+                            </div>
+                        </div>
+                        <small class="text-muted flex-shrink-0">
+                            {% blocktrans with days=item.days_until %}in {{ days }} T.{% endblocktrans %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% elif not calendar_today %}
+            <div class="text-center text-muted py-5 px-3">
+                <p class="mb-0">{% trans "Keine Geburtstage oder Hochzeitstage in den nächsten 30 Tagen." %}</p>
+                <small>{% trans "Es werden nur vollständige Datumsangaben berücksichtigt." %}</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if can_edit %}
+    <div class="card border-0 shadow-sm border-warning border-opacity-25">
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0">🔧 {% trans "Datenpflege" %}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                {% if maintenance_without_birth %}
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                        <span>{% trans "Personen ohne Geburtsdatum" %}</span>
+                        <a href="{% url 'genview:individual-list' tree_id=tree_id %}" class="badge bg-warning text-dark fs-6 text-decoration-none">
+                            {{ maintenance_without_birth }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {% if maintenance_unlinked_faces %}
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                        <span>{% trans "Unverknüpfte Gesichtserkennungen" %}</span>
+                        <a href="{% url 'genview:face-suggestion-review' tree_id=tree_id %}" class="badge bg-danger fs-6 text-decoration-none">
+                            {{ maintenance_unlinked_faces }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {% if maintenance_face_suggestions %}
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                        <span>{% trans "Gesichts-Vorschläge" %}</span>
+                        <a href="{% url 'genview:face-suggestion-review' tree_id=tree_id %}" class="badge bg-success fs-6 text-decoration-none">
+                            {{ maintenance_face_suggestions }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {% if maintenance_doc_suggestions %}
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                        <span>{% trans "Dokument-Vorschläge" %}</span>
+                        <a href="{% url 'genview:document-suggestion-review' tree_id=tree_id %}" class="badge bg-primary fs-6 text-decoration-none">
+                            {{ maintenance_doc_suggestions }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col-md-6">
+                    <a href="{% url 'genview:place-deduplication' tree_id=tree_id %}" class="btn btn-outline-secondary w-100">
+                        📍 {% trans "Orte bereinigen" %}
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="{% url 'genview:face-suggestion-review' tree_id=tree_id %}" class="btn btn-outline-secondary w-100">
+                        👤 {% trans "Gesichter zuordnen" %}
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="{% url 'genview:document-suggestion-review' tree_id=tree_id %}" class="btn btn-outline-secondary w-100">
+                        📜 {% trans "Dokument-Vorschläge" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

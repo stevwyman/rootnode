@@ -51,7 +51,14 @@
                     {% endif %}
                         
                         <div class="d-flex align-items-center">
-                            <span class="fs-3 me-3">{{ obj.search_icon }}</span>
+                            {% if obj.search_show_thumb and obj.search_thumb_url %}
+                                <img src="{{ obj.search_thumb_url }}"
+                                     alt=""
+                                     class="rounded-circle shadow-sm border me-3 flex-shrink-0"
+                                     style="width: 48px; height: 48px; object-fit: cover;">
+                            {% else %}
+                                <span class="fs-3 me-3">{{ obj.search_icon }}</span>
+                            {% endif %}
                             <div>
                                 <h6 class="mb-0 fw-bold">{{ obj.search_title }}</h6>
                                 <small class="text-muted">{{ obj.search_desc }}</small>

@@ -16,7 +16,7 @@ from django.db.models import Count, Subquery, OuterRef, Prefetch, Value, Integer
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.forms import modelformset_factory
-from django.http import JsonResponse, FileResponse, Http404, HttpResponseBadRequest
+from django.core.paginator import Paginator
 from django.views import View
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, TemplateView
@@ -26,6 +26,12 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy, reverse
 
 from logging import getLogger
+
+from .tree_calendar import (
+    collect_upcoming_birthdays,
+    collect_upcoming_anniversaries,
+    merge_upcoming,
+)
 
 logger = getLogger(__name__)
 
@@ -37,6 +43,7 @@ from .models import (
     ChildFamilyLink,
     MediaObject,
     FaceTag,
+    DocumentExtractionSuggestion,
     Tree,
     TreeMembership,
     Source,
@@ -148,6 +155,81 @@ class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         # Eine Erfolgsmeldung für den Admin setzen
         messages.success(self.request, _("Der Stammbaum '%(name)s' und alle dazugehörigen Daten wurden unwiderruflich gelöscht.") % {"name": tree.name})
         return super().form_valid(form)
+
+
+class TreeOverviewView(TreeAccessMixin, TemplateView):
+    """Per-tree dashboard: statistics and upcoming birthdays / anniversaries."""
+
+    template_name = "genview/tree_overview.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        tree_id = self.kwargs["tree_id"]
+        tree = Tree.objects.select_related("starting_individual").get(pk=tree_id)
+        context["tree"] = tree
+        apply_privacy = self.get_apply_privacy()
+
+        context["stat_individuals"] = tree.individuals.count()
+        context["stat_families"] = tree.families.count()
+        context["stat_places"] = tree.places.count()
+        context["stat_events"] = Event.objects.filter(gedcom_tree_id=tree_id).count()
+        media_qs = MediaObject.objects.filter(gedcom_tree_id=tree_id)
+        context["stat_media"] = media_qs.count()
+        context["stat_media_photos"] = media_qs.filter(
+            category=MediaObject.Category.PHOTO
+        ).count()
+        context["stat_media_documents"] = media_qs.filter(
+            category=MediaObject.Category.DOCUMENT
+        ).count()
+        context["stat_sources"] = tree.sources.count()
+
+        death_tag = EventType.objects.filter(tag="DEAT").first()
+        if death_tag:
+            deceased_pks = Event.objects.filter(
+                gedcom_tree_id=tree_id,
+                event_type=death_tag,
+                individual__isnull=False,
+            ).values_list("individual_id", flat=True)
+            context["stat_deceased"] = len(set(deceased_pks))
+        else:
+            context["stat_deceased"] = 0
+        context["stat_living"] = max(
+            context["stat_individuals"] - context["stat_deceased"], 0
+        )
+        context["show_living_stats"] = not apply_privacy
+
+        birthdays = collect_upcoming_birthdays(tree_id, apply_privacy)
+        anniversaries = collect_upcoming_anniversaries(tree_id, apply_privacy)
+        today_items, upcoming_items = merge_upcoming(birthdays, anniversaries)
+        context["calendar_today"] = today_items
+        context["calendar_upcoming"] = upcoming_items
+
+        if context.get("can_edit"):
+            birt_tag = EventType.objects.filter(tag="BIRT").first()
+            without_birth = context["stat_individuals"]
+            if birt_tag:
+                with_birth = Event.objects.filter(
+                    gedcom_tree_id=tree_id,
+                    event_type=birt_tag,
+                    individual__isnull=False,
+                ).values("individual_id").distinct().count()
+                without_birth = context["stat_individuals"] - with_birth
+            context["maintenance_without_birth"] = max(without_birth, 0)
+            context["maintenance_unlinked_faces"] = FaceTag.objects.filter(
+                media__gedcom_tree_id=tree_id,
+                individual__isnull=True,
+            ).count()
+            context["maintenance_face_suggestions"] = FaceTag.objects.filter(
+                media__gedcom_tree_id=tree_id,
+                individual__isnull=True,
+                suggested_individual__isnull=False,
+            ).count()
+            context["maintenance_doc_suggestions"] = DocumentExtractionSuggestion.objects.filter(
+                media__gedcom_tree_id=tree_id,
+                status=DocumentExtractionSuggestion.Status.PENDING,
+            ).count()
+
+        return context
 
 
 class TreeJSONView(LoginRequiredMixin, TreeAccessMixin, View):
@@ -283,10 +365,66 @@ def _search_queryset_by_tokens(qs, query: str, search_fields: list[str], limit: 
     return [by_pk[pk] for pk in ordered_pks if pk in by_pk]
 
 
+def _media_thumb_url_if_allowed(media, tree_id, apply_privacy) -> str | None:
+    """Return authenticated mini-thumb URL when media may be shown to this viewer."""
+    if not media or not media.file or not media.file.name:
+        return None
+    if not (media.is_image or media.is_pdf):
+        return None
+    if apply_privacy and (media.is_confidential or media.is_private):
+        return None
+    return reverse(
+        "genview:media-thumb",
+        kwargs={"tree_id": tree_id, "pk": media.pk, "size": "mini"},
+    )
+
+
+def _profile_media_for_individual(individual) -> MediaObject | None:
+    """Prefer prefetched media list; fall back to a DB query."""
+    ordered = getattr(individual, "_ordered_media", None)
+    if ordered is not None:
+        return ordered[0] if ordered else None
+    return individual.profile_image
+
+
+def _search_thumb_for_individual(individual, tree_id, apply_privacy) -> str | None:
+    if apply_privacy and individual.is_confidential:
+        return None
+    return _media_thumb_url_if_allowed(
+        _profile_media_for_individual(individual), tree_id, apply_privacy
+    )
+
+
+def _prefetch_individual_profile_media(individuals: list[Individual]) -> None:
+    if not individuals:
+        return
+    enriched = Individual.objects.filter(pk__in=[i.pk for i in individuals]).prefetch_related(
+        Prefetch(
+            "media_objects",
+            queryset=MediaObject.objects.order_by("-is_portrait", "id"),
+            to_attr="_ordered_media",
+        )
+    )
+    by_pk = {ind.pk: ind for ind in enriched}
+    for individual in individuals:
+        if individual.pk in by_pk:
+            individual._ordered_media = by_pk[individual.pk]._ordered_media
+
+
+def _finalize_individual_search_results(
+    results: list[Individual], tree_id, apply_privacy
+) -> list[Individual]:
+    _prefetch_individual_profile_media(results)
+    for ind in results:
+        ind.search_thumb_url = _search_thumb_for_individual(ind, tree_id, apply_privacy)
+    return results
+
+
 def _annotate_individual_search_result(individual, apply_privacy, match: str | None = None):
     individual.search_type = _("Person")
     individual.search_icon = "👤"
     individual.search_match = match
+    individual.search_show_thumb = True
     if apply_privacy and individual.is_confidential:
         individual.search_title = _("Vertrauliche Person")
         individual.search_desc = _("Datenschutzgeschützt")
@@ -358,7 +496,7 @@ def _search_individuals(
                 break
             if individual_matches_phonetic_term(ind, term) and _add(ind, "phonetic"):
                 phonetic_added += 1
-        return results
+        return _finalize_individual_search_results(results, tree_id, apply_privacy)
 
     # ---------- 1) exact AND ----------
     for ind in base.filter(_individual_and_q(terms)).distinct()[:limit_and]:
@@ -392,7 +530,7 @@ def _search_individuals(
         if individual_matches_any_phonetic(ind, terms) and _add(ind, "or_phonetic"):
             phonetic_or_added += 1
 
-    return results
+    return _finalize_individual_search_results(results, tree_id, apply_privacy)
 
 
 class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
@@ -1606,7 +1744,10 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         # Lade die Tags inklusive der verknüpften Personen für das Frontend
-        ctx['tags'] = self.object.facetags.select_related('individual')
+        ctx['tags'] = self.object.facetags.select_related('individual', 'suggested_individual')
+        ctx['document_suggestions'] = self.object.document_suggestions.filter(
+            status=DocumentExtractionSuggestion.Status.PENDING
+        ).select_related('individual', 'place')
         
         # ACHTUNG: Bei sehr großen Bäumen (Tausende Personen) sollte das im 
         # Frontend perspektivisch durch ein AJAX-Suchfeld (Select2) ersetzt werden!
@@ -1636,6 +1777,12 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             return self._handle_assignment(request, media)
         elif "ocr" in request.POST:
             return self._handle_ocr(request, media)
+        elif "parse_suggestions" in request.POST:
+            return self._handle_parse_suggestions(request, media)
+        elif "accept_doc_suggestion" in request.POST:
+            return self._handle_doc_suggestion_action(request, media, accept=True)
+        elif "reject_doc_suggestion" in request.POST:
+            return self._handle_doc_suggestion_action(request, media, accept=False)
 
         return redirect(request.path)
     
@@ -1662,6 +1809,57 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         messages.success(request, _("Text erfolgreich extrahiert."))
         return redirect(request.path)
 
+    def _handle_parse_suggestions(self, request, media):
+        from .document_intelligence import extract_document_suggestions
+
+        if not (media.extracted_text or "").strip():
+            messages.warning(
+                request,
+                _("Zuerst OCR-Text extrahieren, dann Vorschläge erzeugen."),
+            )
+            return redirect(request.path)
+
+        tree_id = self.kwargs.get("tree_id")
+        created = extract_document_suggestions(media, tree_id)
+        if created:
+            messages.success(
+                request,
+                _("%(count)s Ereignis-Vorschlag/Vorschläge erzeugt.") % {"count": len(created)},
+            )
+        else:
+            messages.info(
+                request,
+                _("Keine erkennbaren Ereignisse im Text gefunden."),
+            )
+        return redirect(request.path)
+
+    def _handle_doc_suggestion_action(self, request, media, accept: bool):
+        from .document_intelligence import apply_document_suggestion
+
+        suggestion_id = request.POST.get("suggestion_id")
+        suggestion = get_object_or_404(
+            DocumentExtractionSuggestion,
+            pk=suggestion_id,
+            media=media,
+            status=DocumentExtractionSuggestion.Status.PENDING,
+        )
+        tree_id = self.kwargs.get("tree_id")
+        if accept:
+            try:
+                event = apply_document_suggestion(suggestion, tree_id)
+                messages.success(
+                    request,
+                    _("Ereignis „%(etype)s“ erstellt und mit dem Dokument verknüpft.")
+                    % {"etype": event.event_type.name},
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+        else:
+            suggestion.status = DocumentExtractionSuggestion.Status.REJECTED
+            suggestion.save(update_fields=["status", "updated_at"])
+            messages.info(request, _("Vorschlag abgelehnt."))
+        return redirect(request.path)
+
     # -------------------------------------------------
     # Action-Handler 1: Erkennung & Prozentrechnung
     # -------------------------------------------------
@@ -1685,11 +1883,11 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             )
             return redirect(request.path)
 
-        if result["linked"] > 0:
+        if result["suggested"] > 0:
             messages.success(
                 request,
-                _("%(saved)s Gesicht(er) erkannt, davon %(matched)s automatisch zugeordnet.")
-                % {"saved": result["faces_found"], "matched": result["linked"]},
+                _("%(saved)s Gesicht(er) erkannt, davon %(matched)s Vorschläge zur Prüfung.")
+                % {"saved": result["faces_found"], "matched": result["suggested"]},
             )
         else:
             messages.success(
@@ -1713,6 +1911,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             tree_id = self.kwargs.get("tree_id")
             individual = get_object_or_404(Individual, pk=indiv_id, gedcom_tree_id=tree_id)
             tag.individual = individual
+            tag.suggested_individual = None
+            tag.match_distance = None
             tag.save()
             messages.success(request, _("Gesicht erfolgreich mit %(person)s verknüpft.") % {"person": individual})
         else:
@@ -1863,13 +2063,131 @@ class MediaFaceScanProcessView(LoginRequiredMixin, TreeEditAccessMixin, View):
                 "media_id": result["media_id"],
                 "title": result["title"],
                 "faces_found": result["faces_found"],
-                "linked": result["linked"],
+                "suggested": result["suggested"],
+                "linked": result["suggested"],
                 "detail_url": reverse(
                     "genview:media-detail",
                     kwargs={"tree_id": tree_id, "pk": media.pk},
                 ),
             }
         )
+
+
+class FaceSuggestionReviewView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+    """Review queue for unlinked faces with optional person suggestions."""
+
+    template_name = "genview/face_suggestion_review.html"
+    paginate_by = 24
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tree_id = self.kwargs["tree_id"]
+        qs = (
+            FaceTag.objects.filter(
+                media__gedcom_tree_id=tree_id,
+                individual__isnull=True,
+            )
+            .select_related("media", "suggested_individual")
+            .order_by("-suggested_individual_id", "id")
+        )
+        paginator = Paginator(qs, self.paginate_by)
+        page_obj = paginator.get_page(self.request.GET.get("page"))
+        ctx["face_tags"] = page_obj.object_list
+        ctx["page_obj"] = page_obj
+        ctx["is_paginated"] = page_obj.has_other_pages()
+        return ctx
+
+    def _redirect_back(self, request, tree_id):
+        page = request.POST.get("page") or request.GET.get("page")
+        url = reverse("genview:face-suggestion-review", kwargs={"tree_id": tree_id})
+        if page:
+            url = f"{url}?page={page}"
+        return redirect(url)
+
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs["tree_id"]
+        tag = get_object_or_404(
+            FaceTag,
+            pk=request.POST.get("tag_id"),
+            media__gedcom_tree_id=tree_id,
+            individual__isnull=True,
+        )
+        action = request.POST.get("action")
+        if action == "accept" and tag.suggested_individual_id:
+            tag.individual = tag.suggested_individual
+            tag.suggested_individual = None
+            tag.match_distance = None
+            tag.save()
+            messages.success(
+                request,
+                _("Vorschlag übernommen: %(person)s")
+                % {"person": tag.individual.full_name()},
+            )
+        elif action == "reject":
+            tag.suggested_individual = None
+            tag.match_distance = None
+            tag.save(update_fields=["suggested_individual", "match_distance", "updated_at"])
+            messages.info(request, _("Vorschlag verworfen."))
+        elif action == "assign":
+            indiv_id = request.POST.get("individual_id")
+            if indiv_id:
+                individual = get_object_or_404(Individual, pk=indiv_id, gedcom_tree_id=tree_id)
+                tag.individual = individual
+                tag.suggested_individual = None
+                tag.match_distance = None
+                tag.save()
+                messages.success(
+                    request,
+                    _("Gesicht mit %(person)s verknüpft.") % {"person": individual.full_name()},
+                )
+            else:
+                messages.warning(request, _("Keine Person gewählt."))
+        return self._redirect_back(request, tree_id)
+
+
+class DocumentSuggestionReviewView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+    """Central queue for OCR-derived event suggestions."""
+
+    template_name = "genview/document_suggestion_review.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tree_id = self.kwargs["tree_id"]
+        ctx["suggestions"] = (
+            DocumentExtractionSuggestion.objects.filter(
+                media__gedcom_tree_id=tree_id,
+                status=DocumentExtractionSuggestion.Status.PENDING,
+            )
+            .select_related("media", "individual", "place")
+            .order_by("media_id", "-created_at")[:200]
+        )
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from .document_intelligence import apply_document_suggestion
+
+        tree_id = self.kwargs["tree_id"]
+        suggestion = get_object_or_404(
+            DocumentExtractionSuggestion,
+            pk=request.POST.get("suggestion_id"),
+            media__gedcom_tree_id=tree_id,
+            status=DocumentExtractionSuggestion.Status.PENDING,
+        )
+        action = request.POST.get("action")
+        if action == "accept":
+            try:
+                event = apply_document_suggestion(suggestion, tree_id)
+                messages.success(
+                    request,
+                    _("Ereignis „%(etype)s“ erstellt.") % {"etype": event.event_type.name},
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+        elif action == "reject":
+            suggestion.status = DocumentExtractionSuggestion.Status.REJECTED
+            suggestion.save(update_fields=["status", "updated_at"])
+            messages.info(request, _("Vorschlag abgelehnt."))
+        return redirect("genview:document-suggestion-review", tree_id=tree_id)
 
 
 class MediaObjectCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):

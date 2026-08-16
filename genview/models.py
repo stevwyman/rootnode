@@ -1005,7 +1005,7 @@ class MediaObject(GedcomIdMixin):
         upload_to=tree_media_directory_path, verbose_name=_("Datei/Bild")
     )
 
-    extracted_text = models.CharField(blank=True, null=True)
+    extracted_text = models.TextField(blank=True, null=True)
 
     gedcom_original_filepath = models.CharField(
         max_length=500, 
@@ -1157,6 +1157,19 @@ class FaceTag(models.Model):
     media          = models.ForeignKey(MediaObject, on_delete=models.CASCADE, related_name="facetags")
     individual     = models.ForeignKey(Individual, on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="tagged_faces")
+    suggested_individual = models.ForeignKey(
+        Individual,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suggested_face_tags",
+        help_text=_("Automatisch vorgeschlagene Person (noch nicht bestätigt)."),
+    )
+    match_distance = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_("Kosinus-Abstand zum besten Embedding-Match (kleiner = ähnlicher)."),
+    )
     
     # Position / Größe des Rechtecks (einfach u/v Koordinaten, relativ zum Original)
     x_percent      = models.FloatField()   # linke obere Ecke, Pixel
@@ -1181,7 +1194,63 @@ class FaceTag(models.Model):
         unique_together = ("media", "x_percent", "y_percent", "width_percent", "height_percent")   # vermeidet Duplikate
 
     def __str__(self):
-        return f"FaceTag für {self.individual or 'unbekannt'} ({self.media.id})"
+        return f"FaceTag für {self.individual or self.suggested_individual or 'unbekannt'} ({self.media.id})"
+
+
+class DocumentExtractionSuggestion(models.Model):
+    """Structured event hints parsed from OCR text on a document."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Ausstehend")
+        ACCEPTED = "accepted", _("Übernommen")
+        REJECTED = "rejected", _("Abgelehnt")
+
+    media = models.ForeignKey(
+        MediaObject,
+        on_delete=models.CASCADE,
+        related_name="document_suggestions",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    event_type_tag = models.CharField(max_length=4)
+    person_name = models.CharField(max_length=255, blank=True)
+    individual = models.ForeignKey(
+        Individual,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="document_suggestions",
+    )
+    raw_date = models.CharField(max_length=100, blank=True)
+    parsed_date = models.DateField(null=True, blank=True)
+    place_name = models.CharField(max_length=255, blank=True)
+    place = models.ForeignKey(
+        Place,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="document_suggestions",
+    )
+    context_line = models.CharField(max_length=500, blank=True)
+    created_event = models.ForeignKey(
+        Event,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_document_suggestions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.event_type_tag} ({self.get_status_display()}) — {self.media_id}"
 
 
 # ----------------------------------------------------------------------

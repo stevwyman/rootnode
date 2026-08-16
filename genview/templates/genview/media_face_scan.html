@@ -97,7 +97,7 @@
             done + " / " + total + " — " +
             stats.ok + " ok, " +
             stats.faces + " Gesichter, " +
-            stats.linked + " verknüpft, " +
+            stats.linked + " Vorschläge, " +
             stats.empty + " ohne Treffer, " +
             stats.errors + " Fehler";
     }
@@ -169,12 +169,12 @@
                 } else {
                     stats.ok += 1;
                     stats.faces += data.faces_found;
-                    stats.linked += data.linked || 0;
+                    stats.linked += data.suggested || data.linked || 0;
                     appendLog({
                         title: data.title || candidate.title,
                         url: data.detail_url,
                         id: candidate.id,
-                        message: data.faces_found + " Gesicht(er), " + (data.linked || 0) + " verknüpft",
+                        message: data.faces_found + " Gesicht(er), " + (data.suggested || data.linked || 0) + " Vorschläge",
                     }, "list-group-item-success");
                 }
             } catch (err) {
@@ -199,7 +199,7 @@
             bar.classList.add("bg-success");
             statusEl.textContent =
                 "Abgeschlossen: " + total + " Bilder — " +
-                stats.faces + " Gesichter, " + stats.linked + " verknüpft, " +
+                stats.faces + " Gesichter, " + stats.linked + " Vorschläge, " +
                 stats.errors + " Fehler.";
         } else {
             startBtn.disabled = false;

@@ -97,9 +97,12 @@
                         <form method="post" class="m-0">
                             {% csrf_token %}
                             <button type="submit" name="detect" class="btn btn-primary">
-                                🔍 Bild analysieren
+                                🔍 {% trans "Bild analysieren" %}
                             </button>
                         </form>
+                        <a href="{% url 'genview:face-suggestion-review' tree_id=tree_id %}" class="btn btn-outline-secondary">
+                            {% trans "Gesichter prüfen" %}
+                        </a>
                     </div>
 
                     {# ---- Bereits erkannte Gesichter + Zuordnungs-Formular ---- #}
@@ -113,9 +116,14 @@
                                                 #{{ forloop.counter }}
                                             </span>
                                             {% if tag.individual %}
-                                                <strong>Verknüpft:</strong> {{ tag.individual.full_name }}
+                                                <strong>{% trans "Verknüpft:" %}</strong> {{ tag.individual.full_name }}
+                                            {% elif tag.suggested_individual %}
+                                                <strong>{% trans "Vorschlag:" %}</strong> {{ tag.suggested_individual.full_name }}
+                                                {% if tag.match_distance %}
+                                                <small class="text-muted">({{ tag.match_distance|floatformat:3 }})</small>
+                                                {% endif %}
                                             {% else %}
-                                                <strong>Unbekanntes Gesicht</strong>
+                                                <strong>{% trans "Unbekanntes Gesicht" %}</strong>
                                             {% endif %}
                                         </div>
 
@@ -155,21 +163,72 @@
                 <div class="container mt-4 px-0">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="mb-0">📜 Texterkennung</h3>
-                        
-                        {# ---- Erkennungs-Button ---- #}
-                        <form method="post">
+                        <div class="d-flex flex-wrap gap-2">
+                        <form method="post" class="m-0">
                             {% csrf_token %}
-                            <button type="submit" name="ocr" class="btn btn-outline-primary mt-2">
-                                Handschrift-Text extrahieren
+                            <button type="submit" name="ocr" class="btn btn-outline-primary">
+                                {% trans "Text extrahieren (OCR)" %}
                             </button>
                         </form>
+                        {% if media.extracted_text %}
+                        <form method="post" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" name="parse_suggestions" class="btn btn-primary">
+                                {% trans "Ereignis-Vorschläge erzeugen" %}
+                            </button>
+                        </form>
+                        {% endif %}
+                        </div>
                     </div>
 
                     <div>
-                        
                         {% if media.extracted_text %}
-                            <h5 class="mt-4">Erkannter Text:</h5>
-                            <pre class="border p-2">{{ media.extracted_text }}</pre>
+                            <h5 class="mt-2">{% trans "Erkannter Text" %}</h5>
+                            <pre class="border p-2 bg-white small" style="max-height: 240px; overflow: auto;">{{ media.extracted_text }}</pre>
+                        {% endif %}
+
+                        {% if document_suggestions %}
+                        <h5 class="mt-4">{% trans "Vorschläge aus diesem Dokument" %}</h5>
+                        <div class="list-group mb-3">
+                            {% for s in document_suggestions %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <span class="badge bg-secondary me-2">{{ s.event_type_tag }}</span>
+                                        {% if s.person_name or s.individual %}
+                                        <strong>{{ s.individual.full_name|default:s.person_name }}</strong>
+                                        {% endif %}
+                                        {% if s.parsed_date or s.raw_date %}
+                                        <span class="text-muted ms-2">
+                                            {{ s.parsed_date|date:"d.m.Y"|default:s.raw_date }}
+                                        </span>
+                                        {% endif %}
+                                        {% if s.place_name or s.place %}
+                                        <span class="text-muted ms-2">📍 {{ s.place.name|default:s.place_name }}</span>
+                                        {% endif %}
+                                        {% if s.context_line %}
+                                        <div class="small text-muted mt-1">{{ s.context_line }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <form method="post" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="suggestion_id" value="{{ s.pk }}">
+                                            <button type="submit" name="accept_doc_suggestion" value="1" class="btn btn-success btn-sm">✓</button>
+                                        </form>
+                                        <form method="post" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="suggestion_id" value="{{ s.pk }}">
+                                            <button type="submit" name="reject_doc_suggestion" value="1" class="btn btn-outline-secondary btn-sm">✕</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <a href="{% url 'genview:document-suggestion-review' tree_id=tree_id %}" class="btn btn-sm btn-outline-primary">
+                            {% trans "Alle Dokument-Vorschläge" %}
+                        </a>
                         {% endif %}
                     </div>
 

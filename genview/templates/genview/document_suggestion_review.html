@@ -1,0 +1,74 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dokument-Vorschläge" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <h2 class="mb-2">📜 {% trans "Dokument-Vorschläge" %}</h2>
+    <p class="text-muted mb-4">{% trans "Aus OCR-Text erkannte Ereignisse — bitte prüfen und übernehmen oder ablehnen." %}</p>
+
+    {% if suggestions %}
+    <div class="list-group shadow-sm">
+        {% for s in suggestions %}
+        <div class="list-group-item p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div class="flex-grow-1">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span class="badge bg-primary">{{ s.event_type_tag }}</span>
+                        <a href="{% url 'genview:media-detail' tree_id=tree_id pk=s.media.pk %}" class="fw-semibold text-decoration-none">
+                            {{ s.media.title|default:"(ohne Titel)" }}
+                        </a>
+                    </div>
+                    {% if s.context_line %}
+                    <p class="small text-muted mb-2 font-monospace">{{ s.context_line }}</p>
+                    {% endif %}
+                    <ul class="list-unstyled small mb-0">
+                        {% if s.person_name or s.individual %}
+                        <li><strong>{% trans "Person:" %}</strong>
+                            {% if s.individual %}
+                                <a href="{{ s.individual.get_absolute_url }}">{{ s.individual.full_name }}</a>
+                            {% else %}
+                                {{ s.person_name }} <span class="text-muted">({% trans "nicht verknüpft" %})</span>
+                            {% endif %}
+                        </li>
+                        {% endif %}
+                        {% if s.raw_date or s.parsed_date %}
+                        <li><strong>{% trans "Datum:" %}</strong>
+                            {% if s.parsed_date %}{{ s.parsed_date|date:"d.m.Y" }}{% else %}{{ s.raw_date }}{% endif %}
+                        </li>
+                        {% endif %}
+                        {% if s.place_name or s.place %}
+                        <li><strong>{% trans "Ort:" %}</strong>
+                            {% if s.place %}{{ s.place.name }}{% else %}{{ s.place_name }}{% endif %}
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="d-flex flex-column gap-2">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="suggestion_id" value="{{ s.pk }}">
+                        <button type="submit" name="action" value="accept" class="btn btn-success btn-sm w-100">
+                            ✓ {% trans "Ereignis erstellen" %}
+                        </button>
+                    </form>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="suggestion_id" value="{{ s.pk }}">
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-secondary btn-sm w-100">
+                            {% trans "Ablehnen" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-success text-center py-5">
+        {% trans "Keine ausstehenden Dokument-Vorschläge." %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -14,6 +14,7 @@ urlpatterns = [
     # 2. import trees
     path('gedcom/import/', views.GedcomImportView.as_view(), name='gedcom-import'),
     # 3. Tree-Specific Views:
+    path('tree/<int:tree_id>/', views.TreeOverviewView.as_view(), name='tree-overview'),
     path('tree/<int:tree_id>/search/', views.GlobalSearchView.as_view(), name='global-search'),
     path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
     # 4. match users to trees and enable/disable public flag 
@@ -200,6 +201,16 @@ urlpatterns = [
         "tree/<int:tree_id>/media/face-scan/process/",
         views.MediaFaceScanProcessView.as_view(),
         name="media-face-scan-process",
+    ),
+    path(
+        "tree/<int:tree_id>/media/face-review/",
+        views.FaceSuggestionReviewView.as_view(),
+        name="face-suggestion-review",
+    ),
+    path(
+        "tree/<int:tree_id>/media/document-suggestions/",
+        views.DocumentSuggestionReviewView.as_view(),
+        name="document-suggestion-review",
     ),
     path(
         "tree/<int:tree_id>/media/toggle-category/",

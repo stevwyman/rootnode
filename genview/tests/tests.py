@@ -251,3 +251,57 @@ class GlobalSearchViewTests(TestCase):
         self.assertTrue(any(r.pk == schmitt.pk for r in exact))
         self.assertTrue(any(r.pk == schmidt.pk for r in phonetic))
         self.assertLess(person_results.index(exact[0]), person_results.index(phonetic[0]))
+
+    def test_search_thumb_hidden_for_confidential_person(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from genview.models import MediaObject
+
+        media = MediaObject.objects.create(
+            gedcom_tree=self.tree,
+            title="Secret portrait",
+            file=SimpleUploadedFile("secret.jpg", b"jpeg", content_type="image/jpeg"),
+        )
+        media.individuals.add(self.john_smith)
+
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "John"})
+        john = next(r for r in response.context["results"] if r.pk == self.john_smith.pk)
+
+        self.assertIsNone(john.search_url)
+        self.assertIsNone(john.search_thumb_url)
+
+    def test_search_thumb_for_public_person(self):
+        from datetime import date
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from genview.models import MediaObject, Event
+
+        ancestor = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Victorian",
+            surname="Portrait",
+        )
+        deat_type = EventType.objects.filter(tag="DEAT").first()
+        if not deat_type:
+            deat_type = EventType.objects.create(tag="DEAT", name="Death", is_visible=True)
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=ancestor,
+            event_type=deat_type,
+            parsed_date=date(1920, 1, 1),
+            raw_date="1920",
+        )
+        media = MediaObject.objects.create(
+            gedcom_tree=self.tree,
+            title="Portrait",
+            file=SimpleUploadedFile("portrait.jpg", b"jpeg", content_type="image/jpeg"),
+            is_portrait=True,
+        )
+        media.individuals.add(ancestor)
+
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Victorian"})
+        person = next(r for r in response.context["results"] if r.pk == ancestor.pk)
+
+        self.assertIsNotNone(person.search_thumb_url)
+        self.assertIn("/thumb/mini/", person.search_thumb_url)
+        self.assertIn(f"/media/{media.pk}/", person.search_thumb_url)

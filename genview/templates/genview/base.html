@@ -38,6 +38,12 @@
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
                                     {% if tree.starting_individual_id %}
                                     <li>
+                                        <a class="dropdown-item" href="{% url 'genview:tree-overview' tree_id=tree_id %}">
+                                            🏠 {% trans "Übersicht" %}
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
                                         <a class="dropdown-item" href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}">
                                             🌳 {% trans "Baumansicht starten" %}
                                         </a>
@@ -68,6 +74,8 @@
                                         <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ {% trans "Baum verwalten" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍 {% trans "Orte bereinigen" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:media-face-scan' tree_id %}">👤 {% trans "Gesichter scannen" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:face-suggestion-review' tree_id %}">👤 {% trans "Gesichter zuordnen" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:document-suggestion-review' tree_id %}">📜 {% trans "Dokument-Vorschläge" %}</a></li>
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     {% if user.is_superuser %}

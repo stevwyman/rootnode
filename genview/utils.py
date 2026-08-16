@@ -23,42 +23,42 @@ from PIL import Image, ImageOps
 import pymupdf
 
 def find_best_match_for_face(new_embedding, tree_id, threshold=0.30):
+    """Return the best-matching Individual or None (legacy helper)."""
+    individual, _ = find_best_face_match(new_embedding, tree_id, threshold=threshold)
+    return individual
+
+
+def find_best_face_match(new_embedding, tree_id, threshold=0.30):
     """
-    Vergleicht ein neues Gesicht-Embedding mit allen bereits Personen
-    zugeordneten Embeddings im selben Stammbaum.
-    Gibt das Individual-Objekt zurück, wenn ein Match gefunden wurde.
+    Compare a face embedding to known linked faces in the tree.
+    Returns (individual, cosine_distance) when below threshold.
     """
     if not new_embedding:
-        return None
+        return None, None
 
-    # 1. Hole alle bereits erfolgreich verknüpften Gesichter aus diesem Baum
     known_tags = FaceTag.objects.filter(
         media__gedcom_tree_id=tree_id,
         individual__isnull=False,
-        embedding__isnull=False
-    ).select_related('individual')
+        embedding__isnull=False,
+    ).select_related("individual")
 
     if not known_tags.exists():
-        return None
+        return None, None
 
     best_individual = None
-    lowest_distance = 1.0  # Startwert (Kosinus-Abstand liegt zwischen 0 und 1)
-
-    # Vektor in ein Numpy-Array umwandeln für schnellere Berechnung
+    lowest_distance = 1.0
     A = np.array(new_embedding)
 
     for tag in known_tags:
         B = np.array(tag.embedding)
-        
-        # Mathematische Formel für den Kosinus-Abstand
         cosine_distance = 1 - (np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B)))
-
-        # Wenn der Abstand kleiner ist als alles bisherige UND unter dem Threshold liegt
         if cosine_distance < lowest_distance and cosine_distance < threshold:
             lowest_distance = cosine_distance
             best_individual = tag.individual
 
-    return best_individual
+    if best_individual is None:
+        return None, None
+    return best_individual, lowest_distance
 
 
 def detect_and_save_faces(media, tree_id: int) -> dict:
@@ -66,7 +66,7 @@ def detect_and_save_faces(media, tree_id: int) -> dict:
     Run FaceNode detection on *media* and replace FaceTag rows.
 
     Returns a result dict:
-      ok, error, faces_found, linked, title, media_id
+      ok, error, faces_found, suggested, title, media_id
     """
     from .facenode_client import detect_faces_via_api
 
@@ -74,7 +74,7 @@ def detect_and_save_faces(media, tree_id: int) -> dict:
         "ok": False,
         "error": None,
         "faces_found": 0,
-        "linked": 0,
+        "suggested": 0,
         "title": media.title or f"Media {media.pk}",
         "media_id": media.pk,
     }
@@ -106,16 +106,16 @@ def detect_and_save_faces(media, tree_id: int) -> dict:
 
     media.facetags.all().delete()
 
-    linked = 0
+    suggested = 0
     for face in faces:
         x_pct = (face["x"] / img_width) * 100
         y_pct = (face["y"] / img_height) * 100
         w_pct = (face["width"] / img_width) * 100
         h_pct = (face["height"] / img_height) * 100
         embedding = face["embedding"]
-        individual = find_best_match_for_face(embedding, tree_id)
-        if individual:
-            linked += 1
+        match_ind, distance = find_best_face_match(embedding, tree_id)
+        if match_ind:
+            suggested += 1
         FaceTag.objects.create(
             media=media,
             x_percent=x_pct,
@@ -124,12 +124,14 @@ def detect_and_save_faces(media, tree_id: int) -> dict:
             height_percent=h_pct,
             confidence=face["confidence"],
             embedding=embedding,
-            individual=individual,
+            individual=None,
+            suggested_individual=match_ind,
+            match_distance=distance,
         )
 
     result["ok"] = True
     result["faces_found"] = len(faces)
-    result["linked"] = linked
+    result["suggested"] = suggested
     return result
 
 

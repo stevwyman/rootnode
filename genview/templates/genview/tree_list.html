@@ -52,6 +52,10 @@
                     
                     <div class="card-footer bg-light border-top-0 p-3">
                         <div class="d-grid gap-2">
+                            <a href="{% url 'genview:tree-overview' tree_id=tree.pk %}" class="btn btn-success">
+                                🏠 {% trans "Übersicht öffnen" %}
+                            </a>
+
                             {% if tree.starting_individual %}
                             <a href="{% url 'genview:family_tree_view' tree_id=tree.pk individual_id=tree.starting_individual.pk %}" class="btn btn-primary">
                                 🌳 {% trans "Baumansicht starten" %}
