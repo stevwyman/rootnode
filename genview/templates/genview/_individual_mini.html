@@ -2,6 +2,7 @@
 {% load i18n %}
 
 <div class="col-2">
+    {# ---------- thumbnail image or emoji ---------- #}
     {% if individual.profile_image and individual.profile_image.file %}
         <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=individual.profile_image.pk size='mini' %}" 
             alt="{{ individual.given_name }}" 
@@ -13,6 +14,7 @@
 </div>
 <div class="col-10">
     {% if individual %}
+        {# ---------- name with dates ---------- #}
         <div>
             {% if apply_privacy and individual.is_confidential %}
                 <span class="text-muted fst-italic">🔒 {% trans "vertraulich" %}</span>

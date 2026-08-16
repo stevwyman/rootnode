@@ -897,7 +897,7 @@
         {% if object.parental_families.all %}
             {% for fam in object.parental_families.all %}
                 <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
-                    <div class="card-header bg-light py-2">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
                         <span class="text-muted small fw-medium">{{ fam.family }}</span>
                     </div>
                     <ul class="list-group list-group-flush">
@@ -952,12 +952,12 @@
         {% endif %}
 
         {# ---------- siblings ---------- #}
-        <h4 class="mt-5 mb-3">👦👧 Geschwister</h4>
+        <h4 class="mt-4 mb-3">👦👧 Geschwister</h4>
 
         <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
             
-            <div class="card-header bg-light py-3">
-                <h5 class="mb-0 fw-bold">Geschwister (inkl. Halbgeschwister)</h5>
+            <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                <span class="text-muted small fw-medium">Geschwister (inkl. Halbgeschwister)</span>
             </div>
 
             <div class="card-body p-0">
@@ -965,7 +965,11 @@
                     <ul class="list-group list-group-flush">
                         {% for sibling in object.siblings %}
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% include "genview/_individual_mini.html" with individual=sibling %}
+                                {% if apply_privacy and sibling.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {% include "genview/_individual_mini.html" with individual=sibling %}
+                                {% endif %}
                             </li>
                         {% endfor %}
                     </ul>
@@ -983,43 +987,53 @@
 
         {% for family in object.spousal_families %}
 
-            
-            <div class="card shadow-sm w-100 border-secondary border-opacity-25">
-                
-                <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
-                    <h5 class="mb-0 fw-bold">
+            {# ---------- spouce ---------- #}
+            <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
+                {# ---------- spouce header ---------- #}
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                    <span class="text-muted small fw-medium">
                         {% if family.husband == object and family.wife %}
-                            Partnerin
+                            Partnerin 
                         {% elif family.wife == object and family.husband %}
-                            Partner
+                            Partner 
                         {% else %}
-                            <span class="text-muted fst-italic">Unbekannter Partner</span>
+                            Unbekannter Partner
                         {% endif %}
-                    </h5>
-                    
-                    {% if family.marriage_date_parsed or family.marriage_date_raw %}
-                        <span class="badge bg-secondary text-light">
-                            ⚭ 
-                            {% if apply_privacy and family.is_confidential %}
-                                <span class="text-muted fst-italic">🔒 vertraulich</span>
-                            {% else %}
-                                {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
-                            {% endif %}
+                    </span>
+
+                    {% if apply_privacy and family.is_confidential %}
+                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                    {% else %}
+                        <span class="text-muted small fw-medium">
+                            ({{ family.gedcom_id }})
                         </span>
+                        {% if family.marriage_date_parsed or family.marriage_date_raw %}
+                            <span class="badge bg-secondary text-light">
+                                ⚭ {{ family.marriage_date_parsed|date:"Y"|default:family.marriage_date_raw }}
+                            </span>
+                        {% endif %}
                     {% endif %}
                 </div>
-
+                {# ---------- spouce body ---------- #}
                 <div class="card-body p-0">
                     {% if family.husband == object and family.wife %}
                         <ul class="list-group list-group-flush">
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% include "genview/_individual_mini.html" with individual=family.wife %}
+                                {% if apply_privacy and family.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {% include "genview/_individual_mini.html" with individual=family.wife %}
+                                {% endif %}
                             </li>
                         </ul>
                     {% elif family.wife == object and family.husband %}
                         <ul class="list-group list-group-flush">
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% include "genview/_individual_mini.html" with individual=family.husband %}
+                                {% if apply_privacy and family.is_confidential %}
+                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                {% else %}
+                                    {% include "genview/_individual_mini.html" with individual=family.husband %}
+                                {% endif %}
                             </li>
                         </ul>
                     
@@ -1027,24 +1041,23 @@
                         <span class="text-muted fst-italic">Unbekannter Partner</span>
                     {% endif %}
                 </div>
-
-                
             </div>
 
+            {# ---------- children ---------- #}
             <div class="card mb-4 shadow-sm w-100 border-secondary border-opacity-25">
-                
-                <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
-                    <h5 class="mb-0 fw-bold">
-                        Kinder
-                    </h5>
+                {# ---------- children header ---------- #}
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                    <span class="text-muted small fw-medium">Kinder</span>
                 </div>
-
+                {# ---------- children body ---------- #}
                 <div class="card-body p-0">
                     {% if family.children.all %}
                         <ul class="list-group list-group-flush">
                             {% for link in family.children.all %}
                                 {% if apply_privacy and link.child.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
+                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
+                                    </li>
                                 {% else %}
                                     <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
                                         {% include "genview/_individual_mini.html" with individual=link.child %}
@@ -1058,23 +1071,23 @@
                         </div>
                     {% endif %}
                 </div>
-
+                {# ---------- children footer ---------- #}
                 {% if can_edit %}
-                <div class="card-footer bg-white py-3 d-flex gap-2">
-    
-                    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-50">
-                        👶 Kind hinzufügen
-                        {% if family.husband == object and family.wife %}
-                            (mit {{ family.wife.given_name }})
-                        {% elif family.wife == object and family.husband %}
-                            (mit {{ family.husband.given_name }})
-                        {% endif %}
-                    </a>
-                    <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-sm btn-outline-secondary w-50">
-                        👪 Zur Familie
-                    </a>
-                    
-                </div>
+                    <div class="card-footer bg-white py-3 d-flex gap-2">
+        
+                        <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-50">
+                            👶 Kind hinzufügen
+                            {% if family.husband == object and family.wife %}
+                                (mit {{ family.wife.given_name }})
+                            {% elif family.wife == object and family.husband %}
+                                (mit {{ family.husband.given_name }})
+                            {% endif %}
+                        </a>
+                        <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-sm btn-outline-secondary w-50">
+                            👪 Zur Familie
+                        </a>
+                        
+                    </div>
                 {% endif %}
             </div>
 
