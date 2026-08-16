@@ -1783,6 +1783,8 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             return self._handle_doc_suggestion_action(request, media, accept=True)
         elif "reject_doc_suggestion" in request.POST:
             return self._handle_doc_suggestion_action(request, media, accept=False)
+        elif "create_portrait" in request.POST:
+            return self._handle_create_portrait(request, media)
 
         return redirect(request.path)
     
@@ -1859,6 +1861,55 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             suggestion.save(update_fields=["status", "updated_at"])
             messages.info(request, _("Vorschlag abgelehnt."))
         return redirect(request.path)
+
+    def _handle_create_portrait(self, request, media):
+        from .utils import create_portrait_from_crop
+
+        if not media.is_image or not media.file:
+            messages.error(request, _("Nur Bilddateien können als Portrait zugeschnitten werden."))
+            return redirect(request.path)
+
+        individual_id = request.POST.get("individual_id")
+        if not individual_id:
+            messages.warning(request, _("Bitte eine Person auswählen."))
+            return redirect(request.path)
+
+        tree_id = self.kwargs.get("tree_id")
+        individual = get_object_or_404(
+            Individual, pk=individual_id, gedcom_tree_id=tree_id
+        )
+
+        try:
+            x = float(request.POST.get("x_percent", ""))
+            y = float(request.POST.get("y_percent", ""))
+            w = float(request.POST.get("width_percent", ""))
+            h = float(request.POST.get("height_percent", ""))
+        except (TypeError, ValueError):
+            messages.error(request, _("Ungültige Auswahl. Bitte ein Rechteck auf dem Bild markieren."))
+            return redirect(request.path)
+
+        try:
+            portrait = create_portrait_from_crop(media, individual, x, y, w, h)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect(request.path)
+        except OSError as exc:
+            messages.error(
+                request,
+                _("Bild konnte nicht gelesen werden: %(detail)s") % {"detail": exc},
+            )
+            return redirect(request.path)
+
+        messages.success(
+            request,
+            _("Portrait für %(person)s erstellt und als Profilbild gesetzt.")
+            % {"person": individual.full_name()},
+        )
+        return redirect(
+            "genview:media-detail",
+            tree_id=tree_id,
+            pk=portrait.pk,
+        )
 
     # -------------------------------------------------
     # Action-Handler 1: Erkennung & Prozentrechnung

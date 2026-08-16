@@ -6,12 +6,15 @@ from django.db import transaction
 from django.urls import reverse
 from .models import (
     FaceTag,
+    Individual,
+    MediaObject,
     Place,
     tree_thumbs_mini_directory_path,
     tree_thumbs_small_directory_path,
 )
 
 import io
+import uuid
 from pathlib import Path
 from typing import Tuple
 
@@ -409,6 +412,113 @@ def _save_image(img: Image.Image, dest_path: Path, quality: int = 85) -> None:
     """Save Pillow image to *dest_path* (creates parent dirs)."""
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(str(dest_path), format="JPEG", quality=quality, optimize=True)
+
+
+def crop_image_by_percent(
+    image_path: Path,
+    x_percent: float,
+    y_percent: float,
+    width_percent: float,
+    height_percent: float,
+    padding_percent: float = 0.03,
+) -> Image.Image:
+    """
+    Crop a rectangular region from an image using percentage coordinates
+    (same convention as FaceTag: origin top-left, relative to image size).
+    """
+    img = _open_image(image_path)
+    img_w, img_h = img.size
+
+    x = max(0.0, x_percent - padding_percent)
+    y = max(0.0, y_percent - padding_percent)
+    w = min(100.0 - x, width_percent + 2 * padding_percent)
+    h = min(100.0 - y, height_percent + 2 * padding_percent)
+
+    left = int(round(x / 100.0 * img_w))
+    top = int(round(y / 100.0 * img_h))
+    right = int(round((x + w) / 100.0 * img_w))
+    bottom = int(round((y + h) / 100.0 * img_h))
+
+    right = min(img_w, max(right, left + 1))
+    bottom = min(img_h, max(bottom, top + 1))
+
+    return img.crop((left, top, right, bottom))
+
+
+def _validate_crop_percentages(
+    x_percent: float,
+    y_percent: float,
+    width_percent: float,
+    height_percent: float,
+    min_size: float = 1.0,
+) -> None:
+    for name, value in (
+        ("x_percent", x_percent),
+        ("y_percent", y_percent),
+        ("width_percent", width_percent),
+        ("height_percent", height_percent),
+    ):
+        if not 0 <= value <= 100:
+            raise ValueError(f"{name} must be between 0 and 100")
+
+    if width_percent < min_size or height_percent < min_size:
+        raise ValueError("Crop region is too small")
+
+    if x_percent + width_percent > 100.01 or y_percent + height_percent > 100.01:
+        raise ValueError("Crop region exceeds image bounds")
+
+
+def create_portrait_from_crop(
+    source_media: MediaObject,
+    individual: Individual,
+    x_percent: float,
+    y_percent: float,
+    width_percent: float,
+    height_percent: float,
+) -> MediaObject:
+    """
+    Crop *source_media*, save a new PHOTO linked to *individual* with is_portrait=True.
+    Thumbnails are generated via post_save signals on the new MediaObject.
+    """
+    if not source_media.is_image:
+        raise ValueError("Source media is not an image")
+    if not source_media.file or not source_media.file.name:
+        raise ValueError("Source media has no file")
+
+    _validate_crop_percentages(x_percent, y_percent, width_percent, height_percent)
+
+    source_path = Path(source_media.file.path)
+    cropped = crop_image_by_percent(
+        source_path,
+        x_percent,
+        y_percent,
+        width_percent,
+        height_percent,
+    )
+
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="JPEG", quality=90, optimize=True)
+    buffer.seek(0)
+
+    filename = f"portrait_{individual.pk}_{uuid.uuid4().hex[:8]}.jpg"
+    source_title = source_media.title or f"Media {source_media.pk}"
+
+    with transaction.atomic():
+        portrait = MediaObject(
+            gedcom_tree_id=source_media.gedcom_tree_id,
+            title=f"Portrait: {individual.full_name()}",
+            category=MediaObject.Category.PHOTO,
+            is_portrait=True,
+            description=(
+                f"Aus Gruppenfoto „{source_title}“ "
+                f"(Media #{source_media.pk})."
+            ),
+        )
+        portrait.save()
+        portrait.file.save(filename, ContentFile(buffer.read()), save=True)
+        portrait.individuals.add(individual)
+
+    return portrait
 
 
 _THUMB_UPLOAD_TO = {

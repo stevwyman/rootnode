@@ -19,6 +19,19 @@
                 background-color: rgba(255, 255, 255, 0.15);
                 box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
             }
+            .face-box.crop-preset-active {
+                background-color: rgba(13, 110, 253, 0.2);
+                box-shadow: 0 0 12px rgba(13, 110, 253, 0.55);
+            }
+            #portrait-crop-container {
+                cursor: crosshair;
+                user-select: none;
+            }
+            #crop-selection {
+                pointer-events: none;
+                background-color: rgba(13, 110, 253, 0.15);
+                z-index: 20;
+            }
             /* Verhindert, dass Nametags beim Hover das Bild verzerren */
             .face-badge {
                 z-index: 10;
@@ -28,17 +41,25 @@
 
         <div class="col text-center bg-light p-3 rounded border mb-4">
             {% if media.is_image and media.file %}
-                <div class="position-relative d-inline-block" style="max-width: 100%;">
-                    <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" target="_blank">
-                        <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" 
-                            class="img-fluid rounded shadow-sm" 
-                            style="max-height: 70vh; object-fit: contain;" 
-                            alt="{{ media.title }}">
-                    </a>
+                <div id="portrait-crop-container" class="position-relative d-inline-block" style="max-width: 100%;">
+                    <img id="media-preview-img"
+                        src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}"
+                        class="img-fluid rounded shadow-sm d-block"
+                        style="max-height: 70vh; object-fit: contain;"
+                        alt="{{ media.title }}">
+                    
+                    <div id="crop-selection" class="position-absolute border border-primary border-3" style="display: none;"></div>
                     
                     {% for tag in tags %}
-                        <div class="position-absolute border border-2 {% if tag.individual %}border-success{% else %}border-warning{% endif %} face-box"
+                        <div class="position-absolute border border-2 {% if tag.individual %}border-success{% else %}border-warning{% endif %} face-box{% if can_edit %} crop-preset{% endif %}"
                              style="left: {{ tag.x_percent|unlocalize }}%; top: {{ tag.y_percent|unlocalize }}%; width: {{ tag.width_percent|unlocalize }}%; height: {{ tag.height_percent|unlocalize }}%;"
+                             {% if can_edit %}
+                             data-x="{{ tag.x_percent|unlocalize }}"
+                             data-y="{{ tag.y_percent|unlocalize }}"
+                             data-w="{{ tag.width_percent|unlocalize }}"
+                             data-h="{{ tag.height_percent|unlocalize }}"
+                             {% if tag.individual %}data-individual-id="{{ tag.individual.pk }}"{% endif %}
+                             {% endif %}
                              title="{% if tag.individual %}{{ tag.individual.full_name }}{% else %}Gesicht #{{ forloop.counter }} (Unbekannt){% endif %}">
                              
                              {% if tag.individual %}
@@ -56,6 +77,11 @@
                         </div>
                     {% endfor %}
                     
+                </div>
+                <div class="mt-2">
+                    <a href="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+                        {% trans "Vollbild öffnen" %}
+                    </a>
                 </div>
             {% elif media.is_pdf and media.file %}
                 <div class="pdf-preview w-100 text-start">
@@ -88,6 +114,42 @@
         </div>
 
         {% if can_edit %}
+            {% if media.is_image and media.file %}
+                <div class="container mt-4 px-0">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body">
+                            <h3 class="h5 mb-2">🖼️ {% trans "Portrait aus Auswahl erstellen" %}</h3>
+                            <p class="text-muted small mb-3">
+                                {% trans "Ziehen Sie ein Rechteck um ein Gesicht oder klicken Sie auf eine erkannte Markierung. Es wird ein neues Portrait gespeichert und als Profilbild der Person gesetzt." %}
+                            </p>
+                            <form method="post" id="portrait-crop-form" class="d-flex flex-wrap align-items-end gap-3">
+                                {% csrf_token %}
+                                <input type="hidden" name="create_portrait" value="1">
+                                <input type="hidden" name="x_percent" id="crop-x" value="">
+                                <input type="hidden" name="y_percent" id="crop-y" value="">
+                                <input type="hidden" name="width_percent" id="crop-w" value="">
+                                <input type="hidden" name="height_percent" id="crop-h" value="">
+                                <div style="min-width: 260px;">
+                                    <label class="form-label small mb-1" for="portrait-individual-select">{% trans "Person" %}</label>
+                                    <select name="individual_id"
+                                            id="portrait-individual-select"
+                                            class="individual-select form-select"
+                                            data-placeholder="{% trans 'Person wählen…' %}"
+                                            style="width: 100%;">
+                                        {% for person in media.individuals.all %}
+                                            <option value="{{ person.pk }}">{{ person.full_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-success" id="portrait-crop-submit" disabled>
+                                    {% trans "Als Portrait speichern" %}
+                                </button>
+                            </form>
+                            <div id="crop-status" class="small text-muted mt-2">{% trans "Noch keine Auswahl markiert." %}</div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
             {% if media.category == 'PHOTO' %}
                 <div class="container mt-4 px-0">
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -324,6 +386,120 @@
 <script>
 jQuery(document).ready(function($) {
     initGenviewSelect2('.individual-select', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "Personen suchen...");
+
+    var $container = $('#portrait-crop-container');
+    if (!$container.length) {
+        return;
+    }
+
+    var $selection = $('#crop-selection');
+    var $form = $('#portrait-crop-form');
+    var $submit = $('#portrait-crop-submit');
+    var $status = $('#crop-status');
+    var $personSelect = $('#portrait-individual-select');
+    var dragging = false;
+    var startX = 0;
+    var startY = 0;
+
+    function updateSubmitState() {
+        var hasCrop = $('#crop-x').val() && $('#crop-w').val();
+        var hasPerson = $personSelect.val();
+        $submit.prop('disabled', !hasCrop || !hasPerson);
+    }
+
+    function setCropPercent(x, y, w, h) {
+        $('#crop-x').val(x.toFixed(4));
+        $('#crop-y').val(y.toFixed(4));
+        $('#crop-w').val(w.toFixed(4));
+        $('#crop-h').val(h.toFixed(4));
+
+        $selection.css({
+            display: 'block',
+            left: x + '%',
+            top: y + '%',
+            width: w + '%',
+            height: h + '%'
+        });
+
+        $status.text(
+            'Auswahl: ' + x.toFixed(1) + '% / ' + y.toFixed(1) + '% · ' +
+            w.toFixed(1) + '% × ' + h.toFixed(1) + '%'
+        );
+        updateSubmitState();
+    }
+
+    function setCropFromPixels(left, top, width, height) {
+        var rect = $container[0].getBoundingClientRect();
+        if (!rect.width || !rect.height) {
+            return;
+        }
+        var x = (left / rect.width) * 100;
+        var y = (top / rect.height) * 100;
+        var w = (width / rect.width) * 100;
+        var h = (height / rect.height) * 100;
+        setCropPercent(x, y, w, h);
+    }
+
+    $('.crop-preset').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $('.crop-preset').removeClass('crop-preset-active');
+        $(this).addClass('crop-preset-active');
+
+        var x = parseFloat(this.dataset.x);
+        var y = parseFloat(this.dataset.y);
+        var w = parseFloat(this.dataset.w);
+        var h = parseFloat(this.dataset.h);
+        setCropPercent(x, y, w, h);
+
+        var personId = this.dataset.individualId;
+        if (personId) {
+            if ($personSelect.find('option[value="' + personId + '"]').length) {
+                $personSelect.val(personId).trigger('change');
+            } else {
+                var label = $(this).attr('title') || personId;
+                var option = new Option(label, personId, true, true);
+                $personSelect.append(option).trigger('change');
+            }
+        }
+    });
+
+    $container.on('mousedown', function(e) {
+        if ($(e.target).closest('.face-badge a').length) {
+            return;
+        }
+        if ($(e.target).closest('.crop-preset').length) {
+            return;
+        }
+        dragging = true;
+        var rect = $container[0].getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        $('.crop-preset').removeClass('crop-preset-active');
+        setCropFromPixels(startX, startY, 0, 0);
+        e.preventDefault();
+    });
+
+    $(document).on('mousemove', function(e) {
+        if (!dragging) {
+            return;
+        }
+        var rect = $container[0].getBoundingClientRect();
+        var currentX = e.clientX - rect.left;
+        var currentY = e.clientY - rect.top;
+        var left = Math.min(startX, currentX);
+        var top = Math.min(startY, currentY);
+        var width = Math.abs(currentX - startX);
+        var height = Math.abs(currentY - startY);
+        setCropFromPixels(left, top, width, height);
+    });
+
+    $(document).on('mouseup', function() {
+        dragging = false;
+    });
+
+    $personSelect.on('change select2:select', updateSubmitState);
+    updateSubmitState();
 });
 </script>
 {% endblock %}
