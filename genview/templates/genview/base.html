@@ -42,17 +42,19 @@
                                             🏠 {% trans "Übersicht" %}
                                         </a>
                                     </li>
+                                    {% if visible_starting_individual %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
-                                        <a class="dropdown-item" href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}">
+                                        <a class="dropdown-item" href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=visible_starting_individual.pk %}">
                                             🌳 {% trans "Baumansicht starten" %}
                                         </a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual_id %}">
+                                        <a class="dropdown-item" href="{% url 'genview:individual-detail' tree_id=tree_id pk=visible_starting_individual.pk %}">
                                             ⭐ {% trans "Startperson" %}
                                         </a>
                                     </li>
+                                    {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     {% endif %}
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-query' tree_id=tree_id %}">{% trans "Stammbaum fragen" %}</a></li>

@@ -507,6 +507,8 @@ def _neighbors(person: Individual) -> list[tuple[Individual, str]]:
         for child in fam.children_links():
             if child.pk != person.pk:
                 edges.append((child, "child"))
+    for sib in person.siblings:
+        edges.append((sib, "sibling"))
     return edges
 
 
@@ -538,7 +540,7 @@ def find_relation_path(
 
 
 def describe_relation(edge_path: list[str]) -> str:
-    """Turn an edge-label path into a short relationship phrase."""
+    """Turn an edge-label path into a short relationship phrase (who the goal is to the start)."""
     if not edge_path:
         return _("dieselbe Person")
     key = tuple(edge_path)
@@ -547,6 +549,7 @@ def describe_relation(edge_path: list[str]) -> str:
         ("mother",): _("Mutter"),
         ("child",): _("Kind"),
         ("spouse",): _("Ehepartner/in"),
+        ("sibling",): _("Geschwister"),
         ("father", "child"): _("Geschwister (väterlicherseits)"),
         ("mother", "child"): _("Geschwister (mütterlicherseits)"),
         ("father", "father"): _("Großvater väterlicherseits"),
@@ -559,14 +562,114 @@ def describe_relation(edge_path: list[str]) -> str:
         ("spouse", "father"): _("Schwiegervater"),
         ("spouse", "mother"): _("Schwiegermutter"),
         ("child", "spouse"): _("Schwiegerkind"),
+        ("sibling", "spouse"): _("Schwager/Schwägerin"),
+        ("spouse", "sibling"): _("Schwager/Schwägerin"),
+        ("father", "sibling"): _("Onkel/Tante väterlicherseits"),
+        ("mother", "sibling"): _("Onkel/Tante mütterlicherseits"),
+        ("sibling", "child"): _("Neffe/Nichte"),
         ("father", "father", "child"): _("Onkel/Tante väterlicherseits"),
+        ("father", "mother", "child"): _("Onkel/Tante väterlicherseits"),
+        ("mother", "father", "child"): _("Onkel/Tante mütterlicherseits"),
         ("mother", "mother", "child"): _("Onkel/Tante mütterlicherseits"),
         ("father", "child", "child"): _("Neffe/Nichte väterlicherseits"),
         ("mother", "child", "child"): _("Neffe/Nichte mütterlicherseits"),
+        ("father", "sibling", "child"): _("Cousin/Cousine väterlicherseits"),
+        ("mother", "sibling", "child"): _("Cousin/Cousine mütterlicherseits"),
+        ("father", "father", "father"): _("Urgroßvater väterlicherseits"),
+        ("mother", "mother", "mother"): _("Urgroßmutter mütterlicherseits"),
+        ("father", "father", "mother"): _("Urgroßmutter väterlicherseits"),
+        ## TODO: complete the list
     }
     if key in mapping:
         return mapping[key]
     return " → ".join(STEP_LABELS[s]() if s in STEP_LABELS else s for s in edge_path)
+
+
+def _sex_of(person: Individual | None) -> str:
+    return (getattr(person, "sex", None) or "").upper()
+
+
+def _role_with_article(kind: str, sex: str) -> str:
+    """Grammatical German role with article, gendered when known."""
+    male = sex == "M"
+    female = sex == "F"
+    roles = {
+        "child": (_("das Kind"), _("der Sohn"), _("die Tochter")),
+        "parent": (_("ein Elternteil"), _("der Vater"), _("die Mutter")),
+        "spouse": (_("der/die Ehepartner/in"), _("der Ehemann"), _("die Ehefrau")),
+        "sibling": (_("ein Geschwisterteil"), _("der Bruder"), _("die Schwester")),
+        "nibling": (_("der/die Neffe/Nichte"), _("der Neffe"), _("die Nichte")),
+        "pibling": (_("der/die Onkel/Tante"), _("der Onkel"), _("die Tante")),
+        "grandchild": (_("das Enkelkind"), _("der Enkel"), _("die Enkelin")),
+        "grandparent": (_("ein Großelternteil"), _("der Großvater"), _("die Großmutter")),
+        "child_in_law": (
+            _("das Schwiegerkind"),
+            _("der Schwiegersohn"),
+            _("die Schwiegertochter"),
+        ),
+        "parent_in_law": (
+            _("ein Schwiegerelternteil"),
+            _("der Schwiegervater"),
+            _("die Schwiegermutter"),
+        ),
+        "sibling_in_law": (
+            _("der/die Schwager/Schwägerin"),
+            _("der Schwager"),
+            _("die Schwägerin"),
+        ),
+        "cousin": (_("ein Cousin/eine Cousine"), _("der Cousin"), _("die Cousine")),
+    }
+    neutral, der, die = roles[kind]
+    if male:
+        return der
+    if female:
+        return die
+    return neutral
+
+
+# Path start→goal: who *start* is to *goal* (August→Beatrice = nibling).
+_START_ROLE_TO_GOAL: dict[tuple[str, ...], str] = {
+    ("father",): "child",
+    ("mother",): "child",
+    ("child",): "parent",
+    ("spouse",): "spouse",
+    ("sibling",): "sibling",
+    ("father", "child"): "sibling",
+    ("mother", "child"): "sibling",
+    ("father", "spouse"): "stepchild",
+    ("mother", "spouse"): "stepchild",
+    ("spouse", "father"): "child_in_law",
+    ("spouse", "mother"): "child_in_law",
+    ("child", "spouse"): "parent_in_law",
+    ("sibling", "spouse"): "sibling_in_law",
+    ("spouse", "sibling"): "sibling_in_law",
+    ("father", "sibling"): "nibling",
+    ("mother", "sibling"): "nibling",
+    ("sibling", "child"): "pibling",
+    ("father", "father"): "grandchild",
+    ("father", "mother"): "grandchild",
+    ("mother", "father"): "grandchild",
+    ("mother", "mother"): "grandchild",
+    ("child", "child"): "grandparent",
+    ("father", "father", "child"): "nibling",
+    ("father", "mother", "child"): "nibling",
+    ("mother", "father", "child"): "nibling",
+    ("mother", "mother", "child"): "nibling",
+    ("father", "child", "child"): "pibling",
+    ("mother", "child", "child"): "pibling",
+    ("father", "sibling", "child"): "cousin",
+    ("mother", "sibling", "child"): "cousin",
+}
+
+
+def describe_start_to_goal(edge_path: list[str], start: Individual) -> str:
+    """Who *start* is to the person at the end of *edge_path*, with article."""
+    kind = _START_ROLE_TO_GOAL.get(tuple(edge_path))
+    if not kind:
+        return describe_relation(edge_path)
+    if kind == "stepchild":
+        return _role_with_article("child", _sex_of(start))
+    return _role_with_article(kind, _sex_of(start))
 
 
 def _capitalize(text: str) -> str:
@@ -676,7 +779,18 @@ def render_answer(intent: str, facts: dict[str, Any]) -> str:
                 "a": name,
                 "b": other.get("display_name") or _("Unbekannt"),
             }
-        return _("%(a)s und %(b)s: %(relation)s.") % {
+        kind = facts.get("relation_kind")
+        if kind == "sibling":
+            return _("%(a)s und %(b)s sind Geschwister.") % {
+                "a": name,
+                "b": other.get("display_name") or _("Unbekannt"),
+            }
+        if kind == "spouse":
+            return _("%(a)s und %(b)s sind Ehepartner.") % {
+                "a": name,
+                "b": other.get("display_name") or _("Unbekannt"),
+            }
+        return _("%(a)s ist %(relation)s von %(b)s.") % {
             "a": name,
             "b": other.get("display_name") or _("Unbekannt"),
             "relation": relation,
@@ -945,10 +1059,12 @@ def execute_tree_query(
                 facts["no_relation"] = True
                 facts["relation_path"] = []
                 facts["relation_label"] = ""
+                facts["relation_kind"] = None
             else:
                 facts["no_relation"] = False
                 facts["relation_path"] = edge_path
-                facts["relation_label"] = describe_relation(edge_path)
+                facts["relation_kind"] = _START_ROLE_TO_GOAL.get(tuple(edge_path))
+                facts["relation_label"] = describe_start_to_goal(edge_path, subject)
             return _ok(intent, facts)
 
         raise TreeQueryError(_("Unbekannte Anfrageart."))

@@ -51,6 +51,15 @@ class RuleParserTests(SimpleTestCase):
         self.assertEqual(plan["person_name"], "Anna Müller")
         self.assertEqual(plan["target_name"], "Bernd Beispiel")
 
+    def test_relation_between_strips_quotes(self):
+        plan = parse_question_rules(
+            'Wie sind "August Philip Hawke Brooksbank" und '
+            '"Beatrice Elizabeth Mary Windsor " verwandt?'
+        )
+        self.assertEqual(plan["intent"], "relation_between")
+        self.assertEqual(plan["person_name"], "August Philip Hawke Brooksbank")
+        self.assertEqual(plan["target_name"], "Beatrice Elizabeth Mary Windsor")
+
     def test_unknown_returns_none(self):
         self.assertIsNone(parse_question_rules("Erzähl mir etwas Lustiges über Kekse"))
 
@@ -65,6 +74,20 @@ class RuleParserTests(SimpleTestCase):
         plan = parse_question_rules("how old was my grandmother")
         self.assertEqual(plan["intent"], "person_age")
         self.assertEqual(plan["kinship_path"], ["mother", "mother"])
+
+    def test_how_old_named_person(self):
+        plan = parse_question_rules(
+            'Wie alt ist "Beatrice Elizabeth Mary Windsor"?'
+        )
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["intent"], "person_age")
+        self.assertEqual(plan["kinship_path"], [])
+        self.assertEqual(plan["person_name"], "Beatrice Elizabeth Mary Windsor")
+
+    def test_how_old_named_person_english(self):
+        plan = parse_question_rules("How old is Jane Doe?")
+        self.assertEqual(plan["intent"], "person_age")
+        self.assertEqual(plan["person_name"], "Jane Doe")
 
     def test_grandfathers_of_named_person(self):
         plan = parse_question_rules(
@@ -86,6 +109,33 @@ class RuleParserTests(SimpleTestCase):
         self.assertEqual(plan["intent"], "list_relatives")
         self.assertEqual(plan["kind"], "children")
         self.assertEqual(plan["person_name"], "Charles Windsor")
+
+    def test_father_of_named_person(self):
+        plan = parse_question_rules(
+            "Wer ist der Vater von Eugenie Victoria Helena Windsor?"
+        )
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["intent"], "resolve_kinship")
+        self.assertEqual(plan["kinship_path"], ["father"])
+        self.assertEqual(plan["person_name"], "Eugenie Victoria Helena Windsor")
+
+    def test_genitive_father_of_named_person(self):
+        plan = parse_question_rules(
+            "Wie heißt der Vater von Eugenie Victoria Helena Windsor?"
+        )
+        self.assertEqual(plan["kinship_path"], ["father"])
+        plan = parse_question_rules(
+            "Wie lautet der Name des Vaters von Eugenie Victoria Helena Windsor?"
+        )
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["kinship_path"], ["father"])
+        self.assertEqual(plan["person_name"], "Eugenie Victoria Helena Windsor")
+
+    def test_english_mother_of_named_person(self):
+        plan = parse_question_rules("Who is the mother of Jane Doe?")
+        self.assertEqual(plan["intent"], "resolve_kinship")
+        self.assertEqual(plan["kinship_path"], ["mother"])
+        self.assertEqual(plan["person_name"], "Jane Doe")
 
     def test_other_grandmother_is_paternal(self):
         plan = parse_question_rules(
@@ -255,6 +305,35 @@ class NaturalLanguagePipelineTests(TestCase):
         self.assertIn("Andreas", result["answer"])
         self.assertIn("Georg", result["answer"])
         self.assertIn("Charles", result["answer"])
+
+    def test_father_of_named_person_via_question(self):
+        from genview.models import ChildFamilyLink, Family
+
+        eugenie = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Eugenie Victoria Helena",
+            surname="Windsor",
+        )
+        andrew = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Andrew", surname="Windsor"
+        )
+        ChildFamilyLink.objects.create(
+            child=eugenie,
+            family=Family.objects.create(
+                gedcom_tree=self.tree, husband=andrew, wife=None
+            ),
+        )
+
+        parsed = parse_natural_language_question(
+            "Wer ist der Vater von Eugenie Victoria Helena Windsor?"
+        )
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["source"], "rules")
+        self.assertEqual(parsed["plan"]["intent"], "resolve_kinship")
+        self.assertEqual(parsed["plan"]["kinship_path"], ["father"])
+        result = execute_tree_query(self.tree.id, parsed["plan"], apply_privacy=False)
+        self.assertTrue(result["ok"], result["answer"])
+        self.assertIn("Andrew", result["answer"])
 
     @patch("genview.tree_query_parse.parse_question_via_llm")
     def test_llm_empty_path_does_not_count_start_person(self, mock_llm):

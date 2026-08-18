@@ -19,6 +19,7 @@ from genview.tree_query import (
     execute_tree_query,
     find_relation_path,
     describe_relation,
+    describe_start_to_goal,
     TreeQueryError,
 )
 
@@ -162,7 +163,7 @@ class TreeQueryExecutorTests(TestCase):
 
     def test_relation_siblings(self):
         path = find_relation_path(self.mother, self.uncle)
-        self.assertEqual(path, ["father", "child"])
+        self.assertEqual(path, ["sibling"])
         self.assertIn("Geschwister", describe_relation(path))
 
         result = execute_tree_query(
@@ -176,6 +177,49 @@ class TreeQueryExecutorTests(TestCase):
         )
         self.assertTrue(result["ok"])
         self.assertIn("Geschwister", result["answer"])
+
+    def test_relation_nephew_of_aunt(self):
+        self.start.sex = "M"
+        self.start.save(update_fields=["sex"])
+        self.uncle.sex = "M"
+        self.uncle.save(update_fields=["sex"])
+        self.mother.sex = "F"
+        self.mother.save(update_fields=["sex"])
+
+        path = find_relation_path(self.start, self.uncle)
+        self.assertEqual(path, ["mother", "sibling"])
+
+        nephew = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "relation_between",
+                "person_id": self.start.pk,
+                "target_id": self.uncle.pk,
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(nephew["ok"])
+        self.assertIn("Neffe", nephew["answer"])
+        self.assertIn("Karl", nephew["answer"])
+
+        aunt = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "relation_between",
+                "person_id": self.uncle.pk,
+                "target_id": self.start.pk,
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(aunt["ok"])
+        self.assertIn("Onkel", aunt["answer"])
+
+    def test_mother_father_child_is_maternal_aunt_uncle(self):
+        self.assertIn(
+            "Onkel/Tante",
+            describe_relation(["mother", "father", "child"]),
+        )
+        self.assertIn("Neffe", describe_start_to_goal(["mother", "father", "child"], self.start))
 
     def test_privacy_redacts_living_subject(self):
         living = Individual.objects.create(

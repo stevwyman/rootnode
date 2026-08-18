@@ -18,6 +18,13 @@ _UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 
 # Longest phrases first.
 _PATH_PHRASES: list[tuple[str, list[str]]] = [
+    # --- Great-Grandparents (Urgroßeltern) ---
+    ("urgrossmutter muetterlicherseits", ["mother", "mother", "mother"]),
+    ("urgrossvater vaeterlicherseits", ["father", "father", "father"]),
+    ("great grandmother on my mothers side", ["mother", "mother", "mother"]),
+    ("great grandfather on my fathers side", ["father", "father", "father"]),
+
+    # --- Grandparents (Großeltern) ---
     ("grossmutter muetterlicherseits", ["mother", "mother"]),
     ("grandmother on my mothers side", ["mother", "mother"]),
     ("grandmother on mothers side", ["mother", "mother"]),
@@ -25,18 +32,21 @@ _PATH_PHRASES: list[tuple[str, list[str]]] = [
     ("muetterliche grossmutter", ["mother", "mother"]),
     ("mutter meiner mutter", ["mother", "mother"]),
     ("mutter der mutter", ["mother", "mother"]),
+    
     ("grossmutter vaeterlicherseits", ["father", "mother"]),
     ("grandmother on my fathers side", ["father", "mother"]),
     ("grandmother on fathers side", ["father", "mother"]),
     ("vaeterliche grossmutter", ["father", "mother"]),
     ("mutter meines vaters", ["father", "mother"]),
     ("mutter des vaters", ["father", "mother"]),
+    
     ("grossvater muetterlicherseits", ["mother", "father"]),
     ("grandfather on my mothers side", ["mother", "father"]),
     ("grandfather on mothers side", ["mother", "father"]),
     ("muetterlicher grossvater", ["mother", "father"]),
     ("vater meiner mutter", ["mother", "father"]),
     ("vater der mutter", ["mother", "father"]),
+    
     ("grossvater vaeterlicherseits", ["father", "father"]),
     ("grandfather on my fathers side", ["father", "father"]),
     ("grandfather on fathers side", ["father", "father"]),
@@ -47,7 +57,33 @@ _PATH_PHRASES: list[tuple[str, list[str]]] = [
     ("vater des vaters", ["father", "father"]),
     ("my father's father", ["father", "father"]),
     ("my fathers father", ["father", "father"]),
-    # Unspecified "Großmutter" is maternal; "die andere" is the paternal one.
+
+    # --- Uncles and Aunts (Onkel und Tanten) ---
+    ("onkel muetterlicherseits", ["mother", "brother"]),
+    ("bruder meiner mutter", ["mother", "brother"]),
+    ("bruder der mutter", ["mother", "brother"]),
+    ("maternal uncle", ["mother", "brother"]),
+    ("uncle on my mothers side", ["mother", "brother"]),
+    
+    ("onkel vaeterlicherseits", ["father", "brother"]),
+    ("bruder meines vaters", ["father", "brother"]),
+    ("bruder des vaters", ["father", "brother"]),
+    ("paternal uncle", ["father", "brother"]),
+    ("uncle on my fathers side", ["father", "brother"]),
+
+    ("tante muetterlicherseits", ["mother", "sister"]),
+    ("schwester meiner mutter", ["mother", "sister"]),
+    ("schwester der mutter", ["mother", "sister"]),
+    ("maternal aunt", ["mother", "sister"]),
+    ("aunt on my mothers side", ["mother", "sister"]),
+    
+    ("tante vaeterlicherseits", ["father", "sister"]),
+    ("schwester meines vaters", ["father", "sister"]),
+    ("schwester des vaters", ["father", "sister"]),
+    ("paternal aunt", ["father", "sister"]),
+    ("aunt on my fathers side", ["father", "sister"]),
+
+    # --- Unspecified "other" relatives ---
     ("andere grossmutter", ["father", "mother"]),
     ("other grandmother", ["father", "mother"]),
     ("andere oma", ["father", "mother"]),
@@ -56,19 +92,29 @@ _PATH_PHRASES: list[tuple[str, list[str]]] = [
     ("andere grossvater", ["mother", "father"]),
     ("other grandfather", ["mother", "father"]),
     ("anderer opa", ["mother", "father"]),
+
+    # --- Direct family members (Eltern, Geschwister, Partner) ---
     ("meine grossmutter", ["mother", "mother"]),
     ("my grandmother", ["mother", "mother"]),
     ("meine oma", ["mother", "mother"]),
     ("my grandma", ["mother", "mother"]),
+    
     ("mein grossvater", ["father", "father"]),
     ("my grandfather", ["father", "father"]),
     ("mein opa", ["father", "father"]),
     ("my grandpa", ["father", "father"]),
+    
     ("meine mutter", ["mother"]),
     ("my mother", ["mother"]),
+    
     ("mein vater", ["father"]),
     ("my father", ["father"]),
-    ("meine mutter", ["mother"]),
+    
+    ("mein bruder", ["brother"]),
+    ("my brother", ["brother"]),
+    ("meine schwester", ["sister"]),
+    ("my sister", ["sister"]),
+    
     ("ehepartner", ["spouse"]),
     ("ehemann", ["spouse"]),
     ("ehefrau", ["spouse"]),
@@ -76,7 +122,6 @@ _PATH_PHRASES: list[tuple[str, list[str]]] = [
     ("my wife", ["spouse"]),
     ("my husband", ["spouse"]),
 ]
-
 
 def _fold(text: str) -> str:
     folded = (text or "").lower().translate(_UMLAUT)
@@ -257,6 +302,28 @@ def _detect_relative_kind(folded: str) -> str | None:
     return None
 
 
+_NAMED_PERSON_RELATIVE: list[tuple[str, list[str]]] = [
+    (r"\burgrossmutter\b", ["mother", "mother", "mother"]),
+    (r"\burgrossvater\b", ["father", "father", "father"]),
+    (r"\bgrossmutter\b|\bgrandmother\b", ["mother", "mother"]),
+    (r"\bgrossvater\b|\bgrandfather\b", ["father", "father"]),
+    (r"\bmutter(?:s)?\b|\bmother\b|\bmama\b|\bmom\b|\bmum\b", ["mother"]),
+    (r"\bvater(?:s)?\b|\bfather\b|\bpapa\b|\bdad\b|\bdaddy\b", ["father"]),
+    (r"\behefrau\b|\behemann\b|\behepartner\b|\bwife\b|\bhusband\b|\bspouse\b", ["spouse"]),
+    (r"\bschwester\b|\bsister\b", ["sister"]),
+    (r"\bbruder\b|\bbrother\b", ["brother"]),
+    (r"\bsohn\b|\btochter\b|\bson\b|\bdaughter\b", ["child"]),
+]
+
+
+def _detect_named_person_relative(folded: str) -> list[str]:
+    """Singular relative in 'Vater von NAME' / 'father of NAME' (word boundaries)."""
+    for pattern, path in _NAMED_PERSON_RELATIVE:
+        if re.search(pattern, folded):
+            return list(path)
+    return []
+
+
 def _extract_of_person_name(question: str) -> str:
     """Name after 'von' / 'of', if it looks like a person rather than a relative."""
     match = re.search(
@@ -266,9 +333,11 @@ def _extract_of_person_name(question: str) -> str:
     )
     if not match:
         return ""
-    raw = " ".join(match.group(1).split()).strip(" .,!?")
+    raw = " ".join(match.group(1).split()).strip(" .,!?\"'«»“”")
     folded = _fold(raw)
     if not folded or folded in {"mir", "mich", "me", "uns", "ihm", "ihr"}:
+        return ""
+    if re.search(r"startperson|starting person", folded):
         return ""
     if re.match(
         r"^(dem |der |den |des |the |my |meiner |meinem |meinen |meines )?"
@@ -285,7 +354,11 @@ def _extract_of_person_name(question: str) -> str:
 
 
 def _detect_intent(folded: str) -> str:
-    if re.search(r"beziehung zwischen|verwandtschaft zwischen|relation between|how .*related", folded):
+    if re.search(
+        r"beziehung zwischen|verwandtschaft zwischen|relation between|"
+        r"how (?:are|is) .*related|wie sind .+ verwandt|wie ist .+ verwandt",
+        folded,
+    ):
         return "relation_between"
     if re.search(r"wie ?viele kinder|wieviele kinder|how many children|anzahl (der )?kinder", folded):
         return "count_children"
@@ -296,21 +369,69 @@ def _detect_intent(folded: str) -> str:
         folded,
     ):
         return "person_age"
-    if re.search(r"\bgeboren\b|\bgestorben\b|\bwann\b|\bbirth\b|\bdeath\b|\bgestorben\b", folded):
-        if _detect_path(folded) or re.search(r"mein |my |der |die |von ", folded):
-            return "person_facts"
+    if re.search(r"\bgeboren\b|\bgestorben\b|\bbirth\b|\bdeath\b", folded):
+        return "person_facts"
     return "resolve_kinship"
 
 
-def _extract_between_names(question: str) -> tuple[str, str]:
-    match = re.search(
-        r"(?:zwischen|between)\s+(.+?)\s+(?:und|and)\s+(.+?)(?:\?|$)",
-        question,
-        flags=re.IGNORECASE,
+def _clean_extracted_name(raw: str) -> str:
+    return " ".join((raw or "").split()).strip(" .,!?\"'«»“”")
+
+
+def _name_is_relative_or_pronoun(raw: str) -> bool:
+    folded = _fold(raw)
+    if not folded or folded in {"mir", "mich", "me", "uns", "ihm", "ihr", "ich", "i"}:
+        return True
+    if re.search(r"startperson|starting person", folded):
+        return True
+    if _detect_path(folded) or _detect_named_person_relative(folded):
+        return True
+    return bool(
+        re.match(
+            r"^(dem |der |den |des |die |das |the |my |meiner |meinem |meinen |meines )?"
+            r"(grossmutter|grossvater|grossvaeter|grossmuetter|grosseltern|"
+            r"oma|opa|mutter|vater|grandmother|grandfather|grandmothers|"
+            r"grandfathers|grandparents|mother|father|eltern|parents|kinder|children|"
+            r"onkel|tanten|geschwister|enkel)\b",
+            folded,
+        )
     )
-    if not match:
-        return "", ""
-    return match.group(1).strip(" .,!?"), match.group(2).strip(" .,!?")
+
+
+def _extract_subject_person_name(question: str) -> str:
+    """Person the question is about, e.g. 'Wie alt ist NAME?'."""
+    patterns = (
+        r"wie alt (?:ist|war|sind|waren)\s+(.+?)(?:\?|$)",
+        r"how old (?:is|was|are|were)\s+(.+?)(?:\?|$)",
+        r"(?:age of|alter von)\s+(.+?)(?:\?|$)",
+        r"wann (?:wurde|ist|war)\s+(.+?)\s+(?:geboren|gestorben)",
+        r"when was\s+(.+?)\s+(?:born|died)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, question, flags=re.IGNORECASE)
+        if not match:
+            continue
+        raw = _clean_extracted_name(match.group(1))
+        raw = re.sub(r"^(der|die|das|the)\s+", "", raw, flags=re.IGNORECASE).strip()
+        if raw and not _name_is_relative_or_pronoun(raw):
+            return raw
+    return ""
+
+
+def _extract_between_names(question: str) -> tuple[str, str]:
+    patterns = (
+        r"(?:zwischen|between)\s+(.+?)\s+(?:und|and)\s+(.+?)(?:\?|$)",
+        r"(?:wie sind|how are)\s+(.+?)\s+(?:und|and)\s+(.+?)\s+(?:verwandt|related)",
+        r"(?:wie ist|how is)\s+(.+?)\s+(?:mit|to)\s+(.+?)\s*(?:verwandt|related)?",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, question, flags=re.IGNORECASE)
+        if match:
+            left = _clean_extracted_name(match.group(1))
+            right = _clean_extracted_name(match.group(2))
+            if left and right:
+                return left, right
+    return "", ""
 
 
 def parse_question_rules(question: str) -> dict[str, Any] | None:
@@ -324,6 +445,10 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
     kind = _detect_relative_kind(folded)
     person_name = _extract_of_person_name(question)
     target_name = ""
+    if not path and person_name and not kind:
+        path = _detect_named_person_relative(folded)
+    if not person_name and intent in {"person_age", "person_facts"}:
+        person_name = _extract_subject_person_name(question)
 
     if intent == "relation_between":
         person_name, target_name = _extract_between_names(question)
@@ -357,7 +482,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
         "person_age",
     }:
         # "meine andere Großmutter" contains "meine" but is not the start person.
-        if not _is_about_self(folded):
+        if not person_name and not _is_about_self(folded):
             return None
 
     return {
@@ -438,6 +563,23 @@ def parse_natural_language_question(question: str) -> dict[str, Any]:
         }
 
     raw = sanitize_llm_plan(llm["plan"])
+    if (
+        raw.get("intent") == "relation_between"
+        and not re.search(
+            r"zwischen|between|verwandt|related|beziehung", _fold(question)
+        )
+    ):
+        named_path = _detect_path(_fold(question)) or _detect_named_person_relative(
+            _fold(question)
+        )
+        of_name = _extract_of_person_name(question)
+        if named_path and of_name:
+            raw["intent"] = "resolve_kinship"
+            raw["kinship_path"] = named_path
+            raw["kind"] = None
+            raw["kinship_set"] = None
+            raw["person_name"] = of_name
+            raw["target_name"] = ""
     if str(raw.get("intent") or "").strip().lower() in _UNSUPPORTED_INTENTS:
         return {
             "ok": False,

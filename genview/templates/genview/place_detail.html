@@ -13,17 +13,12 @@
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Ereignisse an diesem Ort</h5>
-                <span class="badge bg-light text-primary">{{ place.events.count }}</span>
+                <span class="badge bg-light text-primary">{{ place_event_count }}</span>
             </div>
             <div class="card-body p-0">
                 <div class="list-group list-group-flush">
 
-                    {% for event in place.events.all %}
-                        {% if apply_privacy and event.is_confidential %}
-                            <div class="list-group-item">
-                                <span class="text-muted fst-italic">🔒 vertraulich</span>
-                            </div>
-                        {% else %}
+                    {% for event in place_events %}
                             <div class="list-group-item">
                                 <div class="d-flex w-100 justify-content-between">
                                     <h6 class="mb-1 fw-bold">{{ event.event_type_name }}</h6>
@@ -47,7 +42,6 @@
                                     {% endif %}
                                 </p>
                             </div>
-                        {% endif %}
                     {% empty %}
                         <div class="list-group-item text-center py-4 text-muted">
                             <p class="mb-0">Bisher sind keine Ereignisse mit diesem Ort verknüpft.</p>

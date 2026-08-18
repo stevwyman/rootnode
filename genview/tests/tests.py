@@ -262,10 +262,12 @@ class GlobalSearchViewTests(TestCase):
 
         self.client.login(username="search_user", password="password")
         response = self.client.get(self.url, {"q": "John"})
-        john = next(r for r in response.context["results"] if r.pk == self.john_smith.pk)
-
-        self.assertIsNone(john.search_url)
-        self.assertIsNone(john.search_thumb_url)
+        person_results = [
+            r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"
+        ]
+        self.assertFalse(any(r.pk == self.john_smith.pk for r in person_results))
+        self.assertNotContains(response, "John Smith")
+        self.assertNotContains(response, "Vertrauliche Person")
 
     def test_search_thumb_for_public_person(self):
         from datetime import date

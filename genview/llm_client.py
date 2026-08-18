@@ -22,13 +22,14 @@ Schema:
 {
   "intent": "resolve_kinship" | "count_children" | "list_children" | "list_relatives" | "person_facts" | "person_age" | "relation_between",
   "kind": "grandfathers" | "grandmothers" | "grandparents" | "parents" | "children" | "siblings" | "brothers" | "sisters" | "spouses" | "uncles" | "aunts" | "grandchildren" | "",
-  "kinship_path": ["father" | "mother" | "spouse" | "child" | "sibling"],
+  "kinship_path": ["father" , "mother" , "spouse" , "child" , "sibling"],
   "person_name": "",
   "target_name": ""
 }
 Rules:
 - Questions about "my/ich/mein/meine" use empty person_name (the tree starting person).
 - Named people go in person_name ("von Charles …" → person_name="Charles …"). Never invent numeric ids.
+- "Wer ist der Vater von NAME" / "who is the father of NAME" → resolve_kinship, kinship_path=["father"], person_name=NAME. Same for Mutter/mother (["mother"]).
 - list_relatives: list every person of one kind. Set kind and person_name. Leave kinship_path empty unless the kind is asked of a relative ("Kinder meiner Mutter" → kind=children, kinship_path=["mother"]).
   Examples: "Großväter von NAME" → list_relatives, kind=grandfathers, person_name=NAME.
   "Onkel von NAME" → kind=uncles. "Geschwister von NAME" → kind=siblings. "Kinder von NAME" → kind=children.
@@ -40,6 +41,7 @@ Rules:
 - relation_between is ONLY "Beziehung zwischen A und B" / "how is A related to B". Two personal names required. Never for "Großväter von X" or "Onkel von X".
 - count_children: how many children. person_name or kinship_path identifies whose children.
 - person_facts: birth/death/marriage. person_age: how old (RootNode calculates; do not invent an age).
+  "Wie alt ist NAME?" / "How old is NAME?" → person_age, person_name=NAME, empty kinship_path.
 - If the question is not about kinship or a person's dates/name in the family tree, return {"intent": "unsupported"}. Never guess a relative or count children for an unrelated question (hidden people, settings, weather, …).
 """
 
@@ -160,6 +162,9 @@ def parse_question_via_llm(question: str) -> LlmParseResult:
             "model": cfg["model"],
             "stream": False,
             "format": "json",
+            "options": {
+                "temperature": 0.0
+            },
             "messages": [
                 {"role": "system", "content": PARSE_SYSTEM_PROMPT},
                 {"role": "user", "content": question},

@@ -73,6 +73,9 @@ from .mixins import (
     apply_privacy_to_family_qs,
     apply_privacy_to_media_qs,
     apply_privacy_to_event_qs,
+    apply_privacy_for_request,
+    public_individual_pks,
+    _visible_relative,
     SortableListViewMixin,
     FilterableListViewMixin,
 )
@@ -134,6 +137,16 @@ class TreeListView(ListView):
         # Neueste Bäume zuerst anzeigen
         return qs.select_related("starting_individual").order_by('-id')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        for tree in context["trees"]:
+            tree.visible_starting_individual = _visible_relative(
+                tree.starting_individual,
+                apply_privacy_for_request(user, tree),
+            )
+        return context
+
 
 class TreeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Tree
@@ -170,38 +183,82 @@ class TreeOverviewView(TreeAccessMixin, TemplateView):
         tree = Tree.objects.select_related("starting_individual").get(pk=tree_id)
         context["tree"] = tree
         apply_privacy = self.get_apply_privacy()
+        
+        context["starting_individual"] = context.get("visible_starting_individual")
 
-        context["stat_individuals"] = tree.individuals.count()
-        context["stat_families"] = tree.families.count()
+        public_ids = public_individual_pks(tree_id) if apply_privacy else None
+        public_family_ids = None
+        ind_qs = apply_privacy_to_individual_qs(
+            Individual.objects.filter(gedcom_tree_id=tree_id), apply_privacy
+        )
+        fam_qs = apply_privacy_to_family_qs(
+            Family.objects.filter(gedcom_tree_id=tree_id),
+            apply_privacy,
+            tree_id,
+            public_ids=public_ids,
+        )
+        if apply_privacy:
+            public_family_ids = fam_qs.values("pk")
+        event_qs = apply_privacy_to_event_qs(
+            Event.objects.filter(gedcom_tree_id=tree_id),
+            apply_privacy,
+            tree_id,
+            public_ids=public_ids,
+            public_family_ids=public_family_ids,
+        )
+        media_qs = apply_privacy_to_media_qs(
+            MediaObject.objects.filter(gedcom_tree_id=tree_id),
+            apply_privacy,
+            tree_id,
+            public_ids=public_ids,
+        )
+
+        context["stat_individuals"] = ind_qs.count()
+        context["stat_families"] = fam_qs.count()
         context["stat_places"] = tree.places.count()
-        context["stat_events"] = Event.objects.filter(gedcom_tree_id=tree_id).count()
-        media_qs = MediaObject.objects.filter(gedcom_tree_id=tree_id)
-        context["stat_media"] = media_qs.count()
-        context["stat_media_photos"] = media_qs.filter(
-            category=MediaObject.Category.PHOTO
-        ).count()
-        context["stat_media_documents"] = media_qs.filter(
-            category=MediaObject.Category.DOCUMENT
-        ).count()
+        context["stat_events"] = event_qs.count()
+        media_stats = media_qs.aggregate(
+            total=Count("pk"),
+            photos=Count("pk", filter=Q(category=MediaObject.Category.PHOTO)),
+            documents=Count("pk", filter=Q(category=MediaObject.Category.DOCUMENT)),
+        )
+        context["stat_media"] = media_stats["total"]
+        context["stat_media_photos"] = media_stats["photos"]
+        context["stat_media_documents"] = media_stats["documents"]
         context["stat_sources"] = tree.sources.count()
 
-        death_tag = EventType.objects.filter(tag="DEAT").first()
-        if death_tag:
-            deceased_pks = Event.objects.filter(
-                gedcom_tree_id=tree_id,
-                event_type=death_tag,
-                individual__isnull=False,
-            ).values_list("individual_id", flat=True)
-            context["stat_deceased"] = len(set(deceased_pks))
-        else:
-            context["stat_deceased"] = 0
-        context["stat_living"] = max(
-            context["stat_individuals"] - context["stat_deceased"], 0
-        )
         context["show_living_stats"] = not apply_privacy
+        if apply_privacy:
+            context["stat_deceased"] = 0
+            context["stat_living"] = 0
+        else:
+            death_tag = EventType.objects.filter(tag="DEAT").first()
+            if death_tag:
+                context["stat_deceased"] = (
+                    Event.objects.filter(
+                        gedcom_tree_id=tree_id,
+                        event_type=death_tag,
+                        individual__isnull=False,
+                    )
+                    .values("individual_id")
+                    .distinct()
+                    .count()
+                )
+            else:
+                context["stat_deceased"] = 0
+            context["stat_living"] = max(
+                context["stat_individuals"] - context["stat_deceased"], 0
+            )
 
-        birthdays = collect_upcoming_birthdays(tree_id, apply_privacy)
-        anniversaries = collect_upcoming_anniversaries(tree_id, apply_privacy)
+        birthdays = collect_upcoming_birthdays(
+            tree_id, apply_privacy, public_ids=public_ids
+        )
+        anniversaries = collect_upcoming_anniversaries(
+            tree_id,
+            apply_privacy,
+            public_ids=public_ids,
+            public_family_ids=public_family_ids,
+        )
         today_items, upcoming_items = merge_upcoming(birthdays, anniversaries)
         context["calendar_today"] = today_items
         context["calendar_upcoming"] = upcoming_items
@@ -476,7 +533,9 @@ def _search_individuals(
     if not terms:
         return []
 
-    base = Individual.objects.filter(gedcom_tree_id=tree_id)
+    base = apply_privacy_to_individual_qs(
+        Individual.objects.filter(gedcom_tree_id=tree_id), apply_privacy
+    )
     results = []
     seen: set[int] = set()
 
@@ -553,24 +612,27 @@ class GlobalSearchView(TreeAccessMixin, TemplateView):
 
             individuals = _search_individuals(tree_id, q, apply_privacy)
 
-            # 2. FAMILIEN durchsuchen
-            families = Family.objects.filter(gedcom_tree_id=tree_id).filter(
-                Q(husband__surname__icontains=q) |
-                Q(wife__surname__icontains=q) |
-                Q(gedcom_id__icontains=q)
-            ).select_related('husband', 'wife')[:10]
-
-            for fam in families:
+            # 2. FAMILIEN durchsuchen — omit confidential hits (no name oracle)
+            families = apply_privacy_to_family_qs(
+                Family.objects.filter(gedcom_tree_id=tree_id).filter(
+                    Q(husband__surname__icontains=q) |
+                    Q(wife__surname__icontains=q) |
+                    Q(gedcom_id__icontains=q)
+                ).select_related('husband', 'wife'),
+                apply_privacy,
+                tree_id,
+            )
+            visible_families = []
+            for fam in families[:10]:
+                if apply_privacy and fam.is_confidential:
+                    continue
                 fam.search_type = _("Familie")
                 fam.search_icon = "👪"
-                if apply_privacy and fam.is_confidential:
-                    fam.search_title = _("Vertrauliche Familie")
-                    fam.search_desc = _("Datenschutzgeschützt")
-                    fam.search_url = None
-                else:
-                    fam.search_title = str(fam)
-                    fam.search_desc = _("Heirat: %(date)s") % {"date": fam.marriage_date_raw or "?"}
-                    fam.search_url = fam.get_absolute_url()
+                fam.search_title = str(fam)
+                fam.search_desc = _("Heirat: %(date)s") % {"date": fam.marriage_date_raw or "?"}
+                fam.search_url = fam.get_absolute_url()
+                visible_families.append(fam)
+            families = visible_families
 
             # 3. ORTE durchsuchen
             places = Place.objects.filter(gedcom_tree_id=tree_id, name__icontains=q)[:10]
@@ -827,7 +889,72 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
                 # Aufsteigend sortieren, leere Werte ans Ende!
                 qs = qs.order_by(F(ordering).asc(nulls_last=True))
 
+        qs = apply_privacy_to_individual_qs(qs, self.get_apply_privacy())
         return qs.distinct()
+
+
+def _dtree_format_person(person, tree_id, apply_privacy):
+    """Compact dTree node. Confidential relatives are omitted, not redacted in place."""
+    if not person:
+        return None
+    if apply_privacy and person.is_confidential:
+        return None
+
+    avatar_url = ""
+    if person.profile_image and person.profile_image.file:
+        avatar_url = reverse(
+            "genview:media-thumb",
+            kwargs={"tree_id": tree_id, "pk": person.profile_image.id, "size": "mini"},
+        )
+    return {
+        "name": f"{person.given_name} {person.surname}",
+        "class": "node",
+        "extra": {
+            "id": person.pk,
+            "url": person.get_absolute_url(),
+            "avatar": avatar_url,
+            "b_year": person.birth_year,
+            "d_year": person.death_year,
+        },
+    }
+
+
+def _dtree_marriage_str(fam, apply_privacy):
+    if not fam:
+        return ""
+    if apply_privacy and fam.is_confidential:
+        return ""
+    m_year = ""
+    if getattr(fam, "marriage_date_parsed", None):
+        m_year = fam.marriage_date_parsed.year
+    elif getattr(fam, "marriage_date_raw", None):
+        import re
+
+        match = re.search(r"\d{4}", fam.marriage_date_raw)
+        m_year = match.group() if match else ""
+    return f"⚭ {m_year}" if m_year else ""
+
+
+def _dtree_marriage_branch(family, person, tree_id, apply_privacy):
+    partner = family.wife if family.husband_id == person.pk else family.husband
+    spouse_node = _dtree_format_person(partner, tree_id, apply_privacy)
+    children = []
+    for link in family.children.all():
+        node = _dtree_format_person(link.child, tree_id, apply_privacy)
+        if node:
+            children.append(node)
+    if spouse_node is None and not children:
+        return None
+    if spouse_node is None:
+        spouse_node = {"name": "", "class": "node", "extra": {}}
+    m_str = _dtree_marriage_str(family, apply_privacy)
+    if m_str and "extra" in spouse_node:
+        spouse_node["extra"]["marriage_info"] = m_str
+    return {"spouse": spouse_node, "children": children}
+
+
+def _visible_media_qs(qs, apply_privacy, tree_id):
+    return apply_privacy_to_media_qs(qs, apply_privacy, tree_id)
 
 
 class IndividualDetailView(TreeAccessMixin, DetailView):
@@ -873,6 +1000,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         
         # Privacy-Flag für das Template zugänglich machen
         apply_privacy = ctx.get('apply_privacy', False)
+        tree_id = person.gedcom_tree_id
 
         # -------------------------------------------------------------
         # 1️⃣ Ehepartner & Familie
@@ -889,6 +1017,9 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 spouse = wife_fam.husband
                 family = wife_fam
 
+        if apply_privacy and spouse and spouse.is_confidential:
+            spouse = None
+            family = None
         ctx["spouse"] = spouse
         ctx["family"] = family
 
@@ -900,8 +1031,19 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             children_links.extend(list(husband_fam.children.all()))
         if person.families_as_wife.first():
             children_links.extend(list(person.families_as_wife.first().children.all()))
-        
-        ctx["children_links"] = list({cl.id: cl for cl in children_links}.values())
+
+        children_links = list({cl.id: cl for cl in children_links}.values())
+        if apply_privacy:
+            children_links = [
+                cl for cl in children_links
+                if cl.child and not cl.child.is_confidential
+            ]
+        ctx["children_links"] = children_links
+
+        siblings = list(person.siblings)
+        if apply_privacy:
+            siblings = [s for s in siblings if not s.is_confidential]
+        ctx["visible_siblings"] = siblings
 
         # -------------------------------------------------------------
         # 3️⃣ Eltern-Familien
@@ -911,15 +1053,15 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         # 4️⃣ Ahnentafel (Pedigree)
         # -------------------------------------------------------------
-        father = person.father
-        mother = person.mother
+        father = _visible_relative(person.father, apply_privacy)
+        mother = _visible_relative(person.mother, apply_privacy)
         ctx['pedigree'] = {
             'father': father,
             'mother': mother,
-            'ff': father.father if father else None,
-            'fm': father.mother if father else None,
-            'mf': mother.father if mother else None,
-            'mm': mother.mother if mother else None,
+            'ff': _visible_relative(father.father if father else None, apply_privacy),
+            'fm': _visible_relative(father.mother if father else None, apply_privacy),
+            'mf': _visible_relative(mother.father if mother else None, apply_privacy),
+            'mm': _visible_relative(mother.mother if mother else None, apply_privacy),
         }
 
         # -------------------------------------------------------------
@@ -930,6 +1072,9 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         ).select_related('event_type', 'place').prefetch_related('sources').order_by(
             F("parsed_date").asc(nulls_last=True)
         )
+        combined_events = apply_privacy_to_event_qs(
+            combined_events, apply_privacy, tree_id
+        )
         ctx["timeline_events"] = combined_events
 
         # -------------------------------------------------------------
@@ -937,25 +1082,22 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         
         portrait = person.profile_image
+        if apply_privacy and portrait and (portrait.is_confidential or portrait.is_private):
+            portrait = None
         ctx["portrait"] = portrait
 
-        # Wenn die Person datengeschützt ist, zeigen wir gar keine Medien
         if apply_privacy and person.is_confidential:
             ctx['photos'] = []
             ctx['documents'] = []
             ctx['gallery_photos'] = []
             ctx['gallery_documents'] = []
         else:
-            # --- TEIL A: Direkt verknüpfte Medien (Für den Tab "Galerie") ---
-            # Das sind nur die Bilder, die hart mit dieser Person verknüpft sind.
-            direct_media = person.media_objects.all()
+            direct_media = _visible_media_qs(
+                person.media_objects.all(), apply_privacy, tree_id
+            )
             ctx['photos'] = direct_media.filter(category=MediaObject.Category.PHOTO)
             ctx['documents'] = direct_media.filter(category=MediaObject.Category.DOCUMENT)
 
-
-            # --- TEIL B: Die intelligente Album-Abfrage (Für den Tab "Album") ---
-            # Zieht auch Bilder aus Events, Hochzeiten und Kinder-Familien an.
-            tree_id = person.gedcom_tree_id
             birth_family_ids = ChildFamilyLink.objects.filter(
                 child=person
             ).values_list('family_id', flat=True)
@@ -972,8 +1114,10 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 Q(families__in=birth_family_ids) |
                 Q(sources__events__individual=person)
             ).distinct().prefetch_related('individuals', 'families', 'events')
+            all_gallery_media = _visible_media_qs(
+                all_gallery_media, apply_privacy, tree_id
+            )
 
-            # Portrait-Bild aus dem erweiterten Album ausschließen (optional)
             g_photos = all_gallery_media.filter(category=MediaObject.Category.PHOTO)
             if portrait:
                 g_photos = g_photos.exclude(pk=portrait.pk)
@@ -984,91 +1128,44 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         # 7️⃣ Stammbaum JSON für dTree (Kompakte Foto-Version)
         # -------------------------------------------------------------
-        def format_person(p):
-            if not p: return None
-
-            # Avatar-URL holen (falls vorhanden)
-            avatar_url = ""
-            if p.profile_image and p.profile_image.file:
-                avatar_url = reverse("genview:media-thumb", kwargs={"tree_id": tree_id, "pk": p.profile_image.id, "size": 'mini'})
-                #avatar_url = p.profile_image.file.url
-
-            # Wir übergeben den Namen und das JSON für die kleinen Knoten
-            return {
-                "name": f"{p.given_name} {p.surname}",
-                "class": "node",
-                "extra": {
-                    "id": p.pk,
-                    "url": p.get_absolute_url(),
-                    "avatar": avatar_url,
-                    "b_year": p.birth_year, # Nutzt unsere neuen Properties!
-                    "d_year": p.death_year,
-                },
-            }
-
-        def get_marriage_str(fam):
-            if not fam: return ""
-            
-            m_year = ""
-            if getattr(fam, 'marriage_date_parsed', None):
-                m_year = fam.marriage_date_parsed.year
-            elif getattr(fam, 'marriage_date_raw', None):
-                import re
-                match = re.search(r'\d{4}', fam.marriage_date_raw)
-                m_year = match.group() if match else ""
-                
-            return f"⚭ {m_year}" if m_year else ""
-        
-
         tree_data = []
         parent_link = person.parental_families.first()
+        spouse_families = list(person.families_as_husband.all()) + list(
+            person.families_as_wife.all()
+        )
+        target_node = _dtree_format_person(person, tree_id, apply_privacy)
+        if target_node is None:
+            ctx["tree_data"] = []
+            ctx["lifecycle_stations"] = []
+            return ctx
+
+        target_node["marriages"] = []
+        for sp_fam in spouse_families:
+            branch = _dtree_marriage_branch(sp_fam, person, tree_id, apply_privacy)
+            if branch:
+                target_node["marriages"].append(branch)
 
         if parent_link and (parent_link.family.husband or parent_link.family.wife):
             fam = parent_link.family
             root_person = fam.husband if fam.husband else fam.wife
             spouse_person = fam.wife if fam.husband else None
-
-            root_node = format_person(root_person)
-            target_node = format_person(person)
-            target_node["marriages"] = []
-
-            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
-
-            for sp_fam in spouse_families:
-                partner = sp_fam.wife if sp_fam.husband == person else sp_fam.husband
-                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
-                m_str = get_marriage_str(sp_fam)
-                if m_str and "extra" in spouse_node:
-                    spouse_node["extra"]["marriage_info"] = m_str
-
-                target_node["marriages"].append({
-                    "spouse": spouse_node,
-                    "children": [format_person(c.child) for c in sp_fam.children.all()],
-                })
-
-            spouse_node = format_person(spouse_person) if spouse_person else {"name": "Unknown Partner", "class": "node", "extra": {}}
-            m_str = get_marriage_str(fam)
-            if m_str and "extra" in spouse_node:
-                spouse_node["extra"]["marriage_info"] = m_str
-
-            root_node["marriages"] = [{"spouse": spouse_node, "children": [target_node]}]
-            tree_data.append(root_node)
+            root_node = _dtree_format_person(root_person, tree_id, apply_privacy)
+            parent_spouse = _dtree_format_person(spouse_person, tree_id, apply_privacy)
+            if root_node is None and parent_spouse is not None:
+                root_node, parent_spouse = parent_spouse, None
+            if root_node is not None:
+                if parent_spouse is None:
+                    parent_spouse = {"name": "", "class": "node", "extra": {}}
+                m_str = _dtree_marriage_str(fam, apply_privacy)
+                if m_str and "extra" in parent_spouse:
+                    parent_spouse["extra"]["marriage_info"] = m_str
+                root_node["marriages"] = [
+                    {"spouse": parent_spouse, "children": [target_node]}
+                ]
+                tree_data.append(root_node)
+            else:
+                tree_data.append(target_node)
         else:
-            target_node = format_person(person)
-            target_node["marriages"] = []
-            spouse_families = list(person.families_as_husband.all()) + list(person.families_as_wife.all())
-            
-            for sp_fam in spouse_families:
-                partner = sp_fam.wife if sp_fam.husband == person else sp_fam.husband
-                spouse_node = format_person(partner) if partner else {"name": "Unknown Partner", "class": "node", "extra": {}}
-                m_str = get_marriage_str(sp_fam)
-                if m_str and "extra" in spouse_node:
-                    spouse_node["extra"]["marriage_info"] = m_str
-
-                target_node["marriages"].append({
-                    "spouse": spouse_node,
-                    "children": [format_person(c.child) for c in sp_fam.children.all()],
-                })
             tree_data.append(target_node)
 
         ctx["tree_data"] = tree_data
@@ -1077,6 +1174,8 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         seen_event_pks = set()
 
         def append_station(event, title=None):
+            if apply_privacy and event.is_confidential:
+                return
             place = event.place
             if not place or place.latitude is None or place.longitude is None:
                 return
@@ -1104,6 +1203,8 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
                 child = child_link.child
                 if not child:
                     continue
+                if apply_privacy and child.is_confidential:
+                    continue
                 child_birth = child.birth_event
                 if child_birth:
                     append_station(
@@ -1116,7 +1217,6 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
 
         return ctx
 
-    
 class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     model = Individual
     form_class = IndividualForm
@@ -1375,7 +1475,7 @@ class IndividualSearchView(TreeAccessMixin, ListView):
                     | Q(name_suffix__icontains=term)
                     | Q(sex__iexact=term.upper())
                 )
-        return qs
+        return apply_privacy_to_individual_qs(qs, self.get_apply_privacy())
 
 
 class IndividualSearchAjaxView(TreeAccessMixin, ListView):
@@ -1401,7 +1501,7 @@ class IndividualSearchAjaxView(TreeAccessMixin, ListView):
                     | Q(name_suffix__icontains=term)
                     | Q(sex__iexact=term.upper())
                 )
-        return qs
+        return apply_privacy_to_individual_qs(qs, self.get_apply_privacy())
 
     def render_to_response(self, context, **response_kwargs):
         """
@@ -1530,6 +1630,7 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
             # Fallback-Sortierung, falls kein Mixin-Ordering greift
             qs = qs.order_by("gedcom_id")
 
+        qs = apply_privacy_to_family_qs(qs, self.get_apply_privacy(), tree_id)
         return qs.distinct()
 
 
@@ -1613,17 +1714,25 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["tree_id"] = self.kwargs.get("tree_id")
-        
+        apply_privacy = ctx.get("apply_privacy", False)
+
         family = self.object
 
         # ==========================================
         # 🔥 NEU: Großeltern-Variablen für das Template vorbereiten
         # ==========================================
-        ctx['husband_father'] = family.husband.father if family.husband else None
-        ctx['husband_mother'] = family.husband.mother if family.husband else None
-        
-        ctx['wife_father'] = family.wife.father if family.wife else None
-        ctx['wife_mother'] = family.wife.mother if family.wife else None
+        ctx['husband_father'] = _visible_relative(
+            family.husband.father if family.husband else None, apply_privacy
+        )
+        ctx['husband_mother'] = _visible_relative(
+            family.husband.mother if family.husband else None, apply_privacy
+        )
+        ctx['wife_father'] = _visible_relative(
+            family.wife.father if family.wife else None, apply_privacy
+        )
+        ctx['wife_mother'] = _visible_relative(
+            family.wife.mother if family.wife else None, apply_privacy
+        )
 
         return ctx
 
@@ -2188,7 +2297,10 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
                 Value(0),
             ),
         )
-        
+
+        qs = apply_privacy_to_media_qs(
+            qs, self.get_apply_privacy(), self.kwargs["tree_id"]
+        )
         return qs.prefetch_related('individuals', 'families', 'events')
 
     def get_context_data(self, **kwargs):
@@ -2703,14 +2815,29 @@ class PlaceDetailView(TreeAccessMixin, DetailView):
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
-        
-        sorted_events_qs = Event.objects.order_by(
-            F("parsed_date").asc(nulls_last=True)
+        apply_privacy = self.get_apply_privacy()
+
+        sorted_events_qs = apply_privacy_to_event_qs(
+            Event.objects.select_related(
+                "event_type",
+                "individual",
+                "family__husband",
+                "family__wife",
+            ).order_by(F("parsed_date").asc(nulls_last=True)),
+            apply_privacy,
+            tree_id,
         )
 
         return Place.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
             Prefetch("events", queryset=sorted_events_qs)
         )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        events = list(self.object.events.all())
+        ctx["place_events"] = events
+        ctx["place_event_count"] = len(events)
+        return ctx
 
 # --- 3. Create View ---
 class PlaceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
@@ -2914,7 +3041,7 @@ class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
             else:
                 qs = qs.order_by(F(ordering).asc(nulls_last=True))
 
-        return qs
+        return apply_privacy_to_event_qs(qs, self.get_apply_privacy(), tree_id)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3203,7 +3330,25 @@ class SourceDetailView(TreeAccessMixin, DetailView):
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
-        return Source.objects.filter(gedcom_tree_id=tree_id)
+        apply_privacy = self.get_apply_privacy()
+        events_qs = apply_privacy_to_event_qs(
+            Event.objects.select_related(
+                "event_type",
+                "individual",
+                "family__husband",
+                "family__wife",
+            ),
+            apply_privacy,
+            tree_id,
+        )
+        return Source.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            Prefetch("events", queryset=events_qs)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["source_events"] = list(self.object.events.all())
+        return ctx
 
 # --- 3. Create View ---
 class SourceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):

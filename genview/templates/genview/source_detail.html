@@ -112,7 +112,7 @@
         </div>
         <div class="card-body p-0">
             <ul class="list-group list-group-flush">
-                {% for event in source.events.all %}
+                {% for event in source_events %}
                     <li class="list-group-item">
                         <strong>{{ event.event_type_name }}</strong>
                         

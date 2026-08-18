@@ -23,8 +23,8 @@
             <a href="{% url 'genview:tree-query' tree_id=tree_id %}" class="btn btn-outline-primary">
                 {% trans "Fragen" %}
             </a>
-            {% if tree.starting_individual_id %}
-            <a href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}" class="btn btn-primary">
+            {% if starting_individual %}
+            <a href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=starting_individual.pk %}" class="btn btn-primary">
                 🌳 {% trans "Baumansicht" %}
             </a>
             {% endif %}
@@ -35,21 +35,23 @@
     </div>
 
     {% if tree.starting_individual %}
+    {% if starting_individual %}
     <div class="alert alert-light border shadow-sm mb-4 py-3">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
             <div>
                 <span class="text-muted small text-uppercase fw-semibold">{% trans "Startperson" %}</span>
                 <div class="fw-semibold fs-5">
-                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual.pk %}" class="text-decoration-none">
-                        ⭐ {{ tree.starting_individual.full_name }}
+                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=starting_individual.pk %}" class="text-decoration-none">
+                        ⭐ {{ starting_individual.full_name }}
                     </a>
                 </div>
             </div>
-            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual.pk %}" class="btn btn-sm btn-outline-primary">
+            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=starting_individual.pk %}" class="btn btn-sm btn-outline-primary">
                 {% trans "Profil öffnen" %}
             </a>
         </div>
     </div>
+    {% endif %}
     {% endif %}
 
   <div class="row row-cols-2 row-cols-md-3 row-cols-lg-6 g-3 mb-4">

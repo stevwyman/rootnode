@@ -1,24 +1,24 @@
 {% load l10n %}
 {% load i18n %}
 
+{% if individual %}
+    {% if apply_privacy and individual.is_confidential %}
+        {# Omit identity, thumbnail, sex, and alt text — no living-relative census. #}
+    {% else %}
 <div class="col-2">
     {# ---------- thumbnail image or emoji ---------- #}
     {% if individual.profile_image and individual.profile_image.file %}
-        <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=individual.profile_image.pk size='mini' %}" 
-            alt="{{ individual.given_name }}" 
-            class="rounded-circle shadow-sm" 
+        <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=individual.profile_image.pk size='mini' %}"
+            alt="{{ individual.given_name }}"
+            class="rounded-circle shadow-sm"
             style="width: 45px; height: 45px; object-fit: cover;">
     {% else %}
         <span class="me-3 fs-5">{% if individual.sex == 'M' %}👦{% elif individual.sex == 'F' %}👧{% else %}👶{% endif %}</span>
     {% endif %}
 </div>
 <div class="col-10">
-    {% if individual %}
         {# ---------- name with dates ---------- #}
         <div>
-            {% if apply_privacy and individual.is_confidential %}
-                <span class="text-muted fst-italic">🔒 {% trans "vertraulich" %}</span>
-            {% else %}
                 <div>
                 <a href="{{ individual.get_absolute_url }}" class="text-decoration-none text-dark" title="{{ individual.full_name }}">
                     {{ individual.short_given_name }} <span class="fw-semibold">{{ individual.surname }}</span>
@@ -32,7 +32,7 @@
                 {% else %}
                     <span class="text-muted">-</span>
                 {% endif %}
-                
+
                 {% if individual.death_date %}
                     <small class="text-muted ms-2">+ {{ individual.death_date|date:"Y" }}</small>
                 {% elif individual.death_date_raw %}
@@ -41,14 +41,9 @@
                     <span class="text-muted">-</span>
                 {% endif %}
                 </div>
-
-            {% endif %}
             </div>
-    {% else %}
-        <span class="text-muted fst-italic">{% if individual.sex == 'M' %}Vater{% elif individual.sex == 'F' %}Mutter{% else %}{% endif %} unbekannt</span>
-    {% endif %}
 </div>
-
-
-
-
+    {% endif %}
+{% else %}
+        <span class="text-muted fst-italic">{% if individual.sex == 'M' %}Vater{% elif individual.sex == 'F' %}Mutter{% else %}{% endif %} unbekannt</span>
+{% endif %}

@@ -386,18 +386,21 @@
 
                                                 
                                                 {% if event.event_type.tag == 'MARR' and event.family %}
+                                                    {% if event.family.husband.pk == person.pk %}
+                                                        {% if event.family.wife %}
+                                                            {% if not apply_privacy or not event.family.wife.is_confidential %}
                                                     <div class="fst-italic text-secondary small mb-2">
-                                                        💍 Mit
-                                                        {% if apply_privacy and person.is_confidential %}
-                                                            <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                                        {% else %} 
-                                                            {% if event.family.husband.pk == person.pk %}
-                                                                {{ event.family.wife.full_name }}
-                                                            {% else %}
-                                                                {{ event.family.husband.full_name }}
+                                                        💍 Mit {{ event.family.wife.full_name }}
+                                                    </div>
                                                             {% endif %}
                                                         {% endif %}
+                                                    {% elif event.family.husband %}
+                                                        {% if not apply_privacy or not event.family.husband.is_confidential %}
+                                                    <div class="fst-italic text-secondary small mb-2">
+                                                        💍 Mit {{ event.family.husband.full_name }}
                                                     </div>
+                                                        {% endif %}
+                                                    {% endif %}
                                                 {% endif %}
 
                                                 <div class="d-flex flex-wrap gap-3 mt-3">
@@ -901,16 +904,31 @@
                         <span class="text-muted small fw-medium">{{ fam.family }}</span>
                     </div>
                     <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">                        
+                        {% if fam.family.husband %}
+                            {% if not apply_privacy or not fam.family.husband.is_confidential %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
                             {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
                         </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
+                            {% include "genview/_individual_mini.html" with individual=fam.family.husband %}
+                        </li>
+                        {% endif %}
+                        {% if fam.family.wife %}
+                            {% if not apply_privacy or not fam.family.wife.is_confidential %}
                         <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
                             {% include "genview/_individual_mini.html" with individual=fam.family.wife %}
                         </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3 hover-bg-light">
+                            {% include "genview/_individual_mini.html" with individual=fam.family.wife %}
+                        </li>
+                        {% endif %}
                     </ul>
                     <div class="card-footer bg-white py-3 d-flex gap-2">
                         {% if apply_privacy and fam.family.is_confidential %}
-                            <span class="text-muted fst-italic">🔒 vertraulich</span>
                         {% else %}
                             <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.family.pk %}" class="btn btn-sm btn-outline-secondary w-100">
                                 👪 Zur Familie
@@ -961,15 +979,11 @@
             </div>
 
             <div class="card-body p-0">
-                {% if object.siblings %}
+                {% if visible_siblings %}
                     <ul class="list-group list-group-flush">
-                        {% for sibling in object.siblings %}
+                        {% for sibling in visible_siblings %}
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% if apply_privacy and sibling.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                {% else %}
-                                    {% include "genview/_individual_mini.html" with individual=sibling %}
-                                {% endif %}
+                                {% include "genview/_individual_mini.html" with individual=sibling %}
                             </li>
                         {% endfor %}
                     </ul>
@@ -1002,7 +1016,6 @@
                     </span>
 
                     {% if apply_privacy and family.is_confidential %}
-                        <span class="text-muted fst-italic">🔒 vertraulich</span>
                     {% else %}
                         <span class="text-muted small fw-medium">
                             ({{ family.gedcom_id }})
@@ -1017,25 +1030,21 @@
                 {# ---------- spouce body ---------- #}
                 <div class="card-body p-0">
                     {% if family.husband == object and family.wife %}
+                        {% if not apply_privacy or not family.wife.is_confidential %}
                         <ul class="list-group list-group-flush">
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% if apply_privacy and family.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                {% else %}
-                                    {% include "genview/_individual_mini.html" with individual=family.wife %}
-                                {% endif %}
+                                {% include "genview/_individual_mini.html" with individual=family.wife %}
                             </li>
                         </ul>
+                        {% endif %}
                     {% elif family.wife == object and family.husband %}
+                        {% if not apply_privacy or not family.husband.is_confidential %}
                         <ul class="list-group list-group-flush">
                             <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                {% if apply_privacy and family.is_confidential %}
-                                    <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                {% else %}
-                                    {% include "genview/_individual_mini.html" with individual=family.husband %}
-                                {% endif %}
+                                {% include "genview/_individual_mini.html" with individual=family.husband %}
                             </li>
                         </ul>
+                        {% endif %}
                     
                     {% else %}
                         <span class="text-muted fst-italic">Unbekannter Partner</span>
@@ -1055,9 +1064,6 @@
                         <ul class="list-group list-group-flush">
                             {% for link in family.children.all %}
                                 {% if apply_privacy and link.child.is_confidential %}
-                                    <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
-                                        <span class="text-muted fst-italic">🔒 vertraulich</span>
-                                    </li>
                                 {% else %}
                                     <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-2 hover-bg-light">
                                         {% include "genview/_individual_mini.html" with individual=link.child %}

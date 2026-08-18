@@ -97,71 +97,78 @@ def filter_public_individuals(qs):
     )
 
 
+def public_individual_pks(tree_id):
+    """Primary keys of people who pass living-person privacy for *tree_id*."""
+    from genview.models import Individual
+
+    return (
+        filter_public_individuals(Individual.objects.filter(gedcom_tree_id=tree_id))
+        .order_by()
+        .values("pk")
+    )
+
+
 def apply_privacy_to_individual_qs(qs, apply_privacy: bool):
     if not apply_privacy:
         return qs
     return filter_public_individuals(qs)
 
 
-def apply_privacy_to_family_qs(qs, apply_privacy: bool, tree_id):
+def apply_privacy_to_family_qs(qs, apply_privacy: bool, tree_id, public_ids=None):
     if not apply_privacy:
         return qs
-    from genview.models import ChildFamilyLink, Event, Individual
+    from genview.models import ChildFamilyLink, Event
 
-    public_ids = filter_public_individuals(
-        Individual.objects.filter(gedcom_tree_id=tree_id)
-    ).values_list("pk", flat=True)
+    if public_ids is None:
+        public_ids = public_individual_pks(tree_id)
     marriage_cutoff = cutoff_date(MARRIAGE_PRIVACY_YEARS)
-    has_nonpublic_child = Exists(
-        ChildFamilyLink.objects.filter(
-            family_id=OuterRef("pk"),
-            child_id__isnull=False,
-        ).exclude(child_id__in=public_ids)
+    has_nonpublic_child = ChildFamilyLink.objects.filter(
+        family_id=OuterRef("pk"),
+        child_id__isnull=False,
+    ).exclude(child_id__in=public_ids)
+    has_recent_marriage = Event.objects.filter(
+        family_id=OuterRef("pk"),
+        event_type__tag="MARR",
+        parsed_date__gt=marriage_cutoff,
     )
-    has_recent_marriage = Exists(
-        Event.objects.filter(
-            family_id=OuterRef("pk"),
-            event_type__tag="MARR",
-            parsed_date__gt=marriage_cutoff,
-        )
-    )
-    return qs.annotate(
-        _has_nonpublic_child=has_nonpublic_child,
-        _has_recent_marriage=has_recent_marriage,
-    ).filter(
+    return qs.filter(
         (Q(husband__isnull=True) | Q(husband_id__in=public_ids))
         & (Q(wife__isnull=True) | Q(wife_id__in=public_ids))
-        & Q(_has_nonpublic_child=False)
-        & Q(_has_recent_marriage=False)
+        & ~Exists(has_nonpublic_child)
+        & ~Exists(has_recent_marriage)
     )
 
 
-def apply_privacy_to_media_qs(qs, apply_privacy: bool, tree_id):
+def apply_privacy_to_media_qs(qs, apply_privacy: bool, tree_id, public_ids=None):
     if not apply_privacy:
         return qs
     from genview.models import Individual
 
-    confidential_ids = Individual.objects.filter(gedcom_tree_id=tree_id).exclude(
-        pk__in=filter_public_individuals(
-            Individual.objects.filter(gedcom_tree_id=tree_id)
-        ).values_list("pk", flat=True)
-    )
-    return qs.filter(is_private=False).exclude(individuals__in=confidential_ids).distinct()
+    if public_ids is None:
+        public_ids = public_individual_pks(tree_id)
+    has_nonpublic_person = Individual.objects.filter(
+        gedcom_tree_id=tree_id,
+        media_objects=OuterRef("pk"),
+    ).exclude(pk__in=public_ids)
+    return qs.filter(is_private=False).filter(~Exists(has_nonpublic_person))
 
 
-def apply_privacy_to_event_qs(qs, apply_privacy: bool, tree_id):
+def apply_privacy_to_event_qs(
+    qs, apply_privacy: bool, tree_id, public_ids=None, public_family_ids=None
+):
     if not apply_privacy:
         return qs
-    from genview.models import Family, Individual
+    from genview.models import Family
 
-    public_ids = filter_public_individuals(
-        Individual.objects.filter(gedcom_tree_id=tree_id)
-    ).values_list("pk", flat=True)
-    public_family_ids = apply_privacy_to_family_qs(
-        Family.objects.filter(gedcom_tree_id=tree_id),
-        True,
-        tree_id,
-    ).values_list("pk", flat=True)
+    if public_ids is None:
+        public_ids = public_individual_pks(tree_id)
+    if public_family_ids is None:
+        public_family_ids = apply_privacy_to_family_qs(
+            Family.objects.filter(gedcom_tree_id=tree_id),
+            True,
+            tree_id,
+            public_ids=public_ids,
+        ).values("pk")
 
     today = date.today()
     return qs.filter(
@@ -227,6 +234,15 @@ def apply_privacy_for_request(user, tree) -> bool:
     return True
 
 
+def _visible_relative(person, apply_privacy):
+    """Return *person* only when guests may see their identity."""
+    if not person:
+        return None
+    if apply_privacy and person.is_confidential:
+        return None
+    return person
+
+
 class TreeAccessMixin(UserPassesTestMixin):
 
     def get_apply_privacy(self):
@@ -290,7 +306,10 @@ class TreeAccessMixin(UserPassesTestMixin):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         tree_id = self.kwargs.get('tree_id')
-        tree = get_object_or_404(Tree, pk=tree_id)
+        tree = get_object_or_404(
+            Tree.objects.select_related("starting_individual"),
+            pk=tree_id,
+        )
         
         # 🔥 DER FIX: Wir müssen dem Template die ID (und am besten gleich 
         # das ganze Baum-Objekt) wieder zur Verfügung stellen!
@@ -339,6 +358,10 @@ class TreeAccessMixin(UserPassesTestMixin):
         # exakt denselben Wert bekommen wie die neue Editor-Rolle.
         context['can_edit'] = context.get('is_tree_editor', False)
         context['can_manage_events'] = context.get('is_tree_admin', False)
+        context['visible_starting_individual'] = _visible_relative(
+            tree.starting_individual,
+            context['apply_privacy'],
+        )
 
         return context
     
