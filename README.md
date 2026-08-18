@@ -28,6 +28,18 @@ Therefore we have images that can be marked as private, but trees can be marked 
 
 Private-tree members (including viewers) always see living people. Editors and admins bypass privacy even on a public tree with the living-people flag off. Unauthorized access to a private tree returns 404.
 
+```mermaid
+flowchart TD
+    A[Start] --> B{Is Tree public?}
+    B -->|Yes| C["Check for parameter: Show_Living_Persons"]
+    C[Check for parameter: Show_Living_Persons] --> G{Show living persons?}
+    G --> |true| I["disable all privacy checks"]
+    G --> |false| J["apply privacy checks"]
+    B -->|No| K{Is User Authenticated && Is User assigned to Tree?}
+    K --> |true| I["disable all privacy checks"]
+    K --> |false| L[404]
+````
+
 ![individual view](docu/individual_view.png "individual view")
 
 ![family view](docu/family_view.png "family view")
@@ -49,31 +61,49 @@ This section outlines the architecture, communication flow, and data storage str
 The system utilizes a **Hub-and-Spoke** microservices architecture. The containers communicate over an internal network, with only the main application exposed to the end user.
 
 ```text
- ┌─────────────────────────────────────────────────────────┐
- │                   User / Web Browser                    │
- └────────────────────────────┬────────────────────────────┘
-                              │ HTTP Request
-                              ▼ (Port 8003)
- ┌─────────────────────────────────────────────────────────┐
- │                      ROOTNODE                           │
- │                (Main Django Application)                │
- │                                                         │
- │  • Handles UI, Auth, and Business Logic                 │
- │  • Gunicorn Production Server                           │
- │  • Mounts: /data/genview (SQLite, Media, Static)        │
- └──────┬───────────────────────────────────────────┬──────┘
-        │                                           │
-        │ HTTP POST (File Upload)                   │ HTTP POST (Image Upload)
-        │                                           │
-        ▼ (Port 8000)                               ▼ (Port 8000)
- ┌──────────────────────────┐             ┌──────────────────────────┐
- │        TEXTNODE          │             │        FACENODE          │
- │   (EasyOCR & PyMuPDF)    │             │  (DeepFace & RetinaFace) │
- │                          │             │                          │
- │ • Extracts text / OCR    │             │ • Bounding boxes         │
- │ • Renders PDFs in memory │             │ • 512d Face Embeddings   │
- │ • Stateless (No Volumes) │             │ • Mounts: /app/.deepface │
- └──────────────────────────┘             └──────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                            User / Web Browser                           │
+ └────────────────────────────────────┬────────────────────────────────────┘
+                                      │ HTTP Request
+                                      ▼ (Port 8079 maps to internal 8003)
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                              ROOTNODE                                   │
+ │                     (Public Facing / Main Web App)                      │
+ │                                                                         │
+ │  • Handles UI, Database, and Business Logic                             │
+ │  • Mounts Volume: genview_data (-> /data/genview:z)                     │
+ │  • Network: backend_net                                                 │
+ └─────────┬──────────────────────────┬──────────────────────────┬─────────┘
+           │                          │                          │
+           │ API Call (Network)       │ API Call (Network)       │ API Call (Network)
+           │                          │                          │
+           ▼                          ▼                          ▼
+ ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
+ │    TEXTNODE      │       │    FACENODE      │       │     LLMNODE      │
+ │   (Isolated)     │       │   (Isolated)     │       │  (LLM Wrapper)   │
+ │                  │       │                  │       │                  │
+ │ • Extracts Text  │       │ • Face Embeddings│       │ • Formats Prompt │
+ │ • EasyOCR        │       │ • DeepFace       │       │ • Parses Output  │
+ └─────────┬────────┘       └─────────┬────────┘       └─────────┬────────┘
+           │                          │                          │ 
+           │                          │                          │ Depends on
+           │                          │                          ▼
+           │                          │                ┌──────────────────┐
+           │                          │                │      OLLAMA      │
+           │                          │                │ (Model Executor) │
+           │                          │                │                  │
+           │                          │                │ • Runs Inference │
+           │                          │                │ • Mounts Volume: │
+           │                          │                │   ollama_data    │
+           │                          │                └──────────────────┘
+           ▼                          ▼
+ ┌─────────────────────────────────────────────────┐
+ │            SHARED DOCKER VOLUME                 │
+ │       models_data (shared_ml_models)            │
+ │                                                 │
+ │  • Mounted to TEXTNODE as: /app/.EasyOCR        │
+ │  • Mounted to FACENODE as: /app/.deepface       │
+ └─────────────────────────────────────────────────┘
 ```
 
 ### Component Roles
