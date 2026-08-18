@@ -73,7 +73,7 @@
                                 👪 {% trans "Familien anzeigen" %}
                             </a>
 
-                            {% if user.is_superuser or tree.user_role == 'ADMIN' or tree.user_role == 'EDITOR' %}
+                            {% if user.is_superuser or tree.user_role == 'ADMIN' %}
                             <a href="{% url 'genview:manage-memberships' tree_id=tree.pk %}" class="btn btn-outline-danger">
                                 ⚙️ {% trans "Baum verwalten" %}
                             </a>

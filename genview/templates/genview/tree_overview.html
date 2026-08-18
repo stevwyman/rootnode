@@ -199,14 +199,14 @@
         </div>
     </div>
 
-    {% if can_edit %}
+    {% if can_edit or is_tree_admin %}
     <div class="card border-0 shadow-sm border-warning border-opacity-25">
         <div class="card-header bg-white border-bottom py-3">
             <h5 class="mb-0">🔧 {% trans "Datenpflege" %}</h5>
         </div>
         <div class="card-body">
             <div class="row g-3">
-                {% if maintenance_without_birth %}
+                {% if can_edit and maintenance_without_birth %}
                 <div class="col-md-6">
                     <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
                         <span>{% trans "Personen ohne Geburtsdatum" %}</span>
@@ -216,6 +216,7 @@
                     </div>
                 </div>
                 {% endif %}
+                {% if is_tree_admin %}
                 {% if maintenance_unlinked_faces %}
                 <div class="col-md-6">
                     <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
@@ -261,6 +262,7 @@
                         📜 {% trans "Dokument-Vorschläge" %}
                     </a>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>

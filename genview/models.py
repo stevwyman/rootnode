@@ -79,6 +79,16 @@ class Tree(models.Model):
         verbose_name="Öffentlicher Stammbaum",
         help_text="Wenn aktiviert, kann jeder den Baum sehen, ohne Membership."
     )
+    show_living_people = models.BooleanField(
+        default=False,
+        verbose_name="Lebende Personen anzeigen",
+        help_text=(
+            "Wenn aktiviert, gelten auf einem öffentlichen Baum keine "
+            "Lebend-Datenschutzregeln für Gäste. Editoren und Admins "
+            "sehen lebende Personen immer. Mitglieder eines privaten "
+            "Baums ebenfalls."
+        ),
+    )
     starting_individual = models.ForeignKey(
         "Individual",
         on_delete=models.SET_NULL,
@@ -440,41 +450,39 @@ class Individual(GedcomIdMixin):
     @property
     def is_confidential(self):
         """
-        Prüft, ob die Person unter die Datenschutzrichtlinien fällt.
-        Regeln:
-        - Kein Sterbedatum = Lebt vermutlich -> Vertraulich (außer Geburt ist > 115 Jahre her)
-        - Tod innerhalb der letzten 35 Jahre -> Vertraulich
-        - Geburt innerhalb der letzten 115 Jahre -> Vertraulich
-        - Heirat innerhalb der letzten 85 Jahre -> Vertraulich
+        True when living-person rules hide this person:
+        - birth + 110 years is still after today
+        - death + 80 years is still after today
+        - marriage + 60 years is still after today
+        - no parsed birth, death, or marriage date (fail closed)
         """
-        
-        current_year = date.today().year
+        from .privacy import (
+            BIRTH_PRIVACY_YEARS,
+            DEATH_PRIVACY_YEARS,
+            MARRIAGE_PRIVACY_YEARS,
+            is_within_privacy_window,
+        )
 
-        # 1. Wenn wir SICHER wissen, wann die Person gestorben ist:
+        has_any_date = False
+
         if self.death_date:
-            # Nur vertraulich, wenn der Tod weniger als 35 Jahre her ist.
-            # (Wer vor 40 Jahren gestorben ist, ist öffentlich, egal wann er geboren wurde!)
-            return (current_year - self.death_date.year) <= 35
+            has_any_date = True
+            if is_within_privacy_window(self.death_date, DEATH_PRIVACY_YEARS):
+                return True
 
-        # --- AB HIER: Die Person hat KEIN Sterbedatum (könnte also noch leben) ---
-
-        # 2. Wir prüfen die Geburt (falls vorhanden)
         if self.birth_date:
-            # Vertraulich, wenn die Geburt weniger als 115 Jahre her ist
-            return (current_year - self.birth_date.year) <= 115
+            has_any_date = True
+            if is_within_privacy_window(self.birth_date, BIRTH_PRIVACY_YEARS):
+                return True
 
-        # 3. Wir prüfen die Heirat (falls weder Tod noch Geburt vorhanden sind)
         for spousal_link in self.spousal_families:
-            # getattr als kleine Absicherung, falls das Feld bei einer Familie fehlt
-            marriage_date = getattr(spousal_link, 'marriage_date_parsed', None)
+            marriage_date = getattr(spousal_link, "marriage_date_parsed", None)
             if marriage_date:
-                # Vertraulich, wenn die Heirat weniger als 85 Jahre her ist
-                return (current_year - marriage_date.year) <= 85
+                has_any_date = True
+                if is_within_privacy_window(marriage_date, MARRIAGE_PRIVACY_YEARS):
+                    return True
 
-        # 4. Der Fallback (Absoluter Datenschutz)
-        # Die Person hat KEINEN Tod, KEINE Geburt und KEINE Heirat.
-        # Im Zweifel gehen wir davon aus, dass die Person lebt oder frisch angelegt wurde.
-        return True
+        return not has_any_date
     
     @property
     def profile_image(self):
@@ -709,24 +717,24 @@ class Family(MPTTModel, GedcomIdMixin):
     @property
     def is_confidential(self):
         """
-        Eine Familie ist vertraulich, wenn mindestens ein Beteiligter 
-        (Ehemann, Ehefrau oder eines der verknüpften Kinder) vertraulich ist.
+        A family is confidential if its marriage is within the 60-year window
+        or if husband, wife, or any linked child is confidential.
         """
-        # 1. Ehemann prüfen
+        from .privacy import MARRIAGE_PRIVACY_YEARS, is_within_privacy_window
+
+        if is_within_privacy_window(self.marriage_date_parsed, MARRIAGE_PRIVACY_YEARS):
+            return True
+
         if self.husband and self.husband.is_confidential:
             return True
 
-        # 2. Ehefrau prüfen
         if self.wife and self.wife.is_confidential:
             return True
 
-        # 3. Alle Kinder dieser Familie prüfen
-        # Da du das Through-Model 'ChildFamilyLink' mit related_name="children" nutzt:
         for link in self.children.all():
             if link.child and link.child.is_confidential:
                 return True
 
-        # Wenn weder Eltern noch Kinder vertraulich sind, ist die Familie öffentlich
         return False
     
 
@@ -975,15 +983,26 @@ class Event(models.Model):
 
     @property
     def is_confidential(self):
-        """Ein Ereignis ist vertraulich, wenn sein Besitzer (Person oder Familie) vertraulich ist."""
-        # Wenn es ein Personen-Event ist (z.B. BIRT, DEAT)
-        if hasattr(self, 'individual') and self.individual:
+        """Confidential if the owner is, or this event's own date is still in a privacy window."""
+        from .privacy import (
+            BIRTH_PRIVACY_YEARS,
+            DEATH_PRIVACY_YEARS,
+            MARRIAGE_PRIVACY_YEARS,
+            is_within_privacy_window,
+        )
+
+        tag = getattr(self.event_type, "tag", None) if self.event_type_id else None
+        if tag == "BIRT" and is_within_privacy_window(self.parsed_date, BIRTH_PRIVACY_YEARS):
+            return True
+        if tag == "DEAT" and is_within_privacy_window(self.parsed_date, DEATH_PRIVACY_YEARS):
+            return True
+        if tag == "MARR" and is_within_privacy_window(self.parsed_date, MARRIAGE_PRIVACY_YEARS):
+            return True
+
+        if self.individual_id and self.individual:
             return self.individual.is_confidential
-            
-        # Wenn es ein Familien-Event ist (z.B. MARR, DIV)
-        if hasattr(self, 'family') and self.family:
-            return self.family.is_confidential  # <--- Nutzt jetzt die neue Familien-Logik!
-            
+        if self.family_id and self.family:
+            return self.family.is_confidential
         return True
 
 

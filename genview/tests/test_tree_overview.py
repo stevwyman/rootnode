@@ -68,7 +68,10 @@ class TreeOverviewViewTests(TestCase):
         self.assertEqual(response.context["stat_individuals"], 1)
         self.assertTemplateUsed(response, "genview/tree_overview.html")
 
-    def test_confidential_birthday_hidden_for_viewer(self):
+    def test_confidential_birthday_hidden_for_public_guest(self):
+        self.tree.is_public = True
+        self.tree.show_living_people = False
+        self.tree.save(update_fields=["is_public", "show_living_people"])
         person = Individual.objects.create(
             gedcom_tree=self.tree,
             given_name="Young",
@@ -84,7 +87,6 @@ class TreeOverviewViewTests(TestCase):
             event_type=birt,
             parsed_date=date(today.year - 10, today.month, today.day),
         )
-        self.client.login(username="overview_user", password="password")
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         all_cal = response.context["calendar_today"] + response.context["calendar_upcoming"]

@@ -69,17 +69,16 @@ class IndividualListViewTests(TestCase):
         # URL for the list view of this specific tree
         self.url = reverse("genview:individual-list", kwargs={"tree_id": self.tree.id})
 
-    def test_redirect_if_not_logged_in(self):
-        """Anonymous users should be redirected to the login page."""
+    def test_anonymous_private_tree_is_404(self):
+        """Anonymous users must not learn that a private tree exists."""
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.url.startswith("/account/login/")) # Adjust if your login URL is different
+        self.assertEqual(response.status_code, 404)
 
     def test_access_denied_for_unauthorized_tree(self):
-        """Logged-in users without a TreeMembership are denied with 403."""
+        """Logged-in users without a TreeMembership get 404 on a private tree."""
         self.client.login(username="hacker", password="password")
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_access_granted_for_authorized_user(self):
         """VIEWER members see historically public people unredacted."""
@@ -87,12 +86,11 @@ class IndividualListViewTests(TestCase):
         from genview.models import Event
 
         et, _ = EventType.objects.get_or_create(tag="DEAT", defaults={"name": "Death"})
-        # Death > 35 years ago ⇒ not confidential under privacy rules.
         Event.objects.create(
             individual=self.person,
             event_type=et,
             gedcom_tree=self.tree,
-            parsed_date=date(1950, 1, 1),
+            parsed_date=date(1900, 1, 1),
         )
 
         self.client.login(username="auth_user", password="password")
@@ -102,9 +100,9 @@ class IndividualListViewTests(TestCase):
         self.assertContains(response, "Test")
         self.assertContains(response, "Person")
 
-    def test_privacy_hides_confidential_names(self):
-        """VIEWER privacy keeps confidential people in the list but redacts names."""
-        confidential_person = Individual.objects.create(
+    def test_private_viewer_sees_living_names(self):
+        """VIEWER on a private tree sees living people (privacy off)."""
+        Individual.objects.create(
             gedcom_tree=self.tree,
             given_name="Secret",
             surname="LivingPerson",
@@ -114,14 +112,9 @@ class IndividualListViewTests(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
-        loaded_person = next(
-            p for p in response.context["object_list"] if p.pk == confidential_person.pk
-        )
-        self.assertTrue(loaded_person.is_confidential)
-        self.assertTrue(response.context["apply_privacy"])
-        self.assertContains(response, "Vertrauliche Person")
-        self.assertNotContains(response, "Secret")
-        self.assertNotContains(response, "LivingPerson")
+        self.assertFalse(response.context["apply_privacy"])
+        self.assertContains(response, "Secret")
+        self.assertContains(response, "LivingPerson")
 
     def test_data_leak_prevention(self):
         """Ensure users only see people from the requested tree."""
@@ -255,6 +248,10 @@ class GlobalSearchViewTests(TestCase):
     def test_search_thumb_hidden_for_confidential_person(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from genview.models import MediaObject
+
+        self.tree.is_public = True
+        self.tree.show_living_people = False
+        self.tree.save(update_fields=["is_public", "show_living_people"])
 
         media = MediaObject.objects.create(
             gedcom_tree=self.tree,

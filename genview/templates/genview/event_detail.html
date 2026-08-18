@@ -149,7 +149,7 @@
                 {% else %}
                     <span class="text-muted fst-italic small">Keine Medien mit diesem Ereignis verknüpft.</span>
                 {% endif %}
-                {% if can_edit %}
+                {% if is_tree_admin %}
                 <div class="mt-3">
                     <a href="{% url 'genview:add-existing-media-to-event' tree_id=tree_id event_id=object.pk %}" class="btn btn-primary shadow-sm">
                         ➕ Bestehendes Dokument/Foto verknüpfen
@@ -162,10 +162,19 @@
     {% endblock%}
 
 
+    {% block edit_sidebar %}
+        {% if is_tree_admin %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-body d-flex flex-column gap-2">
+                {% url 'genview:event-edit' tree_id=tree_id pk=object.pk as edit_url %}
+                {% url 'genview:event-delete' tree_id=tree_id pk=object.pk as delete_url %}
+                {% action_buttons layout="sidebar" edit_url=edit_url delete_url=delete_url %}
+            </div>
+        </div>
+        {% endif %}
+    {% endblock%}
+
     {% block edit-right %}
-        {% url 'genview:event-edit' tree_id=tree_id pk=object.pk as edit_url %}
-        {% url 'genview:event-delete' tree_id=tree_id pk=object.pk as delete_url %}
-        {% action_buttons layout="sidebar" edit_url=edit_url delete_url=delete_url %}
     {% endblock%}
 
     {% block details-right%}

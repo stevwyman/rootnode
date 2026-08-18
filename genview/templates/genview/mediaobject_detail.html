@@ -162,9 +162,11 @@
                                 🔍 {% trans "Bild analysieren" %}
                             </button>
                         </form>
+                        {% if is_tree_admin %}
                         <a href="{% url 'genview:face-suggestion-review' tree_id=tree_id %}" class="btn btn-outline-secondary">
                             {% trans "Gesichter prüfen" %}
                         </a>
+                        {% endif %}
                     </div>
 
                     {# ---- Bereits erkannte Gesichter + Zuordnungs-Formular ---- #}
@@ -288,9 +290,11 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if is_tree_admin %}
                         <a href="{% url 'genview:document-suggestion-review' tree_id=tree_id %}" class="btn btn-sm btn-outline-primary">
                             {% trans "Alle Dokument-Vorschläge" %}
                         </a>
+                        {% endif %}
                         {% endif %}
                     </div>
 

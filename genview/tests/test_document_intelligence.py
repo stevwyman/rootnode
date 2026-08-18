@@ -68,7 +68,7 @@ class FaceSuggestionReviewTests(TestCase):
         self.user = User.objects.create_user(username="editor", password="password")
         self.tree = Tree.objects.create(name="Face Tree")
         TreeMembership.objects.create(
-            user=self.user, gedcom_tree=self.tree, role="EDITOR"
+            user=self.user, gedcom_tree=self.tree, role="ADMIN"
         )
         self.media = MediaObject.objects.create(
             gedcom_tree=self.tree,

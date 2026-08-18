@@ -217,6 +217,8 @@ class TreeOverviewView(TreeAccessMixin, TemplateView):
                 ).values("individual_id").distinct().count()
                 without_birth = context["stat_individuals"] - with_birth
             context["maintenance_without_birth"] = max(without_birth, 0)
+
+        if context.get("is_tree_admin"):
             context["maintenance_unlinked_faces"] = FaceTag.objects.filter(
                 media__gedcom_tree_id=tree_id,
                 individual__isnull=True,
@@ -234,7 +236,7 @@ class TreeOverviewView(TreeAccessMixin, TemplateView):
         return context
 
 
-class TreeJSONView(LoginRequiredMixin, TreeAccessMixin, View):
+class TreeJSONView(TreeAccessMixin, View):
     """
     Gibt ein flaches Array von Knoten für f3 (family-chart) zurück.
     Liest optional die 'max_depth' aus den GET-Parametern aus.
@@ -267,7 +269,7 @@ class TreeJSONView(LoginRequiredMixin, TreeAccessMixin, View):
         return JsonResponse(result, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
-class FamilyTreeView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+class FamilyTreeView(TreeAccessMixin, TemplateView):
     """
     Renderet das HTML-Template für den Familienstammbaum.
     Die `tree_id` und `individual_id` werden als Kontext-Variablen
@@ -535,7 +537,7 @@ def _search_individuals(
     return _finalize_individual_search_results(results, tree_id, apply_privacy)
 
 
-class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+class GlobalSearchView(TreeAccessMixin, TemplateView):
     template_name = "genview/global_search.html"
 
     def get_context_data(self, **kwargs):
@@ -655,7 +657,7 @@ def _run_tree_query(tree_id, payload: dict, apply_privacy: bool) -> dict:
     return execute_tree_query(tree_id, payload, apply_privacy)
 
 
-class TreeQueryView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+class TreeQueryView(TreeAccessMixin, TemplateView):
     """Structured kinship query UI plus natural-language parse (Phase 2)."""
 
     template_name = "genview/tree_query.html"
@@ -728,7 +730,7 @@ class TreeQueryView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
         return self.render_to_response(ctx)
 
 
-class TreeQueryExecuteView(LoginRequiredMixin, TreeAccessMixin, View):
+class TreeQueryExecuteView(TreeAccessMixin, View):
     """JSON execute endpoint for the structured tree query (LLM/MCP later)."""
 
     http_method_names = ["post"]
@@ -1329,7 +1331,7 @@ class SetTreeStartingIndividualView(LoginRequiredMixin, TreeAdminAccessMixin, Vi
         )
 
 
-class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class IndividualSearchView(TreeAccessMixin, ListView):
     """
     Listet Personen und filtert nach dem Suchbegriff `q`.
     Der Suchbegriff wird in mehreren Feldern geprüft:
@@ -1376,7 +1378,7 @@ class IndividualSearchView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return qs
 
 
-class IndividualSearchAjaxView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class IndividualSearchAjaxView(TreeAccessMixin, ListView):
     model = Individual
     paginate_by = 25
     ordering = ["surname", "given_name"]
@@ -2217,7 +2219,7 @@ def _face_scan_candidate_qs(tree_id):
     )
 
 
-class MediaFaceScanView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+class MediaFaceScanView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Landing page: lists pending photos and drives one-by-one AJAX progress."""
 
     template_name = "genview/media_face_scan.html"
@@ -2234,7 +2236,7 @@ class MediaFaceScanView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
         return ctx
 
 
-class MediaFaceScanProcessView(LoginRequiredMixin, TreeEditAccessMixin, View):
+class MediaFaceScanProcessView(LoginRequiredMixin, TreeAdminAccessMixin, View):
     """Process a single media object; called repeatedly by the progress UI."""
 
     http_method_names = ["post"]
@@ -2279,7 +2281,7 @@ class MediaFaceScanProcessView(LoginRequiredMixin, TreeEditAccessMixin, View):
         )
 
 
-class FaceSuggestionReviewView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+class FaceSuggestionReviewView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Review queue for unlinked faces with optional person suggestions."""
 
     template_name = "genview/face_suggestion_review.html"
@@ -2351,7 +2353,7 @@ class FaceSuggestionReviewView(LoginRequiredMixin, TreeEditAccessMixin, Template
         return self._redirect_back(request, tree_id)
 
 
-class DocumentSuggestionReviewView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+class DocumentSuggestionReviewView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Central queue for OCR-derived event suggestions."""
 
     template_name = "genview/document_suggestion_review.html"
@@ -2542,7 +2544,7 @@ class MediaObjectDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView)
         return reverse_lazy("genview:tree-list")
 
 
-class BulkMediaUploadView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+class BulkMediaUploadView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     template_name = "genview/bulk_media_upload.html"
 
     def get_context_data(self, **kwargs):
@@ -2759,7 +2761,7 @@ class PlaceDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
         return reverse_lazy("genview:place-list", kwargs={"tree_id": tree_id})
     
 
-class PlaceDeduplicationView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+class PlaceDeduplicationView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     template_name = "genview/place_deduplication.html"
 
     def get_context_data(self, **kwargs):
@@ -2961,7 +2963,7 @@ class EventDetailView(TreeAccessMixin, DetailView):
         return event
     
 
-class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
+class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
     model = Event
     form_class = EventForm
     template_name = "genview/event_form.html"
@@ -3021,7 +3023,7 @@ class EventCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         return context
 
 
-class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+class EventUpdateView(LoginRequiredMixin, TreeAdminAccessMixin, UpdateView):
     model = Event
     form_class = EventForm
     template_name = "genview/event_form.html"
@@ -3076,7 +3078,7 @@ class EventUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
         return context
 
 
-class AddExistingMediaToEventView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
+class AddExistingMediaToEventView(LoginRequiredMixin, TreeAdminAccessMixin, FormView):
     template_name = "genview/add_existing_media.html"
     form_class = AddExistingMediaForm
 
@@ -3113,7 +3115,7 @@ class AddExistingMediaToEventView(LoginRequiredMixin, TreeEditAccessMixin, FormV
         return redirect('genview:tree-dashboard', tree_id=tree_id)
 
 
-class EventDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+class EventDeleteView(LoginRequiredMixin, TreeAdminAccessMixin, DeleteView):
     model = Event
     template_name = "genview/event_confirm_delete.html"
 
@@ -3182,7 +3184,7 @@ class EventTypeDeleteView(SuperuserRequiredMixin, DeleteView):
 # --------------------------------------------------------------
 
 # --- 1. List View ---
-class SourceListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+class SourceListView(TreeAccessMixin, ListView):
     model = Source
     template_name = "genview/source_list.html"
     context_object_name = "sources"
@@ -3194,7 +3196,7 @@ class SourceListView(LoginRequiredMixin, TreeAccessMixin, ListView):
         return Source.objects.filter(gedcom_tree_id=tree_id).order_by("title")
 
 # --- 2. Detail View ---
-class SourceDetailView(LoginRequiredMixin, TreeAccessMixin, DetailView):
+class SourceDetailView(TreeAccessMixin, DetailView):
     model = Source
     template_name = "genview/source_detail.html"
     context_object_name = "source"
@@ -3652,9 +3654,23 @@ class TreeMembershipManageView(LoginRequiredMixin, TreeAdminAccessMixin, View):
         # 🔥 NEU: Prüfen, ob der Sichtbarkeits-Schalter geklickt wurde
         if 'toggle_public' in request.POST:
             tree.is_public = not tree.is_public
-            tree.save()
+            tree.save(update_fields=["is_public"])
             status = "öffentlich zugänglich" if tree.is_public else "privat und geschützt"
             messages.info(request, _("Der Stammbaum ist jetzt %(status)s.") % {"status": status})
+            return redirect('genview:manage-memberships', tree_id=tree.id)
+
+        if 'toggle_show_living' in request.POST:
+            tree.show_living_people = not tree.show_living_people
+            tree.save(update_fields=["show_living_people"])
+            status = (
+                "lebende Personen für Gäste sichtbar"
+                if tree.show_living_people
+                else "lebende Personen für Gäste ausgeblendet"
+            )
+            messages.info(
+                request,
+                _("Datenschutz: %(status)s.") % {"status": status},
+            )
             return redirect('genview:manage-memberships', tree_id=tree.id)
         
 

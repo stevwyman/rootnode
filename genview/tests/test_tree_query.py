@@ -507,7 +507,7 @@ class TreeQueryViewTests(TestCase):
             data='{"intent": "resolve_kinship"}',
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_natural_language_form_post(self):
         self.client.login(username="quser", password="password")

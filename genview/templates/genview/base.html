@@ -70,7 +70,7 @@
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{% blocktrans with username=user.username %}Angemeldet als {{ username }}{% endblocktrans %}</a>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-list' %}">{% trans "Stammbäume" %}</a></li>
-                                    {% if user.is_authenticated and tree_id and can_edit|default:False %}
+                                    {% if user.is_authenticated and tree_id and is_tree_admin|default:False %}
                                         <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 {% trans "Bulk-Upload" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ {% trans "Baum verwalten" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍 {% trans "Orte bereinigen" %}</a></li>
@@ -104,7 +104,7 @@
                                 <a class="nav-link" href="{% url 'genview:register' %}">{% trans "Registrieren" %}</a>
                             </li>
                             {% endif %}
-                            {% if user.is_authenticated and tree_id %}
+                            {% if tree_id %}
                             <li class="nav-item">
                                 <form class="d-flex" action="{% url 'genview:global-search' tree_id=tree_id %}" method="get">
                                     <input class="form-control me-2" type="search" name="q" placeholder="{% trans 'Stammbaum durchsuchen…' %}" aria-label="{% trans 'Suche' %}">
