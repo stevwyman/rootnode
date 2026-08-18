@@ -1,0 +1,179 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Stammbaum fragen" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5" style="max-width: 820px;">
+    <h1 class="mb-2">{% trans "Stammbaum fragen" %}</h1>
+    <p class="text-muted">
+        {% trans "Stellen Sie eine Frage in Alltagssprache. Ein fester Parser (und optional Ollama) macht daraus einen Plan; die Antwort kommt immer aus dem Stammbaum, nicht aus dem Modell." %}
+    </p>
+
+    {% if not tree.starting_individual_id %}
+    <div class="alert alert-warning">
+        {% trans "Noch keine Startperson gesetzt. Wählen Sie unten eine Person oder legen Sie unter der Personen-Detailseite eine Startperson fest." %}
+    </div>
+    {% else %}
+    <p class="small text-muted mb-4">
+        {% trans "Standard-Anker:" %}
+        {% if apply_privacy and tree.starting_individual.is_confidential %}
+            {% trans "Vertrauliche Person" %}
+        {% else %}
+            <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=tree.starting_individual_id %}">
+                {{ tree.starting_individual.full_name }}
+            </a>
+        {% endif %}
+    </p>
+    {% endif %}
+
+    <form method="post" class="card shadow-sm mb-4">
+        {% csrf_token %}
+        <div class="card-body">
+            <label class="form-label" for="question">{% trans "Frage" %}</label>
+            <textarea name="question" id="question" class="form-control" rows="3" autofocus
+                      placeholder="{% trans 'z. B. Wie viele Kinder hatte die Großmutter mütterlicherseits?' %}">{{ question }}</textarea>
+            <div class="form-text mb-3">
+                {% if llm_enabled %}
+                    {% trans "Bekannte Verwandtschaftsfragen werden lokal zerlegt; unklare Formulierungen gehen an Ollama." %}
+                {% else %}
+                    {% trans "Nur bekannte Formulierungen werden lokal zerlegt. Für freie Sprache TREE_QUERY_LLM_URL setzen (Ollama)." %}
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">{% trans "Frage stellen" %}</button>
+        </div>
+    </form>
+
+    {% if result %}
+        {% if result.ok %}
+        <div class="alert alert-success shadow-sm">
+            <div class="fw-semibold mb-1">{% trans "Antwort" %}</div>
+            <p class="mb-0 fs-5">{{ result.answer }}</p>
+        </div>
+        {% if result.parse_source %}
+        <p class="small text-muted">
+            {% if result.parse_source == "rules" %}
+                {% trans "Plan erzeugt aus bekannten Mustern (ohne Sprachmodell)." %}
+            {% elif result.parse_source == "llm" %}
+                {% trans "Plan erzeugt vom Sprachmodell, ausgeführt im Stammbaum." %}
+            {% endif %}
+        </p>
+        {% endif %}
+        {% if result.facts.subject.url %}
+        <p>
+            <a class="btn btn-outline-primary btn-sm" href="{{ result.facts.subject.url }}">{% trans "Person öffnen" %}</a>
+            {% if result.facts.target.url %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ result.facts.target.url }}">{% trans "Zweite Person öffnen" %}</a>
+            {% endif %}
+        </p>
+        {% endif %}
+        {% else %}
+        <div class="alert alert-warning shadow-sm">{{ result.answer }}</div>
+        {% endif %}
+
+        {% if result_json %}
+        <details class="mb-4">
+            <summary class="text-muted small">{% trans "Plan und Fakten (JSON)" %}</summary>
+            <pre class="border rounded bg-white p-3 small mt-2" style="max-height: 320px; overflow: auto;">{{ result_json }}</pre>
+        </details>
+        {% endif %}
+    {% endif %}
+
+    <details class="mb-5">
+        <summary class="fw-semibold">{% trans "Stattdessen strukturiert abfragen (Phase 1)" %}</summary>
+        <form method="post" class="card shadow-sm mt-3">
+            {% csrf_token %}
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="intent">{% trans "Was soll ermittelt werden?" %}</label>
+                    <select name="intent" id="intent" class="form-select">
+                        {% for value, label in intent_choices %}
+                        <option value="{{ value }}" {% if form.intent == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">{% trans "Verwandtschaftspfad ab der Startperson (optional)" %}</label>
+                    <div class="d-flex flex-wrap gap-2 mb-2" id="query-presets">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-steps="father">{% trans "Vater" %}</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-steps="mother">{% trans "Mutter" %}</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-steps="father,father">{% trans "Großvater väterlicherseits" %}</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-steps="mother,mother">{% trans "Großmutter mütterlicherseits" %}</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-steps="spouse">{% trans "Ehepartner/in" %}</button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6 col-md-3">
+                            <select name="step_1" id="step_1" class="form-select">
+                                {% for value, label in step_choices %}
+                                <option value="{{ value }}" {% if form.step_1 == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <select name="step_2" id="step_2" class="form-select">
+                                {% for value, label in step_choices %}
+                                <option value="{{ value }}" {% if form.step_2 == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <select name="step_3" id="step_3" class="form-select">
+                                {% for value, label in step_choices %}
+                                <option value="{{ value }}" {% if form.step_3 == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <select name="step_4" id="step_4" class="form-select">
+                                {% for value, label in step_choices %}
+                                <option value="{{ value }}" {% if form.step_4 == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="person_id">{% trans "Andere Ausgangsperson (optional)" %}</label>
+                    <select name="person_id" id="person_id" class="individual-select form-select" data-placeholder="{% trans 'Startperson beibehalten…' %}" style="width: 100%;">
+                    </select>
+                </div>
+
+                <div class="mb-3" id="target-wrap">
+                    <label class="form-label" for="target_id">{% trans "Zweite Person (nur für Beziehung)" %}</label>
+                    <select name="target_id" id="target_id" class="individual-select form-select" data-placeholder="{% trans 'Person wählen…' %}" style="width: 100%;">
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-outline-primary">{% trans "Abfrage ausführen" %}</button>
+            </div>
+        </form>
+    </details>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    initGenviewSelect2('#person_id', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "{% trans 'Startperson beibehalten…' %}");
+    initGenviewSelect2('#target_id', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "{% trans 'Person wählen…' %}");
+
+    function toggleTarget() {
+        var show = $('#intent').val() === 'relation_between';
+        $('#target-wrap').toggle(show);
+    }
+    $('#intent').on('change', toggleTarget);
+    toggleTarget();
+
+    $('#query-presets button').on('click', function() {
+        var steps = ($(this).data('steps') || '').toString().split(',');
+        $('#step_1, #step_2, #step_3, #step_4').val('');
+        steps.forEach(function(step, i) {
+            $('#step_' + (i + 1)).val(step);
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -20,6 +20,9 @@
             <a href="{% url 'genview:global-search' tree_id=tree_id %}" class="btn btn-outline-primary">
                 🔍 {% trans "Suche" %}
             </a>
+            <a href="{% url 'genview:tree-query' tree_id=tree_id %}" class="btn btn-outline-primary">
+                {% trans "Fragen" %}
+            </a>
             {% if tree.starting_individual_id %}
             <a href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=tree.starting_individual_id %}" class="btn btn-primary">
                 🌳 {% trans "Baumansicht" %}

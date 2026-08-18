@@ -16,6 +16,12 @@ urlpatterns = [
     # 3. Tree-Specific Views:
     path('tree/<int:tree_id>/', views.TreeOverviewView.as_view(), name='tree-overview'),
     path('tree/<int:tree_id>/search/', views.GlobalSearchView.as_view(), name='global-search'),
+    path('tree/<int:tree_id>/query/', views.TreeQueryView.as_view(), name='tree-query'),
+    path(
+        'tree/<int:tree_id>/query/execute/',
+        views.TreeQueryExecuteView.as_view(),
+        name='tree-query-execute',
+    ),
     path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
     # 4. match users to trees and enable/disable public flag 
     path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),

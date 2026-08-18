@@ -159,6 +159,12 @@ DJANGO_SUPERUSER_PASSWORD=admin
 
 FACE_RECOGNITION_URL=http://facenode:8000/detect
 OCR_RECOGNITION_URL=http://textnode:8000/extract
+
+# Optional Phase-2 parser (Ollama chat API, or a wrapper ending in /parse)
+TREE_QUERY_LLM_URL=http://localhost:11434
+TREE_QUERY_LLM_MODEL=llama3.2:3b
+# TREE_QUERY_LLM_API_KEY=
+# Set TREE_QUERY_LLM_URL=off to disable the model and use rule-based phrases only.
 ```
 
 ## ToDos

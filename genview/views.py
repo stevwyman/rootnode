@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import mimetypes
 from pathlib import Path
@@ -594,6 +595,159 @@ class GlobalSearchView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
         context['q'] = q
         context['search_multi_word'] = len(_split_search_terms(q)) > 1
         return context
+
+
+def _tree_query_payload_from_request(request) -> dict:
+    """Accept JSON body or form fields for the Phase-1 query executor."""
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            data = json.loads(request.body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError(_("Ungültiges JSON."))
+        return data if isinstance(data, dict) else {}
+
+    steps = [
+        request.POST.get("step_1", ""),
+        request.POST.get("step_2", ""),
+        request.POST.get("step_3", ""),
+        request.POST.get("step_4", ""),
+    ]
+    path = [s.strip() for s in steps if s and s.strip()]
+    extra = request.POST.get("kinship_path", "").strip()
+    if extra and not path:
+        path = extra
+    return {
+        "intent": request.POST.get("intent", ""),
+        "anchor": request.POST.get("anchor") or "starting_individual",
+        "person_id": request.POST.get("person_id") or None,
+        "target_id": request.POST.get("target_id") or None,
+        "person_name": request.POST.get("person_name") or "",
+        "target_name": request.POST.get("target_name") or "",
+        "question": request.POST.get("question") or "",
+        "kinship_path": path,
+    }
+
+
+def _run_tree_query(tree_id, payload: dict, apply_privacy: bool) -> dict:
+    """Parse a natural-language question when present, then execute the plan."""
+    from .tree_query import execute_tree_query
+    from .tree_query_parse import parse_natural_language_question
+
+    question = str(payload.get("question") or "").strip()
+    if question:
+        parsed = parse_natural_language_question(question)
+        if not parsed["ok"]:
+            return {
+                "ok": False,
+                "error": parsed["error"],
+                "intent": "",
+                "answer": parsed["error"],
+                "facts": {},
+                "question": question,
+                "parse_source": parsed.get("source"),
+                "plan": None,
+            }
+        result = execute_tree_query(tree_id, parsed["plan"], apply_privacy)
+        result["question"] = question
+        result["parse_source"] = parsed["source"]
+        result["plan"] = parsed["plan"]
+        return result
+    return execute_tree_query(tree_id, payload, apply_privacy)
+
+
+class TreeQueryView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+    """Structured kinship query UI plus natural-language parse (Phase 2)."""
+
+    template_name = "genview/tree_query.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["step_choices"] = [
+            ("", "—"),
+            ("father", _("Vater")),
+            ("mother", _("Mutter")),
+            ("spouse", _("Ehepartner/in")),
+            ("child", _("Kind")),
+            ("sibling", _("Geschwister")),
+        ]
+        ctx["intent_choices"] = [
+            ("resolve_kinship", _("Wer ist das?")),
+            ("count_children", _("Anzahl Kinder")),
+            ("list_children", _("Kinder auflisten")),
+            ("person_facts", _("Daten (Geburt/Tod)")),
+            ("person_age", _("Alter")),
+            ("relation_between", _("Beziehung zwischen zwei Personen")),
+        ]
+        ctx["result"] = None
+        ctx["result_json"] = ""
+        ctx["question"] = ""
+        from .llm_client import llm_parser_enabled
+
+        ctx["llm_enabled"] = llm_parser_enabled()
+        ctx["form"] = {
+            "intent": "resolve_kinship",
+            "step_1": "",
+            "step_2": "",
+            "step_3": "",
+            "step_4": "",
+            "person_id": "",
+            "target_id": "",
+        }
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        ctx = self.get_context_data()
+        try:
+            payload = _tree_query_payload_from_request(request)
+        except ValueError as exc:
+            ctx["result"] = {
+                "ok": False,
+                "error": str(exc),
+                "answer": str(exc),
+                "facts": {},
+            }
+            ctx["result_json"] = json.dumps(ctx["result"], ensure_ascii=False, indent=2)
+            return self.render_to_response(ctx)
+
+        ctx["form"] = {
+            "intent": payload.get("intent") or "resolve_kinship",
+            "step_1": request.POST.get("step_1", ""),
+            "step_2": request.POST.get("step_2", ""),
+            "step_3": request.POST.get("step_3", ""),
+            "step_4": request.POST.get("step_4", ""),
+            "person_id": request.POST.get("person_id", ""),
+            "target_id": request.POST.get("target_id", ""),
+        }
+        ctx["question"] = payload.get("question") or ""
+        ctx["result"] = _run_tree_query(
+            self.kwargs["tree_id"],
+            payload,
+            apply_privacy=self.get_apply_privacy(),
+        )
+        ctx["result_json"] = json.dumps(ctx["result"], ensure_ascii=False, indent=2)
+        return self.render_to_response(ctx)
+
+
+class TreeQueryExecuteView(LoginRequiredMixin, TreeAccessMixin, View):
+    """JSON execute endpoint for the structured tree query (LLM/MCP later)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = _tree_query_payload_from_request(request)
+        except ValueError as exc:
+            return JsonResponse(
+                {"ok": False, "error": str(exc), "answer": str(exc), "facts": {}},
+                status=400,
+            )
+
+        result = _run_tree_query(
+            self.kwargs["tree_id"],
+            payload,
+            apply_privacy=self.get_apply_privacy(),
+        )
+        return JsonResponse(result, json_dumps_params={"ensure_ascii": False})
 
 # ----------------------------------------------------------------------
 # 2️⃣ Individuals
