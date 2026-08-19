@@ -127,6 +127,7 @@ def collect_upcoming_birthdays(
         .annotate(_deceased=has_death)
         .filter(_deceased=False)
         .select_related("individual")
+        .prefetch_related(Individual.titl_events_prefetch("individual__events"))
     )
     if apply_privacy:
         if public_ids is None:
@@ -184,7 +185,10 @@ def collect_upcoming_anniversaries(
         family__isnull=False,
         parsed_date__isnull=False,
         parsed_date__month__in=_horizon_months(today, horizon_days),
-    ).select_related("family", "family__husband", "family__wife")
+    ).select_related("family", "family__husband", "family__wife").prefetch_related(
+        Individual.titl_events_prefetch("family__husband__events"),
+        Individual.titl_events_prefetch("family__wife__events"),
+    )
     if apply_privacy:
         if public_family_ids is None:
             from .mixins import apply_privacy_to_family_qs

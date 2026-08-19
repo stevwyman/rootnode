@@ -107,6 +107,8 @@ def individual_name_tokens(individual) -> list[str]:
     for value in (individual.given_name, individual.surname):
         if value:
             parts.extend(tokens(value))
+    for title in individual.noble_titles:
+        parts.extend(tokens(title))
     for alt in individual.alternative_names.all():
         if alt.given_name:
             parts.extend(tokens(alt.given_name))

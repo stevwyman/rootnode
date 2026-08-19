@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from genview.models import Tree, TreeMembership, Individual, EventType
+from genview.models import Tree, TreeMembership, Individual, EventType, Event
 
 class IndividualModelTests(TestCase):
     def setUp(self):
@@ -46,6 +46,29 @@ class IndividualModelTests(TestCase):
         )
         # Fix: Die @-Zeichen ergänzen, die dein Mixin generiert!
         self.assertEqual(person.gedcom_id, f"@I-M{person.pk}@")
+
+    def test_full_name_uses_gedcom_title(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree1,
+            given_name="Edward",
+            surname="Windsor",
+        )
+        self.assertEqual(person.full_name(), "Edward Windsor")
+        self.assertEqual(person.civil_name(), "Edward Windsor")
+
+        titl, _ = EventType.objects.get_or_create(
+            tag="TITL", defaults={"name": "Title"}
+        )
+        Event.objects.create(
+            gedcom_tree=self.tree1,
+            individual=person,
+            event_type=titl,
+            description="King of England",
+        )
+        person = Individual.objects.get(pk=person.pk)
+        self.assertEqual(person.primary_title, "King of England")
+        self.assertEqual(person.full_name(), "King of England")
+        self.assertEqual(person.civil_name(), "Edward Windsor")
 
 class IndividualListViewTests(TestCase):
     def setUp(self):
@@ -144,6 +167,46 @@ class IndividualListViewTests(TestCase):
         self.assertContains(response, "Test")
         self.assertContains(response, "Person")
         self.assertNotContains(response, "Secret Guy")
+
+    def test_search_and_display_uses_gedcom_title(self):
+        titl, _ = EventType.objects.get_or_create(
+            tag="TITL", defaults={"name": "Title"}
+        )
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=self.person,
+            event_type=titl,
+            description="Earl of Warwick",
+        )
+
+        self.client.login(username="auth_user", password="password")
+        response = self.client.get(self.url, {"q": "Warwick"})
+        self.assertEqual(response.status_code, 200)
+        people = list(response.context["people"])
+        self.assertTrue(any(p.pk == self.person.pk for p in people))
+        self.assertContains(response, "Earl of Warwick")
+
+        response = self.client.get(self.url)
+        self.assertContains(response, "Earl of Warwick")
+
+    def test_select2_api_finds_title(self):
+        titl, _ = EventType.objects.get_or_create(
+            tag="TITL", defaults={"name": "Title"}
+        )
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=self.person,
+            event_type=titl,
+            description="Prince of Wales",
+        )
+        api_url = reverse(
+            "genview:api-search-individuals", kwargs={"tree_id": self.tree.id}
+        )
+        self.client.login(username="auth_user", password="password")
+        response = self.client.get(api_url, {"q": "Wales"})
+        self.assertEqual(response.status_code, 200)
+        texts = [row["text"] for row in response.json()["results"]]
+        self.assertTrue(any("Prince of Wales" in text for text in texts))
 
 
 class GlobalSearchViewTests(TestCase):
@@ -304,3 +367,36 @@ class GlobalSearchViewTests(TestCase):
         self.assertIsNotNone(person.search_thumb_url)
         self.assertIn("/thumb/mini/", person.search_thumb_url)
         self.assertIn(f"/media/{media.pk}/", person.search_thumb_url)
+
+    def test_search_finds_person_by_gedcom_title(self):
+        earl = Individual.objects.create(
+            gedcom_tree=self.tree,
+            given_name="Richard",
+            surname="Neville",
+        )
+        titl, _ = EventType.objects.get_or_create(
+            tag="TITL", defaults={"name": "Title"}
+        )
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=earl,
+            event_type=titl,
+            description="Earl of Warwick",
+        )
+
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Warwick"})
+        self.assertEqual(response.status_code, 200)
+        person_results = [
+            r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"
+        ]
+        self.assertTrue(any(r.pk == earl.pk for r in person_results))
+        hit = next(r for r in person_results if r.pk == earl.pk)
+        self.assertEqual(hit.search_title, "Earl of Warwick")
+        self.assertContains(response, "Earl of Warwick")
+
+        response = self.client.get(self.url, {"q": "Earl Warwick"})
+        person_results = [
+            r for r in response.context["results"] if getattr(r, "search_type", None) == "Person"
+        ]
+        self.assertTrue(any(r.pk == earl.pk for r in person_results))

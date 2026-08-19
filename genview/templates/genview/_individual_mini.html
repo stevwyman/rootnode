@@ -20,8 +20,12 @@
         {# ---------- name with dates ---------- #}
         <div>
                 <div>
-                <a href="{{ individual.get_absolute_url }}" class="text-decoration-none text-dark" title="{{ individual.full_name }}">
+                <a href="{{ individual.get_absolute_url }}" class="text-decoration-none text-dark" title="{% if individual.primary_title %}{{ individual.civil_name }}{% else %}{{ individual.full_name }}{% endif %}">
+                    {% if individual.primary_title %}
+                        👑 {{ individual.primary_title }}
+                    {% else %}
                     {{ individual.short_given_name }} <span class="fw-semibold">{{ individual.surname }}</span>
+                    {% endif %}
                 </a>
                 </div>
                 <div>

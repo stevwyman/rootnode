@@ -450,17 +450,24 @@ class FilterableListViewMixin:
     search_fields = []        # Felder für die Textsuche (icontains)
     exact_filter_fields = []  # Felder für Dropdowns (exakter Match)
 
+    def get_extra_search_q(self, search_query: str):
+        """Optional extra Q ORed into the ?q= text search."""
+        return Q()
+
     def get_queryset_filters(self):
         filters = Q()
         
         # 1. Textsuche (Suchfeld: ?q=...)
         search_query = self.request.GET.get('q', '').strip()
-        if search_query and self.search_fields:
+        if search_query:
             search_conditions = Q()
             for field in self.search_fields:
-                # Baut z.B.: Q(given_name__icontains=search_query) | Q(surname__icontains=search_query)
                 search_conditions |= Q(**{f"{field}__icontains": search_query})
-            filters &= search_conditions
+            extra = self.get_extra_search_q(search_query)
+            if extra:
+                search_conditions |= extra
+            if search_conditions:
+                filters &= search_conditions
             
         # 2. Exakte Filter (z.B. Dropdown: ?sex=M)
         for field in self.exact_filter_fields:

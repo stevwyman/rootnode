@@ -1056,6 +1056,7 @@ def resolve_person_by_name(
             | Q(surname__icontains=term)
             | Q(alternative_names__given_name__icontains=term)
             | Q(alternative_names__surname__icontains=term)
+            | Individual.title_search_q(term)
         )
     matches = list(qs.filter(combined).distinct()[:6])
     if not matches:

@@ -9,7 +9,7 @@ from typing import Optional
 
 from django.contrib.auth.models import User
 from django.db import models
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
 from django.dispatch import receiver
@@ -256,10 +256,69 @@ class Individual(GedcomIdMixin):
     def __str__(self) -> str:
         return f"{self.full_name()} ({self.gedcom_id})"
 
-    def full_name(self) -> str:
-        """Vollständiger Name inkl. Prä- und Suffix, leere Teile werden weggelassen."""
+    def civil_name(self) -> str:
+        """GIVN/SURN (and prefix/suffix), ignoring GEDCOM TITL."""
         parts = [self.name_prefix, self.given_name, self.surname, self.name_suffix]
         return " ".join(p for p in parts if p).strip() or "Unnamed"
+
+    def _titl_events(self) -> list["Event"]:
+        """TITL events with a description, oldest then newest."""
+        cached = getattr(self, "title_events", None)
+        if cached is not None:
+            rows = [ev for ev in cached if (ev.description or "").strip()]
+        else:
+            prefetched = getattr(self, "_prefetched_objects_cache", None)
+            if prefetched and "events" in prefetched:
+                rows = [
+                    ev
+                    for ev in self.events.all()
+                    if getattr(getattr(ev, "event_type", None), "tag", None) == "TITL"
+                    and (ev.description or "").strip()
+                ]
+            else:
+                rows = list(
+                    self.events.filter(event_type__tag="TITL")
+                    .exclude(description="")
+                    .select_related("event_type")
+                )
+        rows.sort(
+            key=lambda ev: (
+                ev.parsed_date is not None,
+                ev.parsed_date or date.min,
+                ev.pk or 0,
+            )
+        )
+        return rows
+
+    def full_name(self) -> str:
+        """Display name: GEDCOM TITL when set, otherwise the civil name."""
+        title = self.primary_title
+        if title:
+            return title
+        return self.civil_name()
+
+    @staticmethod
+    def title_search_q(term: str) -> Q:
+        """Match GEDCOM TITL event descriptions (King, Earl, …)."""
+        term = (term or "").strip()
+        if not term:
+            return Q()
+        return Q(
+            events__event_type__tag="TITL",
+            events__description__icontains=term,
+        )
+
+    @staticmethod
+    def titl_event_queryset():
+        return Event.objects.filter(event_type__tag="TITL").select_related("event_type")
+
+    @classmethod
+    def titl_events_prefetch(cls, lookup: str = "events"):
+        return Prefetch(
+            lookup,
+            queryset=cls.titl_event_queryset(),
+            to_attr="title_events",
+        )
 
     def get_absolute_url(self):
         return reverse(
@@ -498,19 +557,21 @@ class Individual(GedcomIdMixin):
     @property
     def noble_titles(self) -> list[str]:
         """Liefert alle erfassten Adelstitel der Person als Liste von Strings."""
-        # Holt alle TITL-Events, die eine Beschreibung haben
-        return [
-            ev.description 
-            for ev in self.events.filter(event_type__tag='TITL').order_by('parsed_date', 'id') 
-            if ev.description
-        ]
+        return [(ev.description or "").strip() for ev in self._titl_events()]
 
     @property
     def primary_title(self) -> str:
-        """Liefert den aktuellsten oder ersten Titel für die prominente Anzeige im UI."""
-        # Holt das erste (oder bei Sortierung nach Datum: das älteste/aktuellste) Titel-Event
-        ev = self.events.filter(event_type__tag='TITL').order_by('-parsed_date', '-id').first()
-        return ev.description if ev else ""
+        """Latest dated TITL, or the newest untitled TITL."""
+        rows = self._titl_events()
+        if not rows:
+            return ""
+        dated = [ev for ev in rows if ev.parsed_date]
+        chosen = (
+            max(dated, key=lambda ev: (ev.parsed_date, ev.pk or 0))
+            if dated
+            else max(rows, key=lambda ev: ev.pk or 0)
+        )
+        return (chosen.description or "").strip()
     
     @property
     def timeline_events(self):

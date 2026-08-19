@@ -363,6 +363,7 @@ def _individual_name_q(term: str) -> Q:
         | Q(alternative_names__given_name__icontains=term)
         | Q(alternative_names__surname__icontains=term)
         | Q(gedcom_id__icontains=term)
+        | Individual.title_search_q(term)
     )
 
 
@@ -397,25 +398,39 @@ def _or_terms_q(terms: list[str], fields: list[str]) -> Q:
     return combined
 
 
-def _search_queryset_by_tokens(qs, query: str, search_fields: list[str], limit: int = 30):
+def _search_queryset_by_tokens(
+    qs, query: str, search_fields: list[str], limit: int = 30, extra_term_q=None
+):
     """
   Ranked token search for Select2: AND matches first, then OR (up to *limit*).
     """
     terms = _split_search_terms(query)
-    if not terms or not search_fields:
+    if not terms or not (search_fields or extra_term_q):
         return []
 
-    if len(terms) == 1:
-        return list(qs.filter(_term_q(terms[0], search_fields)).distinct()[:limit])
+    def term_q(term: str) -> Q:
+        q = _term_q(term, search_fields) if search_fields else Q()
+        if extra_term_q:
+            q |= extra_term_q(term)
+        return q
 
+    if len(terms) == 1:
+        return list(qs.filter(term_q(terms[0])).distinct()[:limit])
+
+    and_q = Q()
+    for term in terms:
+        and_q &= term_q(term)
     and_pks = list(
-        qs.filter(_and_terms_q(terms, search_fields)).distinct().values_list("pk", flat=True)[:limit]
+        qs.filter(and_q).distinct().values_list("pk", flat=True)[:limit]
     )
     remaining = limit - len(and_pks)
     or_pks: list[int] = []
     if remaining > 0:
+        or_q = Q()
+        for term in terms:
+            or_q |= term_q(term)
         or_pks = list(
-            qs.filter(_or_terms_q(terms, search_fields))
+            qs.filter(or_q)
             .exclude(pk__in=and_pks)
             .distinct()
             .values_list("pk", flat=True)[:remaining]
@@ -464,7 +479,8 @@ def _prefetch_individual_profile_media(individuals: list[Individual]) -> None:
             "media_objects",
             queryset=MediaObject.objects.order_by("-is_portrait", "id"),
             to_attr="_ordered_media",
-        )
+        ),
+        Individual.titl_events_prefetch(),
     )
     by_pk = {ind.pk: ind for ind in enriched}
     for individual in individuals:
@@ -498,7 +514,10 @@ def _annotate_individual_search_result(individual, apply_privacy, match: str | N
 
 def _iter_phonetic_candidates(base_qs, exclude_pks):
     """Prefetch name fields for in-Python phonetic matching."""
-    qs = base_qs.exclude(pk__in=exclude_pks).prefetch_related("alternative_names")
+    qs = base_qs.exclude(pk__in=exclude_pks).prefetch_related(
+        "alternative_names",
+        Individual.titl_events_prefetch(),
+    )
     return qs.only(
         "id",
         "given_name",
@@ -836,6 +855,9 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
     ]
     exact_filter_fields = ['sex']              # Diese Felder müssen exakt übereinstimmen
 
+    def get_extra_search_q(self, search_query: str):
+        return Individual.title_search_q(search_query)
+
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         
@@ -868,7 +890,8 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
             # Lädt die Geburts-Events blitzschnell vorab ins Template
             Prefetch("events", queryset=birth_qs, to_attr="birth_events"),
             # 🔥 NEU: Lädt die Todes-Events blitzschnell vorab ins Template
-            Prefetch("events", queryset=death_qs, to_attr="death_events")
+            Prefetch("events", queryset=death_qs, to_attr="death_events"),
+            Individual.titl_events_prefetch(),
         )
 
         # 3. Filter anwenden (aus FilterableListViewMixin)
@@ -907,7 +930,7 @@ def _dtree_format_person(person, tree_id, apply_privacy):
             kwargs={"tree_id": tree_id, "pk": person.profile_image.id, "size": "mini"},
         )
     return {
-        "name": f"{person.given_name} {person.surname}",
+        "name": person.full_name(),
         "class": "node",
         "extra": {
             "id": person.pk,
@@ -1474,6 +1497,7 @@ class IndividualSearchView(TreeAccessMixin, ListView):
                     | Q(name_prefix__icontains=term)
                     | Q(name_suffix__icontains=term)
                     | Q(sex__iexact=term.upper())
+                    | Individual.title_search_q(term)
                 )
         return apply_privacy_to_individual_qs(qs, self.get_apply_privacy())
 
@@ -1500,6 +1524,7 @@ class IndividualSearchAjaxView(TreeAccessMixin, ListView):
                     | Q(name_prefix__icontains=term)
                     | Q(name_suffix__icontains=term)
                     | Q(sex__iexact=term.upper())
+                    | Individual.title_search_q(term)
                 )
         return apply_privacy_to_individual_qs(qs, self.get_apply_privacy())
 
@@ -3437,6 +3462,7 @@ class GenericSelect2APIView(TreeAccessMixin, View):
     """
     model = None          # Z.B. Individual, Source, Place
     search_fields = []    # Z.B. ['given_name', 'surname'] oder ['title']
+    extra_term_q = None   # Optional callable(term) -> Q
     
     def get_display_text(self, obj):
         """
@@ -3465,8 +3491,11 @@ class GenericSelect2APIView(TreeAccessMixin, View):
             qs = apply_privacy_to_event_qs(qs, apply_privacy, tree_id)
 
         # 2. Token search: AND matches first, then OR (e.g. "Max Werner" → Werner Max)
-        if self.search_fields:
-            objects = _search_queryset_by_tokens(qs, query, self.search_fields, limit=30)
+        extra_term_q = getattr(self, "extra_term_q", None)
+        if self.search_fields or extra_term_q:
+            objects = _search_queryset_by_tokens(
+                qs, query, self.search_fields, limit=30, extra_term_q=extra_term_q
+            )
         else:
             objects = []
         
@@ -3488,9 +3517,10 @@ class IndividualSearchAPIView(GenericSelect2APIView):
         "alternative_names__given_name",
         "alternative_names__surname",
     ]
-    
+    extra_term_q = staticmethod(Individual.title_search_q)
+
     def get_display_text(self, obj):
-        return f"{obj.given_name} {obj.surname} ({obj.gedcom_id})"
+        return f"{obj.full_name()} ({obj.gedcom_id})"
 
 # --- Die API für Quellen ---
 class SourceSearchAPIView(GenericSelect2APIView):

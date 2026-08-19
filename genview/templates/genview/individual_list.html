@@ -23,7 +23,7 @@
                 <div class="col-md-5">
                     <div class="input-group">
                         <span class="input-group-text">🔍</span>
-                        <input type="text" name="q" class="form-control" placeholder="{% trans 'Vor- oder Nachname…' %}" value="{{ current_search }}">
+                        <input type="text" name="q" class="form-control" placeholder="{% trans 'Vorname, Nachname oder Titel…' %}" value="{{ current_search }}">
                     </div>
                 </div>
 
@@ -152,7 +152,7 @@
                                 {% if apply_privacy and person.is_confidential %}
                                     <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
                                 {% else %}
-                                    <a href="{{ person.get_absolute_url }}">{{ person.short_given_name }}</a>
+                                    <a href="{{ person.get_absolute_url }}">{% if person.primary_title %}👑 {{ person.primary_title }}{% else %}{{ person.short_given_name }}{% endif %}</a>
                                 {% endif %}
                             </td>
                             
