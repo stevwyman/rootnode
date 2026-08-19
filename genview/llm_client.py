@@ -11,39 +11,13 @@ from typing import Any, TypedDict
 import requests
 from dotenv import load_dotenv
 
+from .tree_query_capabilities import PLAN_TEMPLATE, build_parse_system_prompt
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
 REQUEST_TIMEOUT = (2.0, 60.0)
 _LOG_BODY_MAX_LEN = 400
-
-PARSE_SYSTEM_PROMPT = """You convert genealogy questions into a JSON plan. Output JSON only, no markdown.
-Schema:
-{
-  "intent": "resolve_kinship" | "count_children" | "list_children" | "list_relatives" | "person_facts" | "person_age" | "relation_between",
-  "kind": "grandfathers" | "grandmothers" | "grandparents" | "parents" | "children" | "siblings" | "brothers" | "sisters" | "spouses" | "uncles" | "aunts" | "grandchildren" | "",
-  "kinship_path": ["father" , "mother" , "spouse" , "child" , "sibling"],
-  "person_name": "",
-  "target_name": ""
-}
-Rules:
-- Questions about "my/ich/mein/meine" use empty person_name (the tree starting person).
-- Named people go in person_name ("von Charles …" → person_name="Charles …"). Never invent numeric ids.
-- "Wer ist der Vater von NAME" / "who is the father of NAME" → resolve_kinship, kinship_path=["father"], person_name=NAME. Same for Mutter/mother (["mother"]).
-- list_relatives: list every person of one kind. Set kind and person_name. Leave kinship_path empty unless the kind is asked of a relative ("Kinder meiner Mutter" → kind=children, kinship_path=["mother"]).
-  Examples: "Großväter von NAME" → list_relatives, kind=grandfathers, person_name=NAME.
-  "Onkel von NAME" → kind=uncles. "Geschwister von NAME" → kind=siblings. "Kinder von NAME" → kind=children.
-- Prefer list_relatives over resolve_kinship whenever the question is plural (Großväter, Onkel, Kinder, Geschwister).
-- Maternal grandmother (singular) = kinship_path ["mother","mother"]. Paternal grandfather = ["father","father"].
-- Unspecified grandmother / Oma = ["mother","mother"]. "die andere Großmutter" = paternal = ["father","mother"].
-- Unspecified grandfather / Opa = ["father","father"]. "der andere Großvater" = maternal = ["mother","father"].
-- Never use an empty kinship_path when the question names a singular relative. Empty path is only the starting person ("ich" / "I").
-- relation_between is ONLY "Beziehung zwischen A und B" / "how is A related to B". Two personal names required. Never for "Großväter von X" or "Onkel von X".
-- count_children: how many children. person_name or kinship_path identifies whose children.
-- person_facts: birth/death/marriage. person_age: how old (RootNode calculates; do not invent an age).
-  "Wie alt ist NAME?" / "How old is NAME?" → person_age, person_name=NAME, empty kinship_path.
-- If the question is not about kinship or a person's dates/name in the family tree, return {"intent": "unsupported"}. Never guess a relative or count children for an unrelated question (hidden people, settings, weather, …).
-"""
 
 
 class LlmParseResult(TypedDict):
@@ -130,7 +104,9 @@ def _plan_from_payload(payload: Any) -> tuple[dict[str, Any] | None, str, str | 
     return plan, raw, None
 
 
-def parse_question_via_llm(question: str) -> LlmParseResult:
+def parse_question_via_llm(
+    question: str, draft: dict[str, Any] | None = None
+) -> LlmParseResult:
     """
     Ask the configured LLM to turn *question* into a tree-query plan.
 
@@ -155,9 +131,22 @@ def parse_question_via_llm(question: str) -> LlmParseResult:
 
     if cfg["url"].endswith("/parse"):
         url = cfg["url"]
-        body: dict[str, Any] = {"question": question}
+        body: dict[str, Any] = {
+            "question": question,
+            "template": PLAN_TEMPLATE,
+            "capabilities_prompt": build_parse_system_prompt(),
+        }
+        if draft:
+            body["draft"] = draft
     else:
         url = f"{cfg['url']}/api/chat"
+        user_content = question
+        if draft:
+            user_content = (
+                f"Question:\n{question}\n\n"
+                "Draft plan from heuristics (may be wrong; fill/correct the template):\n"
+                f"{json.dumps(draft, ensure_ascii=False)}"
+            )
         body = {
             "model": cfg["model"],
             "stream": False,
@@ -166,8 +155,8 @@ def parse_question_via_llm(question: str) -> LlmParseResult:
                 "temperature": 0.0
             },
             "messages": [
-                {"role": "system", "content": PARSE_SYSTEM_PROMPT},
-                {"role": "user", "content": question},
+                {"role": "system", "content": build_parse_system_prompt()},
+                {"role": "user", "content": user_content},
             ],
         }
 

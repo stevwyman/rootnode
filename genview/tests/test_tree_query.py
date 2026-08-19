@@ -12,6 +12,7 @@ from genview.models import (
     ChildFamilyLink,
     Event,
     EventType,
+    Place,
 )
 from genview.tree_query import (
     walk_kinship,
@@ -38,23 +39,25 @@ def _birt_type():
     return EventType.objects.create(tag="BIRT", name="Birth", is_visible=True)
 
 
-def _mark_birth(tree, person, when, raw=""):
+def _mark_birth(tree, person, when, raw="", place=None):
     Event.objects.create(
         gedcom_tree=tree,
         individual=person,
         event_type=_birt_type(),
         parsed_date=when,
         raw_date=raw or (when.isoformat() if when else ""),
+        place=place,
     )
 
 
-def _mark_deceased(tree, person, year=1900):
+def _mark_deceased(tree, person, year=1900, place=None):
     Event.objects.create(
         gedcom_tree=tree,
         individual=person,
         event_type=_deat_type(),
         parsed_date=date(year, 1, 1),
         raw_date=str(year),
+        place=place,
     )
 
 
@@ -495,6 +498,72 @@ class TreeQueryExecutorTests(TestCase):
         self.assertEqual(names, ["Karl Onkel"])
         self.assertIn("Karl", result["answer"])
         self.assertNotIn("Helga", result["answer"])
+
+    def test_person_facts_selects_uncle_by_place_and_death(self):
+        berlin = Place.objects.create(gedcom_tree=self.tree, name="Berlin")
+        hamburg = Place.objects.create(gedcom_tree=self.tree, name="Hamburg")
+        self.uncle.sex = Individual.Sex.MALE
+        self.uncle.save(update_fields=["sex"])
+        karl_death = self.uncle.events.filter(event_type__tag="DEAT").first()
+        karl_death.parsed_date = date(1985, 4, 2)
+        karl_death.raw_date = "2 APR 1985"
+        karl_death.place = berlin
+        karl_death.save(update_fields=["parsed_date", "raw_date", "place"])
+
+        paternal_gf = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Wilhelm", surname="Opa", sex="M"
+        )
+        paternal_uncle = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Franz", surname="Onkel", sex="M"
+        )
+        _mark_deceased(self.tree, paternal_gf, 1910)
+        _mark_deceased(self.tree, paternal_uncle, 1970, place=hamburg)
+        pgf_fam = Family.objects.create(
+            gedcom_tree=self.tree, husband=paternal_gf, wife=None
+        )
+        ChildFamilyLink.objects.create(child=self.father, family=pgf_fam)
+        ChildFamilyLink.objects.create(child=paternal_uncle, family=pgf_fam)
+
+        result = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "place_filter": "Berlin",
+                "fact_focus": "death",
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(result["ok"], result["answer"])
+        self.assertEqual(result["facts"]["subject"]["id"], self.uncle.pk)
+        self.assertIn("Karl", result["answer"])
+        self.assertIn("1985", result["answer"])
+        self.assertIn("Berlin", result["answer"])
+        self.assertIn("gestorben", result["answer"])
+        self.assertNotIn("Franz", result["answer"])
+        death_idx = result["answer"].find("gestorben")
+        birth_idx = result["answer"].find("geboren")
+        if birth_idx >= 0:
+            self.assertLess(death_idx, birth_idx)
+
+        listed = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "list_relatives",
+                "kind": "uncles",
+                "place_filter": "Berlin",
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(listed["ok"], listed["answer"])
+        names = [
+            rel["person"]["display_name"]
+            for rel in listed["facts"]["relatives"]
+            if rel.get("person")
+        ]
+        self.assertEqual(names, ["Karl Onkel"])
+        self.assertIn("Berlin", listed["answer"])
+        self.assertNotIn("Franz", listed["answer"])
 
 
 class TreeQueryViewTests(TestCase):

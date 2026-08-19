@@ -14,9 +14,21 @@ from collections import deque
 from datetime import date
 from typing import Any, Iterable
 
+from django.db.models import Q
 from django.utils.translation import gettext as _
 
-from .models import Individual, Tree
+from .models import Event, Individual, Tree
+from .tree_query_capabilities import FACT_FOCUS_VALUES
+
+_FACT_INTENTS = frozenset(
+    {
+        "person_facts",
+        "person_age",
+        "count_children",
+        "list_children",
+        "relation_between",
+    }
+)
 
 ALLOWED_INTENTS = frozenset(
     {
@@ -678,6 +690,41 @@ def _capitalize(text: str) -> str:
     return text[0].upper() + text[1:]
 
 
+def _clause_born(facts: dict[str, Any]) -> str:
+    birth = facts.get("birth_date") or ""
+    bplace = facts.get("birth_place") or ""
+    if birth and bplace:
+        return _("geboren %(date)s in %(place)s") % {"date": birth, "place": bplace}
+    if birth:
+        return _("geboren %(date)s") % {"date": birth}
+    return ""
+
+
+def _clause_died(facts: dict[str, Any]) -> str:
+    death = facts.get("death_date") or ""
+    dplace = facts.get("death_place") or ""
+    if death and dplace:
+        return _("gestorben %(date)s in %(place)s") % {"date": death, "place": dplace}
+    if death:
+        return _("gestorben %(date)s") % {"date": death}
+    return ""
+
+
+def _ordered_event_clauses(facts: dict[str, Any]) -> list[str]:
+    focus = str(facts.get("fact_focus") or "")
+    born = _clause_born(facts)
+    died = _clause_died(facts)
+    if focus == "death":
+        return [c for c in (died, born) if c]
+    if focus == "birth":
+        return [c for c in (born, died) if c]
+    clauses = [c for c in (born, died) if c]
+    age_bit = _age_phrase(facts)
+    if age_bit:
+        clauses.append(age_bit)
+    return clauses
+
+
 def render_answer(intent: str, facts: dict[str, Any]) -> str:
     """Human-readable sentence from structured facts. No model involved."""
     subject = facts.get("subject") or {}
@@ -711,6 +758,9 @@ def render_answer(intent: str, facts: dict[str, Any]) -> str:
         }
 
     if intent in {"person_facts", "person_age"}:
+        relatives = facts.get("relatives") or []
+        if relatives:
+            return _render_relative_fact_list(intent, facts)
         if redacted:
             return _("Die Daten dieser Person unterliegen dem Datenschutz.")
         age_bit = _age_phrase(facts)
@@ -720,24 +770,15 @@ def render_answer(intent: str, facts: dict[str, Any]) -> str:
             return _(
                 "%(name)s: Alter unbekannt (kein ausreichendes Geburts- oder Sterbedatum)."
             ) % {"name": name}
-        bits = [name]
-        birth = facts.get("birth_date") or ""
-        bplace = facts.get("birth_place") or ""
-        if birth and bplace:
-            bits.append(_("geboren %(date)s in %(place)s") % {"date": birth, "place": bplace})
-        elif birth:
-            bits.append(_("geboren %(date)s") % {"date": birth})
-        death = facts.get("death_date") or ""
-        dplace = facts.get("death_place") or ""
-        if death and dplace:
-            bits.append(_("gestorben %(date)s in %(place)s") % {"date": death, "place": dplace})
-        elif death:
-            bits.append(_("gestorben %(date)s") % {"date": death})
-        if age_bit:
-            bits.append(age_bit)
-        if len(bits) == 1:
+        focus = str(facts.get("fact_focus") or "")
+        if focus == "death" and not (facts.get("death_date") or ""):
+            return _("%(name)s: Sterbedatum unbekannt.") % {"name": name}
+        if focus == "birth" and not (facts.get("birth_date") or ""):
+            return _("%(name)s: Geburtsdatum unbekannt.") % {"name": name}
+        clauses = _ordered_event_clauses(facts)
+        if not clauses:
             return _("%(name)s: keine Datumsangaben vorhanden.") % {"name": name}
-        return ", ".join(bits) + "."
+        return ", ".join([name, *clauses]) + "."
 
     if intent in {"list_kinship", "list_relatives"}:
         kind = facts.get("kind") or facts.get("kinship_set")
@@ -762,6 +803,14 @@ def render_answer(intent: str, facts: dict[str, Any]) -> str:
             return _("Keine %(group)s von %(name)s gefunden.") % {
                 "group": group,
                 "name": name,
+            }
+        place = (facts.get("place_filter") or "").strip()
+        if place:
+            return _("Die %(group)s von %(name)s mit Bezug zu „%(place)s“: %(list)s.") % {
+                "group": group,
+                "name": name,
+                "place": place,
+                "list": ", ".join(bits),
             }
         return _("Die %(group)s von %(name)s: %(list)s.") % {
             "group": group,
@@ -797,6 +846,72 @@ def render_answer(intent: str, facts: dict[str, Any]) -> str:
         }
 
     return _("Keine Antwort erzeugt.")
+
+
+def _render_relative_fact_list(intent: str, facts: dict[str, Any]) -> str:
+    subject = facts.get("subject") or {}
+    name = subject.get("display_name") or _("Unbekannt")
+    kind = facts.get("kind") or facts.get("kinship_set")
+    spec = RELATIVE_KINDS.get(kind) if kind else None
+    group = spec["label"]() if spec else _("Verwandte")
+    bits: list[str] = []
+    for rel in facts.get("relatives") or []:
+        person = rel.get("person") or {}
+        who = person.get("display_name") or _("Unbekannt")
+        side = rel.get("side_label") or ""
+        if side:
+            who = _("%(who)s (%(side)s)") % {"who": who, "side": side}
+        if intent == "person_age":
+            age_bit = _age_phrase(rel)
+            if age_bit:
+                bits.append(_("%(who)s %(age)s") % {"who": who, "age": age_bit})
+            else:
+                bits.append(_("%(who)s: Alter unbekannt") % {"who": who})
+            continue
+        focus = str(facts.get("fact_focus") or "")
+        if focus == "death":
+            died = _clause_died(rel)
+            if died:
+                bits.append(_("%(who)s, %(event)s") % {"who": who, "event": died})
+            else:
+                bits.append(_("%(who)s: Sterbedatum unbekannt") % {"who": who})
+            continue
+        if focus == "birth":
+            born = _clause_born(rel)
+            if born:
+                bits.append(_("%(who)s, %(event)s") % {"who": who, "event": born})
+            else:
+                bits.append(_("%(who)s: Geburtsdatum unbekannt") % {"who": who})
+            continue
+        clauses = _ordered_event_clauses(rel)
+        if clauses:
+            bits.append(_("%(who)s, %(events)s") % {"who": who, "events": ", ".join(clauses)})
+        else:
+            bits.append(_("%(who)s: keine Datumsangaben vorhanden") % {"who": who})
+    place = (facts.get("place_filter") or "").strip()
+    if not bits:
+        if place:
+            return _("Kein %(group)s von %(name)s mit Bezug zu „%(place)s“ gefunden.") % {
+                "group": group,
+                "name": name,
+                "place": place,
+            }
+        return _("Keine %(group)s von %(name)s gefunden.") % {
+            "group": group,
+            "name": name,
+        }
+    if place:
+        return _("Die %(group)s von %(name)s mit Bezug zu „%(place)s“: %(list)s.") % {
+            "group": group,
+            "name": name,
+            "place": place,
+            "list": "; ".join(bits),
+        }
+    return _("Die %(group)s von %(name)s: %(list)s.") % {
+        "group": group,
+        "name": name,
+        "list": "; ".join(bits),
+    }
 
 
 def _side_label(path: tuple[str, ...] | list[str]) -> str:
@@ -863,7 +978,7 @@ def parse_plan(payload: dict[str, Any]) -> dict[str, Any]:
         intent = "list_relatives"
     tokens = _path_tokens(payload.get("kinship_path"))
     kind = _resolve_kind(payload, tokens, intent)
-    if kind:
+    if kind and intent not in _FACT_INTENTS:
         intent = "list_relatives"
         if len(tokens) == 1 and tokens[0] in KIND_ALIASES:
             path: list[str] = []
@@ -898,6 +1013,9 @@ def parse_plan(payload: dict[str, Any]) -> dict[str, Any]:
                 "(Großväter, Großmütter, Kinder, Geschwister, Onkel, …)."
             )
         )
+    fact_focus = str(payload.get("fact_focus") or "").strip().lower()
+    if fact_focus not in FACT_FOCUS_VALUES:
+        fact_focus = ""
     return {
         "intent": intent,
         "anchor": str(payload.get("anchor") or "starting_individual").strip()
@@ -906,6 +1024,8 @@ def parse_plan(payload: dict[str, Any]) -> dict[str, Any]:
         "target_id": _optional_int(payload.get("target_id"), "target_id"),
         "person_name": str(payload.get("person_name") or "").strip(),
         "target_name": str(payload.get("target_name") or "").strip(),
+        "place_filter": str(payload.get("place_filter") or "").strip(),
+        "fact_focus": fact_focus,
         "kinship_path": path,
         "kind": kind,
         "kinship_set": kind,
@@ -973,6 +1093,99 @@ def _resolve_anchor(tree: Tree, plan: dict[str, Any], apply_privacy: bool) -> In
     )
 
 
+def _person_matches_place(person: Individual, place_filter: str) -> bool:
+    needle = (place_filter or "").strip()
+    if not needle:
+        return True
+    return Event.objects.filter(
+        Q(individual_id=person.pk)
+        | Q(family__husband_id=person.pk)
+        | Q(family__wife_id=person.pk),
+        place__name__icontains=needle,
+    ).exists()
+
+
+def _visible_kind_rows(
+    rows: list[dict[str, Any]], apply_privacy: bool
+) -> list[dict[str, Any]]:
+    visible: list[dict[str, Any]] = []
+    for rel in rows:
+        person = rel.get("person")
+        if person is None:
+            continue
+        if apply_privacy and person.is_confidential:
+            continue
+        visible.append(rel)
+    return visible
+
+
+def _relative_fact_payload(rel: dict[str, Any], apply_privacy: bool) -> dict[str, Any]:
+    person = rel["person"]
+    row: dict[str, Any] = {
+        "path": rel["path"],
+        "side_label": rel["side_label"],
+        "person": serialize_person(person, apply_privacy),
+    }
+    if person and not (apply_privacy and person.is_confidential):
+        row.update(_person_facts(person))
+    return row
+
+
+def _format_relative_names(rows: list[dict[str, Any]]) -> str:
+    labels: list[str] = []
+    for rel in rows:
+        person = rel.get("person")
+        if not person:
+            continue
+        who = person.full_name()
+        side = rel.get("side_label") or ""
+        if side:
+            labels.append(_("%(who)s (%(side)s)") % {"who": who, "side": side})
+        else:
+            labels.append(who)
+    return ", ".join(labels)
+
+
+def _rows_matching_place(
+    rows: list[dict[str, Any]],
+    place_filter: str,
+    kind: str,
+    kind_root: Individual,
+) -> list[dict[str, Any]]:
+    if not place_filter:
+        return rows
+    placed = [
+        rel
+        for rel in rows
+        if rel.get("person") and _person_matches_place(rel["person"], place_filter)
+    ]
+    if placed:
+        return placed
+    known = _format_relative_names(rows)
+    group = RELATIVE_KINDS[kind]["label"]()
+    if known:
+        raise TreeQueryError(
+            _(
+                "Kein %(group)s von %(name)s mit Bezug zu „%(place)s“ gefunden. "
+                "Bekannte %(group)s: %(known)s."
+            )
+            % {
+                "group": group,
+                "name": kind_root.full_name(),
+                "place": place_filter,
+                "known": known,
+            }
+        )
+    raise TreeQueryError(
+        _("Kein %(group)s von %(name)s mit Bezug zu „%(place)s“ gefunden.")
+        % {
+            "group": group,
+            "name": kind_root.full_name(),
+            "place": place_filter,
+        }
+    )
+
+
 def execute_tree_query(
     tree_id: int,
     payload: dict[str, Any],
@@ -997,6 +1210,8 @@ def execute_tree_query(
             "kind": plan.get("kind"),
             "path_label": kinship_path_label(plan["kinship_path"]),
             "subject": serialize_person(subject, apply_privacy),
+            "place_filter": plan.get("place_filter") or "",
+            "fact_focus": plan.get("fact_focus") or "",
         }
 
         if intent == "resolve_kinship":
@@ -1004,8 +1219,12 @@ def execute_tree_query(
 
         if intent == "list_relatives":
             kind = plan["kind"]
+            place_filter = facts["place_filter"]
+            rows = collect_relatives(subject, kind)
+            if place_filter:
+                rows = _rows_matching_place(rows, place_filter, kind, subject)
             relatives: list[dict[str, Any]] = []
-            for rel in collect_relatives(subject, kind):
+            for rel in rows:
                 person = rel["person"]
                 relatives.append(
                     {
@@ -1033,6 +1252,46 @@ def execute_tree_query(
             return _ok(intent, facts)
 
         if intent in {"person_facts", "person_age"}:
+            kind = plan.get("kind")
+            place_filter = facts["place_filter"]
+            if kind:
+                kind_paths = [list(path) for path in RELATIVE_KINDS[kind]["paths"]]
+                if plan["kinship_path"] in kind_paths:
+                    kind_root = anchor
+                    rows = [
+                        rel
+                        for rel in collect_relatives(kind_root, kind)
+                        if rel["path"] == plan["kinship_path"]
+                    ]
+                    facts["subject"] = serialize_person(kind_root, apply_privacy)
+                else:
+                    kind_root = subject
+                    rows = collect_relatives(kind_root, kind)
+                rows = _visible_kind_rows(rows, apply_privacy)
+                rows = _rows_matching_place(rows, place_filter, kind, kind_root)
+                if not rows:
+                    raise TreeQueryError(
+                        _("Keine %(group)s von %(name)s gefunden.")
+                        % {
+                            "group": RELATIVE_KINDS[kind]["label"](),
+                            "name": kind_root.full_name(),
+                        }
+                    )
+                if len(rows) == 1:
+                    chosen = rows[0]["person"]
+                    facts["subject"] = serialize_person(chosen, apply_privacy)
+                    facts["kinship_path"] = rows[0]["path"]
+                    facts["path_label"] = kinship_path_label(rows[0]["path"])
+                    if not facts["subject"]["redacted"]:
+                        facts.update(_person_facts(chosen))
+                    return _ok(intent, facts)
+                facts["relatives"] = [
+                    _relative_fact_payload(rel, apply_privacy) for rel in rows
+                ]
+                facts["kind"] = kind
+                facts["kinship_set"] = kind
+                facts["path_label"] = RELATIVE_KINDS[kind]["label"]()
+                return _ok(intent, facts)
             if not facts["subject"]["redacted"]:
                 facts.update(_person_facts(subject))
             return _ok(intent, facts)

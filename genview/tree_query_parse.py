@@ -13,8 +13,41 @@ from django.utils.translation import gettext as _
 
 from .llm_client import llm_parser_enabled, parse_question_via_llm
 from .tree_query import ALLOWED_INTENTS, TreeQueryError, parse_plan
+from .tree_query_capabilities import FANOUT_KINDS, FACT_FOCUS_VALUES
 
 _UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+
+_RELATIVE_NOUNS = (
+    r"urgrossmutter|urgrossvater|grossmutter|grossvater|grossvaeter|grossmuetter|"
+    r"grosseltern|oma|opa|mutter|vater|grandmother|grandfather|grandmothers|"
+    r"grandfathers|grandparents|mother|father|eltern|parents|kinder|children|"
+    r"onkel|tante|tanten|uncle|aunt|uncles|aunts|geschwister|sibling|siblings|"
+    r"bruder|schwester|brother|sister|enkel|sohn|tochter|son|daughter"
+)
+
+_PLACE_STOPWORDS = frozenset(
+    {
+        "dem",
+        "der",
+        "den",
+        "des",
+        "die",
+        "das",
+        "the",
+        "a",
+        "an",
+        "my",
+        "his",
+        "her",
+        "meiner",
+        "meinem",
+        "meinen",
+        "meines",
+        "jahr",
+        "jahre",
+        "stammbaum",
+    }
+)
 
 # Longest phrases first.
 _PATH_PHRASES: list[tuple[str, list[str]]] = [
@@ -175,7 +208,10 @@ def _looks_like_tree_query(folded: str) -> bool:
             r"bruder|schwester|brother|sister|"
             r"kinder|children|sohn|tochter|\bson\b|\bdaughter\b|"
             r"eltern|parents|enkel|"
-            r"geboren|gestorben|\bbirth\b|\bdeath\b|"
+            r"geboren|gestorben|\bstarb\b|verstorben|"
+            r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
+            r"when did|wann (?:ist|war|wurde|starb)|"
+            r"geburtsdatum|geburtstag|sterbedatum|"
             r"wie ?alt|how old|\balter\b|"
             r"verwandt|related|beziehung zwischen|"
             r"startperson|stammbaum",
@@ -243,7 +279,15 @@ def _plan_fits_question(question: str, plan: dict[str, Any]) -> bool:
         return bool(re.search(r"wie ?alt|how old|\balter\b|\bage\b|years old", folded))
     if intent == "person_facts":
         return bool(
-            re.search(r"geboren|gestorben|\bbirth\b|\bdeath\b|heirat|married", folded)
+            re.search(
+                r"geboren|gestorben|\bstarb\b|verstorben|"
+                r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
+                r"when did|wann (?:ist|war|wurde|starb)|"
+                r"heirat|married|"
+                r"geburtsdatum|geburtstag|sterbedatum|todestag|"
+                r"birthdate|birth date|date of birth|date of death|death date",
+                folded,
+            )
         )
     if intent == "relation_between":
         return bool(
@@ -340,11 +384,8 @@ def _extract_of_person_name(question: str) -> str:
     if re.search(r"startperson|starting person", folded):
         return ""
     if re.match(
-        r"^(dem |der |den |des |the |my |meiner |meinem |meinen |meines )?"
-        r"(grossmutter|grossvater|grossvaeter|grossmuetter|grosseltern|"
-        r"oma|opa|mutter|vater|grandmother|grandfather|grandmothers|"
-        r"grandfathers|grandparents|mother|father|eltern|parents|kinder|children|"
-        r"onkel|tanten|geschwister|enkel)\b",
+        rf"^(dem |der |den |des |the |my |mein |meine |meiner |meinem |meinen |meines )?"
+        rf"({_RELATIVE_NOUNS})\b",
         folded,
     ):
         return ""
@@ -369,9 +410,35 @@ def _detect_intent(folded: str) -> str:
         folded,
     ):
         return "person_age"
-    if re.search(r"\bgeboren\b|\bgestorben\b|\bbirth\b|\bdeath\b", folded):
+    if re.search(
+        r"geboren|gestorben|\bstarb\b|verstorben|"
+        r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
+        r"when did|wann (?:ist|war|wurde|starb)|"
+        r"geburtsdatum|geburtstag|sterbedatum|todestag|"
+        r"birthdate|birth date|date of birth|date of death|death date",
+        folded,
+    ):
         return "person_facts"
     return "resolve_kinship"
+
+
+def _detect_fact_focus(folded: str) -> str:
+    if re.search(
+        r"gestorben|\bstarb\b|verstorben|\bdied\b|\bdead\b|"
+        r"sterbedatum|todestag|date of death|death date|"
+        r"when did .+\bdie\b",
+        folded,
+    ):
+        return "death"
+    if re.search(
+        r"geboren|geburtsdatum|geburtstag|birthdate|\bborn\b|\bbirth\b|"
+        r"date of birth|birth date",
+        folded,
+    ):
+        return "birth"
+    if re.search(r"heirat|married|hochzeit|marriage", folded):
+        return "marriage"
+    return ""
 
 
 def _clean_extracted_name(raw: str) -> str:
@@ -388,11 +455,8 @@ def _name_is_relative_or_pronoun(raw: str) -> bool:
         return True
     return bool(
         re.match(
-            r"^(dem |der |den |des |die |das |the |my |meiner |meinem |meinen |meines )?"
-            r"(grossmutter|grossvater|grossvaeter|grossmuetter|grosseltern|"
-            r"oma|opa|mutter|vater|grandmother|grandfather|grandmothers|"
-            r"grandfathers|grandparents|mother|father|eltern|parents|kinder|children|"
-            r"onkel|tanten|geschwister|enkel)\b",
+            rf"^(dem |der |den |des |die |das |the |my |mein |meine |meiner |meinem |meinen |meines )?"
+            rf"({_RELATIVE_NOUNS})\b",
             folded,
         )
     )
@@ -434,6 +498,83 @@ def _extract_between_names(question: str) -> tuple[str, str]:
     return "", ""
 
 
+def _looks_like_place_token(token: str) -> bool:
+    folded = _fold(token)
+    if not folded or folded in _PLACE_STOPWORDS:
+        return False
+    if re.match(rf"^({_RELATIVE_NOUNS})$", folded):
+        return False
+    return True
+
+
+def _extract_place_filter(question: str) -> str:
+    """Place mentioned as a discriminator, e.g. 'aus Berlin' / 'from Berlin'."""
+    text = " ".join((question or "").split())
+    if not text:
+        return ""
+    demonym = re.search(
+        r"\b([A-ZÄÖÜ][\w\-äöüß]*)er\s+(?:onkel|tante|uncle|aunt)s?\b",
+        text,
+    )
+    if demonym:
+        stem = demonym.group(1)
+        if _looks_like_place_token(stem):
+            return stem
+    patterns = (
+        r"\b(?:aus|from)\s+(?!dem\b|der\b|den\b|des\b|die\b|das\b|the\b|my\b|meiner\b|meinem\b)([A-Za-zÄÖÜäöüß][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,3})",
+        r"\b(?:geboren|gestorben|born|died)\s+(?:in|at)\s+(?!dem\b|der\b|the\b)([A-Za-zÄÖÜäöüß][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,3})",
+        r"\bin\s+([A-ZÄÖÜ][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,2})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        raw = _clean_extracted_name(match.group(1))
+        raw = re.sub(
+            rf"\s+({_RELATIVE_NOUNS}|geboren|gestorben|born|died)\b.*$",
+            "",
+            raw,
+            flags=re.IGNORECASE,
+        ).strip(" .,!?\"'«»“”")
+        first = raw.split()[0] if raw else ""
+        if raw and _looks_like_place_token(first):
+            return raw
+    return ""
+
+
+def _strip_place_from_name(name: str, place_filter: str) -> str:
+    if not name or not place_filter:
+        return name
+    return re.sub(
+        rf"\s+(?:aus|from|in|of)\s+{re.escape(place_filter)}\s*$",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    ).strip(" .,!?\"'«»“”")
+
+
+def _rule_plan(
+    *,
+    intent: str,
+    path: list[str],
+    kind: str | None = None,
+    person_name: str = "",
+    target_name: str = "",
+    place_filter: str = "",
+    fact_focus: str = "",
+) -> dict[str, Any]:
+    return {
+        "intent": intent,
+        "kinship_path": path,
+        "kind": kind,
+        "person_name": person_name,
+        "target_name": target_name,
+        "place_filter": place_filter,
+        "fact_focus": fact_focus,
+        "anchor": "starting_individual",
+    }
+
+
 def parse_question_rules(question: str) -> dict[str, Any] | None:
     """Return a plan dict if the question matches a known pattern, else None."""
     folded = _fold(question)
@@ -443,18 +584,48 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
     path = _detect_path(folded)
     intent = _detect_intent(folded)
     kind = _detect_relative_kind(folded)
-    person_name = _extract_of_person_name(question)
+    place_filter = _extract_place_filter(question)
+    fact_focus = _detect_fact_focus(folded)
+    person_name = _strip_place_from_name(_extract_of_person_name(question), place_filter)
     target_name = ""
-    if not path and person_name and not kind:
+    if not path and not kind:
         path = _detect_named_person_relative(folded)
     if not person_name and intent in {"person_age", "person_facts"}:
-        person_name = _extract_subject_person_name(question)
+        person_name = _strip_place_from_name(
+            _extract_subject_person_name(question), place_filter
+        )
 
     if intent == "relation_between":
         person_name, target_name = _extract_between_names(question)
         if not person_name or not target_name:
             return None
         path = []
+        return _rule_plan(
+            intent=intent,
+            path=path,
+            person_name=person_name,
+            target_name=target_name,
+            place_filter=place_filter,
+            fact_focus=fact_focus,
+        )
+    elif kind and intent in {"person_facts", "person_age"}:
+        overlap = {
+            "spouses": {"spouse"},
+            "children": {"child"},
+            "siblings": {"sibling"},
+            "brothers": {"sibling"},
+            "sisters": {"sibling"},
+        }
+        if path and set(path) <= overlap.get(kind, set()):
+            path = []
+        return _rule_plan(
+            intent=intent,
+            path=path,
+            kind=kind,
+            person_name=person_name,
+            place_filter=place_filter,
+            fact_focus=fact_focus,
+        )
     elif kind:
         overlap = {
             "spouses": {"spouse"},
@@ -465,14 +636,14 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
         }
         if path and set(path) <= overlap.get(kind, set()):
             path = []
-        return {
-            "intent": "list_relatives",
-            "kind": kind,
-            "kinship_path": path,
-            "person_name": person_name,
-            "target_name": "",
-            "anchor": "starting_individual",
-        }
+        return _rule_plan(
+            intent="list_relatives",
+            path=path,
+            kind=kind,
+            person_name=person_name,
+            place_filter=place_filter,
+            fact_focus=fact_focus,
+        )
     elif not path and intent == "resolve_kinship":
         return None
     elif not path and intent in {
@@ -485,17 +656,21 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
         if not person_name and not _is_about_self(folded):
             return None
 
-    return {
-        "intent": intent,
-        "kinship_path": path,
-        "person_name": person_name,
-        "target_name": target_name,
-        "anchor": "starting_individual",
-    }
+    return _rule_plan(
+        intent=intent,
+        path=path,
+        person_name=person_name,
+        target_name=target_name,
+        place_filter=place_filter,
+        fact_focus=fact_focus,
+    )
 
 
 def sanitize_llm_plan(raw_plan: dict[str, Any]) -> dict[str, Any]:
     """Drop model-invented ids; keep names and kinship_path."""
+    fact_focus = str(raw_plan.get("fact_focus") or "").strip().lower()
+    if fact_focus not in FACT_FOCUS_VALUES:
+        fact_focus = ""
     return {
         "intent": raw_plan.get("intent"),
         "kinship_path": raw_plan.get("kinship_path") or [],
@@ -503,75 +678,69 @@ def sanitize_llm_plan(raw_plan: dict[str, Any]) -> dict[str, Any]:
         "kinship_set": raw_plan.get("kind") or raw_plan.get("kinship_set") or None,
         "person_name": str(raw_plan.get("person_name") or "").strip(),
         "target_name": str(raw_plan.get("target_name") or "").strip(),
+        "place_filter": str(raw_plan.get("place_filter") or "").strip(),
+        "fact_focus": fact_focus,
         "anchor": "starting_individual",
         "person_id": None,
         "target_id": None,
     }
 
 
-def parse_natural_language_question(question: str) -> dict[str, Any]:
-    """
-    Convert a question into a validated tree_query plan.
+def rules_plan_is_certain(question: str, plan: dict[str, Any] | None) -> bool:
+    """True when heuristics uniquely fill the capability template (no LLM needed)."""
+    if not plan:
+        return False
+    if plan.get("place_filter"):
+        return False
+    kind = plan.get("kind")
+    intent = str(plan.get("intent") or "")
+    if kind in FANOUT_KINDS and intent in {
+        "person_facts",
+        "person_age",
+        "resolve_kinship",
+    }:
+        return False
+    if kind in FANOUT_KINDS and plan.get("fact_focus"):
+        return False
+    return True
 
-    Returns ``{ok, error, source, plan}``. ``source`` is ``rules`` or ``llm``.
-    """
-    question = (question or "").strip()
-    if not question:
-        return {
-            "ok": False,
-            "error": _("Bitte eine Frage eingeben."),
-            "source": None,
-            "plan": None,
-        }
 
-    rules_plan = parse_question_rules(question)
-    if rules_plan:
-        try:
-            plan = parse_plan(rules_plan)
-        except TreeQueryError as exc:
-            return {"ok": False, "error": str(exc), "source": "rules", "plan": None}
-        return {"ok": True, "error": None, "source": "rules", "plan": plan}
+def _ok_plan(source: str, payload: dict[str, Any]) -> dict[str, Any]:
+    plan = parse_plan(payload)
+    return {"ok": True, "error": None, "source": source, "plan": plan}
 
-    folded = _fold(question)
-    if not _looks_like_tree_query(folded):
-        return {
-            "ok": False,
-            "error": _off_topic_error(),
-            "source": None,
-            "plan": None,
-        }
 
-    if not llm_parser_enabled():
-        return {
-            "ok": False,
-            "error": _(
-                "Diese Frage konnte nicht automatisch zerlegt werden. "
-                "Bitte die strukturierte Abfrage nutzen oder Ollama konfigurieren."
-            ),
-            "source": None,
-            "plan": None,
-        }
-
-    llm = parse_question_via_llm(question)
-    if llm["error"] or not llm["plan"]:
-        return {
-            "ok": False,
-            "error": llm["error"]
-            or _("Das Sprachmodell lieferte keinen gültigen Plan."),
-            "source": "llm",
-            "plan": None,
-        }
-
-    raw = sanitize_llm_plan(llm["plan"])
+def _refine_llm_raw(question: str, raw: dict[str, Any]) -> dict[str, Any]:
+    folded_q = _fold(question)
+    detected_intent = _detect_intent(folded_q)
+    detected_kind = _detect_relative_kind(folded_q)
+    place_filter = _extract_place_filter(question)
+    fact_focus = _detect_fact_focus(folded_q)
+    if place_filter and not raw.get("place_filter"):
+        raw["place_filter"] = place_filter
+    if fact_focus and not raw.get("fact_focus"):
+        raw["fact_focus"] = fact_focus
+    if raw.get("person_name"):
+        raw["person_name"] = _strip_place_from_name(
+            str(raw.get("person_name") or ""), raw.get("place_filter") or ""
+        )
+    if detected_kind and not raw.get("kind") and not raw.get("kinship_set"):
+        raw["kind"] = detected_kind
+    if (
+        detected_intent in {"person_facts", "person_age"}
+        and (raw.get("kind") or detected_kind)
+        and raw.get("intent") in {"list_relatives", "list_kinship", "resolve_kinship"}
+    ):
+        raw["intent"] = detected_intent
+        if not raw.get("kind"):
+            raw["kind"] = detected_kind
     if (
         raw.get("intent") == "relation_between"
         and not re.search(
-            r"zwischen|between|verwandt|related|beziehung", _fold(question)
+            r"zwischen|between|verwandt|related|beziehung", folded_q
         )
     ):
-        named_path = _detect_path(_fold(question)) or _detect_named_person_relative(
-            _fold(question)
-        )
+        named_path = _detect_path(folded_q) or _detect_named_person_relative(folded_q)
         of_name = _extract_of_person_name(question)
         if named_path and of_name:
             raw["intent"] = "resolve_kinship"
@@ -580,15 +749,7 @@ def parse_natural_language_question(question: str) -> dict[str, Any]:
             raw["kinship_set"] = None
             raw["person_name"] = of_name
             raw["target_name"] = ""
-    if str(raw.get("intent") or "").strip().lower() in _UNSUPPORTED_INTENTS:
-        return {
-            "ok": False,
-            "error": _off_topic_error(),
-            "source": "llm",
-            "plan": None,
-        }
-
-    kind = _detect_relative_kind(_fold(question))
+    kind = _detect_relative_kind(folded_q)
     if (
         kind
         and raw.get("intent") == "relation_between"
@@ -600,38 +761,122 @@ def parse_natural_language_question(question: str) -> dict[str, Any]:
         raw["target_name"] = ""
         if not raw.get("person_name"):
             raw["person_name"] = _extract_of_person_name(question)
+    return raw
 
-    try:
-        plan = parse_plan(raw)
-    except TreeQueryError as exc:
-        return {"ok": False, "error": str(exc), "source": "llm", "plan": None}
 
-    if _drops_named_relative(question, plan):
+def parse_natural_language_question(question: str) -> dict[str, Any]:
+    """
+    Convert a question into a validated tree_query plan.
+
+    Unambiguous templates are filled by heuristics. Anything with a place
+    filter or a group relative plus a date goes to the LLM, which fills the
+    capability template (optionally starting from the heuristic draft).
+    """
+    question = (question or "").strip()
+    if not question:
         return {
             "ok": False,
-            "error": _(
-                "Die Frage bezieht sich auf eine Verwandte, die nicht eindeutig "
-                "zugeordnet wurde. Bitte mütterlicherseits oder väterlicherseits angeben."
-            ),
-            "source": "llm",
-            "plan": None,
-        }
-    if not _plan_fits_question(question, plan):
-        return {
-            "ok": False,
-            "error": _(
-                "Die Frage konnte nicht eindeutig einer Stammbaum-Abfrage zugeordnet werden. "
-                "Bitte die Verwandtschaft genauer benennen."
-            ),
-            "source": "llm",
+            "error": _("Bitte eine Frage eingeben."),
+            "source": None,
             "plan": None,
         }
 
-    if plan["intent"] not in ALLOWED_INTENTS:
+    folded = _fold(question)
+    rules_plan = parse_question_rules(question)
+    if rules_plan_is_certain(question, rules_plan):
+        try:
+            return _ok_plan("rules", rules_plan)
+        except TreeQueryError as exc:
+            return {"ok": False, "error": str(exc), "source": "rules", "plan": None}
+
+    if not rules_plan and not _looks_like_tree_query(folded):
         return {
             "ok": False,
-            "error": _("Unbekannte Anfrageart vom Sprachmodell."),
-            "source": "llm",
+            "error": _off_topic_error(),
+            "source": None,
             "plan": None,
         }
-    return {"ok": True, "error": None, "source": "llm", "plan": plan}
+
+    if llm_parser_enabled():
+        llm = parse_question_via_llm(question, draft=rules_plan)
+        if llm["error"] or not llm["plan"]:
+            if rules_plan:
+                try:
+                    return _ok_plan("rules", rules_plan)
+                except TreeQueryError:
+                    pass
+            return {
+                "ok": False,
+                "error": llm["error"]
+                or _("Das Sprachmodell lieferte keinen gültigen Plan."),
+                "source": "llm",
+                "plan": None,
+            }
+
+        raw = _refine_llm_raw(question, sanitize_llm_plan(llm["plan"]))
+        if str(raw.get("intent") or "").strip().lower() in _UNSUPPORTED_INTENTS:
+            return {
+                "ok": False,
+                "error": _off_topic_error(),
+                "source": "llm",
+                "plan": None,
+            }
+        try:
+            plan = parse_plan(raw)
+        except TreeQueryError as exc:
+            if rules_plan:
+                try:
+                    return _ok_plan("rules", rules_plan)
+                except TreeQueryError:
+                    pass
+            return {"ok": False, "error": str(exc), "source": "llm", "plan": None}
+
+        if _drops_named_relative(question, plan):
+            return {
+                "ok": False,
+                "error": _(
+                    "Die Frage bezieht sich auf eine Verwandte, die nicht eindeutig "
+                    "zugeordnet wurde. Bitte mütterlicherseits oder väterlicherseits angeben."
+                ),
+                "source": "llm",
+                "plan": None,
+            }
+        if not _plan_fits_question(question, plan):
+            if rules_plan:
+                try:
+                    return _ok_plan("rules", rules_plan)
+                except TreeQueryError:
+                    pass
+            return {
+                "ok": False,
+                "error": _(
+                    "Die Frage konnte nicht eindeutig einer Stammbaum-Abfrage zugeordnet werden. "
+                    "Bitte die Verwandtschaft genauer benennen."
+                ),
+                "source": "llm",
+                "plan": None,
+            }
+        if plan["intent"] not in ALLOWED_INTENTS:
+            return {
+                "ok": False,
+                "error": _("Unbekannte Anfrageart vom Sprachmodell."),
+                "source": "llm",
+                "plan": None,
+            }
+        return {"ok": True, "error": None, "source": "llm", "plan": plan}
+
+    if rules_plan:
+        try:
+            return _ok_plan("rules", rules_plan)
+        except TreeQueryError as exc:
+            return {"ok": False, "error": str(exc), "source": "rules", "plan": None}
+
+    return {
+        "ok": False,
+        "error": _(
+            "Diese Frage konnte nicht automatisch zerlegt werden. "
+            "Bitte die strukturierte Abfrage nutzen oder Ollama konfigurieren."
+        ),
+        "source": None,
+        "plan": None,
+    }

@@ -161,6 +161,21 @@ class RuleParserTests(SimpleTestCase):
         self.assertEqual(plan["intent"], "count_children")
         self.assertEqual(plan["kinship_path"], [])
 
+    def test_uncle_from_berlin_death_fills_template(self):
+        for question in (
+            "When did my uncle from Berlin die",
+            "When did my uncle from Berlin died",
+            "Wann ist mein Onkel aus Berlin gestorben?",
+        ):
+            plan = parse_question_rules(question)
+            self.assertIsNotNone(plan, question)
+            self.assertEqual(plan["intent"], "person_facts", question)
+            self.assertEqual(plan["kind"], "uncles", question)
+            self.assertEqual(plan["place_filter"], "Berlin", question)
+            self.assertEqual(plan["fact_focus"], "death", question)
+            self.assertEqual(plan["kinship_path"], [], question)
+            self.assertEqual(plan["person_name"], "", question)
+
 
 class NaturalLanguagePipelineTests(TestCase):
     def setUp(self):
@@ -354,6 +369,157 @@ class NaturalLanguagePipelineTests(TestCase):
         self.assertIsNone(parsed["plan"])
         mock_llm.assert_called_once()
 
+    def test_mama_von_startperson_uses_rules(self):
+        parsed = parse_natural_language_question(
+            "Kannst du mir sagen, wie die Mama von der Startperson heißt?"
+        )
+        self.assertTrue(parsed["ok"])
+        self.assertEqual(parsed["source"], "rules")
+        self.assertEqual(parsed["plan"]["intent"], "resolve_kinship")
+        self.assertEqual(parsed["plan"]["kinship_path"], ["mother"])
+
+    @patch.dict(os.environ, {"TREE_QUERY_LLM_URL": "off"})
+    def test_uncle_from_berlin_death_without_llm(self):
+        from datetime import date
+
+        from genview.models import (
+            ChildFamilyLink,
+            Event,
+            EventType,
+            Family,
+            Place,
+        )
+
+        berlin = Place.objects.create(gedcom_tree=self.tree, name="Berlin")
+        hamburg = Place.objects.create(gedcom_tree=self.tree, name="Hamburg")
+        father = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Hans", surname="Vater", sex="M"
+        )
+        maternal_uncle = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Karl", surname="Onkel", sex="M"
+        )
+        paternal_uncle = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Franz", surname="Onkel", sex="M"
+        )
+        gm_fam = Family.objects.get(wife=self.gm)
+        ChildFamilyLink.objects.create(child=maternal_uncle, family=gm_fam)
+        pgf = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Wilhelm", surname="Opa", sex="M"
+        )
+        pgf_fam = Family.objects.create(
+            gedcom_tree=self.tree, husband=pgf, wife=None
+        )
+        ChildFamilyLink.objects.create(child=father, family=pgf_fam)
+        ChildFamilyLink.objects.create(child=paternal_uncle, family=pgf_fam)
+        parent_fam = Family.objects.get(wife=self.mother)
+        parent_fam.husband = father
+        parent_fam.save()
+
+        deat = EventType.objects.filter(tag="DEAT").first()
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=maternal_uncle,
+            event_type=deat,
+            parsed_date=date(1985, 4, 2),
+            place=berlin,
+        )
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=paternal_uncle,
+            event_type=deat,
+            parsed_date=date(1970, 1, 1),
+            place=hamburg,
+        )
+
+        parsed = parse_natural_language_question(
+            "When did my uncle from Berlin died"
+        )
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["source"], "rules")
+        self.assertEqual(parsed["plan"]["intent"], "person_facts")
+        self.assertEqual(parsed["plan"]["kind"], "uncles")
+        self.assertEqual(parsed["plan"]["place_filter"], "Berlin")
+        self.assertEqual(parsed["plan"]["fact_focus"], "death")
+        result = execute_tree_query(self.tree.id, parsed["plan"], apply_privacy=False)
+        self.assertTrue(result["ok"], result["answer"])
+        self.assertIn("Karl", result["answer"])
+        self.assertIn("1985", result["answer"])
+        self.assertIn("gestorben", result["answer"])
+        self.assertNotIn("Franz", result["answer"])
+
+    @patch("genview.tree_query_parse.parse_question_via_llm")
+    def test_uncertain_place_query_sends_draft_to_llm(self, mock_llm):
+        mock_llm.return_value = {
+            "plan": {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "place_filter": "Berlin",
+                "fact_focus": "death",
+                "kinship_path": [],
+                "person_name": "",
+                "person_id": 999999,
+            },
+            "raw": "{}",
+            "error": None,
+        }
+        parsed = parse_natural_language_question(
+            "When did my uncle from Berlin died"
+        )
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["source"], "llm")
+        self.assertIsNone(parsed["plan"]["person_id"])
+        self.assertEqual(parsed["plan"]["intent"], "person_facts")
+        self.assertEqual(parsed["plan"]["kind"], "uncles")
+        self.assertEqual(parsed["plan"]["place_filter"], "Berlin")
+        self.assertEqual(parsed["plan"]["fact_focus"], "death")
+        mock_llm.assert_called_once()
+        draft = mock_llm.call_args.kwargs["draft"]
+        self.assertEqual(draft["intent"], "person_facts")
+        self.assertEqual(draft["kind"], "uncles")
+        self.assertEqual(draft["place_filter"], "Berlin")
+        self.assertEqual(draft["fact_focus"], "death")
+
+    @patch("genview.tree_query_parse.parse_question_via_llm")
+    def test_llm_list_relatives_upgraded_for_death_question(self, mock_llm):
+        mock_llm.return_value = {
+            "plan": {
+                "intent": "list_relatives",
+                "kind": "uncles",
+                "kinship_path": [],
+            },
+            "raw": "{}",
+            "error": None,
+        }
+        parsed = parse_natural_language_question(
+            "When did my uncle from Berlin died"
+        )
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["plan"]["intent"], "person_facts")
+        self.assertEqual(parsed["plan"]["kind"], "uncles")
+        self.assertEqual(parsed["plan"]["place_filter"], "Berlin")
+        self.assertEqual(parsed["plan"]["fact_focus"], "death")
+
+    @patch("genview.tree_query_parse.parse_question_via_llm")
+    def test_llm_cannot_invent_child_count_for_death_question(self, mock_llm):
+        mock_llm.return_value = {
+            "plan": {
+                "intent": "count_children",
+                "kinship_path": [],
+                "person_name": "Elizabeth",
+            },
+            "raw": "{}",
+            "error": None,
+        }
+        parsed = parse_natural_language_question(
+            "When did my uncle from Berlin died"
+        )
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["source"], "rules")
+        self.assertEqual(parsed["plan"]["intent"], "person_facts")
+        self.assertEqual(parsed["plan"]["kind"], "uncles")
+        self.assertEqual(parsed["plan"]["place_filter"], "Berlin")
+        mock_llm.assert_called_once()
+
     @patch.dict(os.environ, {"TREE_QUERY_LLM_URL": "off"})
     def test_unmatched_without_llm(self):
         parsed = parse_natural_language_question("Wer backt den besten Kuchen im Dorf?")
@@ -367,46 +533,6 @@ class NaturalLanguagePipelineTests(TestCase):
         self.assertIsNone(parsed["plan"])
         self.assertIn("Verwandtschaft", parsed["error"])
         mock_llm.assert_not_called()
-
-    @patch("genview.tree_query_parse.parse_question_via_llm")
-    def test_llm_cannot_invent_child_count_for_name_question(self, mock_llm):
-        mock_llm.return_value = {
-            "plan": {
-                "intent": "count_children",
-                "kinship_path": [],
-                "person_name": "Elizabeth",
-            },
-            "raw": "{}",
-            "error": None,
-        }
-        parsed = parse_natural_language_question(
-            "Kannst du mir sagen, wie die Mama von der Startperson heißt?"
-        )
-        self.assertFalse(parsed["ok"])
-        self.assertIsNone(parsed["plan"])
-        mock_llm.assert_called_once()
-
-    @patch("genview.tree_query_parse.parse_question_via_llm")
-    def test_llm_fallback(self, mock_llm):
-        mock_llm.return_value = {
-            "plan": {
-                "intent": "resolve_kinship",
-                "kinship_path": ["mother"],
-                "person_name": "",
-                "target_name": "",
-                "person_id": 999999,
-            },
-            "raw": "{}",
-            "error": None,
-        }
-        parsed = parse_natural_language_question(
-            "Kannst du mir sagen, wie die Mama von der Startperson heißt?"
-        )
-        self.assertTrue(parsed["ok"])
-        self.assertEqual(parsed["source"], "llm")
-        self.assertIsNone(parsed["plan"]["person_id"])
-        self.assertEqual(parsed["plan"]["kinship_path"], ["mother"])
-        mock_llm.assert_called_once()
 
 
 class LlmClientTests(SimpleTestCase):
@@ -422,11 +548,23 @@ class LlmClientTests(SimpleTestCase):
         }
         with patch.dict(os.environ, {"TREE_QUERY_LLM_URL": "http://ollama.local:11434"}):
             with patch("genview.llm_client.requests.post", return_value=mock_response) as post:
-                result = parse_question_via_llm("Wie viele Kinder hatte Oma?")
+                result = parse_question_via_llm(
+                    "When did my uncle from Berlin died",
+                    draft={
+                        "intent": "person_facts",
+                        "kind": "uncles",
+                        "place_filter": "Berlin",
+                    },
+                )
         self.assertIsNone(result["error"])
         self.assertEqual(result["plan"]["intent"], "count_children")
-        self.assertTrue(post.call_args.kwargs["json"]["format"] == "json")
+        body = post.call_args.kwargs["json"]
+        self.assertTrue(body["format"] == "json")
         self.assertIn("/api/chat", post.call_args.args[0])
+        system = body["messages"][0]["content"]
+        self.assertIn("place_filter", system)
+        self.assertIn("fact_focus", system)
+        self.assertIn("Draft plan", body["messages"][1]["content"])
 
     def test_wrapper_parse_endpoint(self):
         mock_response = MagicMock()
@@ -436,9 +574,16 @@ class LlmClientTests(SimpleTestCase):
         }
         with patch.dict(os.environ, {"TREE_QUERY_LLM_URL": "http://llmnode:8000/parse"}):
             with patch("genview.llm_client.requests.post", return_value=mock_response) as post:
-                result = parse_question_via_llm("Wann wurde mein Vater geboren?")
+                result = parse_question_via_llm(
+                    "Wann wurde mein Vater geboren?",
+                    draft={"intent": "person_facts", "kinship_path": ["father"]},
+                )
         self.assertEqual(result["plan"]["intent"], "person_facts")
         self.assertTrue(post.call_args.args[0].endswith("/parse"))
+        body = post.call_args.kwargs["json"]
+        self.assertIn("template", body)
+        self.assertIn("draft", body)
+        self.assertIn("capabilities_prompt", body)
 
     def test_connection_error(self):
         import requests as req
