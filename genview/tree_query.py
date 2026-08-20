@@ -19,6 +19,7 @@ from django.utils.translation import gettext as _
 
 from .models import Event, Individual, Tree
 from .tree_query_capabilities import FACT_FOCUS_VALUES
+from .tree_query_lexicon import KIND_ALIASES
 
 _FACT_INTENTS = frozenset(
     {
@@ -189,36 +190,6 @@ RELATIVE_KINDS: dict[str, dict[str, Any]] = {
         "show_side": False,
         "report_missing": False,
     },
-}
-
-KIND_ALIASES = {
-    "grandfathers": "grandfathers",
-    "grandmothers": "grandmothers",
-    "grandparents": "grandparents",
-    "parents": "parents",
-    "children": "children",
-    "siblings": "siblings",
-    "brothers": "brothers",
-    "sisters": "sisters",
-    "spouses": "spouses",
-    "uncles": "uncles",
-    "aunts": "aunts",
-    "grandchildren": "grandchildren",
-    "grossvaeter": "grandfathers",
-    "grossmuetter": "grandmothers",
-    "grosseltern": "grandparents",
-    "opas": "grandfathers",
-    "omas": "grandmothers",
-    "kinder": "children",
-    "geschwister": "siblings",
-    "brueder": "brothers",
-    "schwestern": "sisters",
-    "eltern": "parents",
-    "onkel": "uncles",
-    "tanten": "aunts",
-    "enkel": "grandchildren",
-    "enkelkinder": "grandchildren",
-    "ehepartner": "spouses",
 }
 
 # Backward-compatible names used by earlier list_kinship plans.
@@ -715,9 +686,9 @@ def _ordered_event_clauses(facts: dict[str, Any]) -> list[str]:
     born = _clause_born(facts)
     died = _clause_died(facts)
     if focus == "death":
-        return [c for c in (died, born) if c]
+        return [died] if died else []
     if focus == "birth":
-        return [c for c in (born, died) if c]
+        return [born] if born else []
     clauses = [c for c in (born, died) if c]
     age_bit = _age_phrase(facts)
     if age_bit:
@@ -1024,7 +995,8 @@ def parse_plan(payload: dict[str, Any]) -> dict[str, Any]:
         "target_id": _optional_int(payload.get("target_id"), "target_id"),
         "person_name": str(payload.get("person_name") or "").strip(),
         "target_name": str(payload.get("target_name") or "").strip(),
-        "place_filter": str(payload.get("place_filter") or "").strip(),
+        "place_filter": str(payload.get("place_filter") or "").strip(" .,!?\"'«»“”„"),
+        "name_filter": str(payload.get("name_filter") or "").strip(),
         "fact_focus": fact_focus,
         "kinship_path": path,
         "kind": kind,
@@ -1094,16 +1066,33 @@ def _resolve_anchor(tree: Tree, plan: dict[str, Any], apply_privacy: bool) -> In
     )
 
 
-def _person_matches_place(person: Individual, place_filter: str) -> bool:
-    needle = (place_filter or "").strip()
+def _person_matches_place(
+    person: Individual, place_filter: str, *, fact_focus: str = ""
+) -> bool:
+    needle = " ".join((place_filter or "").split()).strip(" .,!?\"'«»“”„")
     if not needle:
         return True
-    return Event.objects.filter(
+    events = Event.objects.filter(
         Q(individual_id=person.pk)
         | Q(family__husband_id=person.pk)
         | Q(family__wife_id=person.pk),
-        place__name__icontains=needle,
-    ).exists()
+    )
+    focus = (fact_focus or "").strip().lower()
+    if focus == "birth":
+        events = events.filter(event_type__tag="BIRT")
+    elif focus == "death":
+        events = events.filter(event_type__tag="DEAT")
+    elif focus == "marriage":
+        events = events.filter(event_type__tag="MARR")
+    if events.filter(place__name__icontains=needle).exists():
+        return True
+    tokens = [token for token in re.split(r"[^\wÄÖÜäöüß]+", needle) if len(token) > 1]
+    if len(tokens) < 2:
+        return False
+    matched = events
+    for token in tokens:
+        matched = matched.filter(place__name__icontains=token)
+    return matched.exists()
 
 
 def _visible_kind_rows(
@@ -1147,23 +1136,93 @@ def _format_relative_names(rows: list[dict[str, Any]]) -> str:
     return ", ".join(labels)
 
 
-def _rows_matching_place(
+def _person_matches_name(person: Individual, name_filter: str) -> bool:
+    needle = " ".join((name_filter or "").split())
+    if not needle:
+        return True
+    blobs = [
+        person.given_name or "",
+        person.surname or "",
+        person.civil_name(),
+        person.full_name(),
+        person.primary_title or "",
+    ]
+    hay = " ".join(blobs).casefold()
+    return all(term.casefold() in hay for term in needle.split())
+
+
+def _rows_matching_filters(
     rows: list[dict[str, Any]],
-    place_filter: str,
     kind: str,
     kind_root: Individual,
+    *,
+    place_filter: str = "",
+    name_filter: str = "",
+    fact_focus: str = "",
 ) -> list[dict[str, Any]]:
-    if not place_filter:
+    if not place_filter and not name_filter:
         return rows
-    placed = [
-        rel
-        for rel in rows
-        if rel.get("person") and _person_matches_place(rel["person"], place_filter)
-    ]
-    if placed:
-        return placed
+
+    def _ok(rel: dict[str, Any]) -> bool:
+        person = rel.get("person")
+        if not person:
+            return False
+        if place_filter and not _person_matches_place(
+            person, place_filter, fact_focus=fact_focus
+        ):
+            return False
+        if name_filter and not _person_matches_name(person, name_filter):
+            return False
+        return True
+
+    matched = [rel for rel in rows if _ok(rel)]
+    if matched:
+        return matched
     known = _format_relative_names(rows)
     group = RELATIVE_KINDS[kind]["label"]()
+    root_name = kind_root.full_name()
+    if name_filter and place_filter:
+        if known:
+            raise TreeQueryError(
+                _(
+                    "Kein %(group)s von %(name)s namens „%(who)s“ mit Bezug zu „%(place)s“ gefunden. "
+                    "Bekannte %(group)s: %(known)s."
+                )
+                % {
+                    "group": group,
+                    "name": root_name,
+                    "who": name_filter,
+                    "place": place_filter,
+                    "known": known,
+                }
+            )
+        raise TreeQueryError(
+            _("Kein %(group)s von %(name)s namens „%(who)s“ mit Bezug zu „%(place)s“ gefunden.")
+            % {
+                "group": group,
+                "name": root_name,
+                "who": name_filter,
+                "place": place_filter,
+            }
+        )
+    if name_filter:
+        if known:
+            raise TreeQueryError(
+                _(
+                    "Kein %(group)s von %(name)s namens „%(who)s“ gefunden. "
+                    "Bekannte %(group)s: %(known)s."
+                )
+                % {
+                    "group": group,
+                    "name": root_name,
+                    "who": name_filter,
+                    "known": known,
+                }
+            )
+        raise TreeQueryError(
+            _("Kein %(group)s von %(name)s namens „%(who)s“ gefunden.")
+            % {"group": group, "name": root_name, "who": name_filter}
+        )
     if known:
         raise TreeQueryError(
             _(
@@ -1172,7 +1231,7 @@ def _rows_matching_place(
             )
             % {
                 "group": group,
-                "name": kind_root.full_name(),
+                "name": root_name,
                 "place": place_filter,
                 "known": known,
             }
@@ -1181,7 +1240,7 @@ def _rows_matching_place(
         _("Kein %(group)s von %(name)s mit Bezug zu „%(place)s“ gefunden.")
         % {
             "group": group,
-            "name": kind_root.full_name(),
+            "name": root_name,
             "place": place_filter,
         }
     )
@@ -1212,6 +1271,7 @@ def execute_tree_query(
             "path_label": kinship_path_label(plan["kinship_path"]),
             "subject": serialize_person(subject, apply_privacy),
             "place_filter": plan.get("place_filter") or "",
+            "name_filter": plan.get("name_filter") or "",
             "fact_focus": plan.get("fact_focus") or "",
         }
 
@@ -1221,9 +1281,16 @@ def execute_tree_query(
         if intent == "list_relatives":
             kind = plan["kind"]
             place_filter = facts["place_filter"]
+            name_filter = facts["name_filter"]
             rows = collect_relatives(subject, kind)
-            if place_filter:
-                rows = _rows_matching_place(rows, place_filter, kind, subject)
+            rows = _rows_matching_filters(
+                rows,
+                kind,
+                subject,
+                place_filter=place_filter,
+                name_filter=name_filter,
+                fact_focus=facts["fact_focus"],
+            )
             relatives: list[dict[str, Any]] = []
             for rel in rows:
                 person = rel["person"]
@@ -1255,6 +1322,7 @@ def execute_tree_query(
         if intent in {"person_facts", "person_age"}:
             kind = plan.get("kind")
             place_filter = facts["place_filter"]
+            name_filter = facts["name_filter"]
             if kind:
                 kind_paths = [list(path) for path in RELATIVE_KINDS[kind]["paths"]]
                 if plan["kinship_path"] in kind_paths:
@@ -1269,7 +1337,14 @@ def execute_tree_query(
                     kind_root = subject
                     rows = collect_relatives(kind_root, kind)
                 rows = _visible_kind_rows(rows, apply_privacy)
-                rows = _rows_matching_place(rows, place_filter, kind, kind_root)
+                rows = _rows_matching_filters(
+                    rows,
+                    kind,
+                    kind_root,
+                    place_filter=place_filter,
+                    name_filter=name_filter,
+                    fact_focus=facts["fact_focus"],
+                )
                 if not rows:
                     raise TreeQueryError(
                         _("Keine %(group)s von %(name)s gefunden.")

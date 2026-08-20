@@ -7,11 +7,26 @@ from django.test import SimpleTestCase, TestCase
 from genview.llm_client import extract_json_object, parse_question_via_llm
 from genview.models import Individual, Tree
 from genview.tree_query import execute_tree_query
+from genview.tree_query_lexicon import KIND_ALIASES, RELATIVE_NOUNS
 from genview.tree_query_parse import (
     parse_natural_language_question,
     parse_question_rules,
     sanitize_llm_plan,
 )
+
+
+class LexiconTests(SimpleTestCase):
+    def test_kind_aliases_use_english_canonical_keys(self):
+        self.assertEqual(KIND_ALIASES["uncles"], "uncles")
+        self.assertEqual(KIND_ALIASES["onkel"], "uncles")
+        self.assertEqual(KIND_ALIASES["tanten"], "aunts")
+        self.assertEqual(KIND_ALIASES["grossvaeter"], "grandfathers")
+
+    def test_relative_nouns_group_german_and_english(self):
+        self.assertIn("onkel", RELATIVE_NOUNS["uncle"])
+        self.assertIn("uncle", RELATIVE_NOUNS["uncle"])
+        self.assertIn("tante", RELATIVE_NOUNS["aunt"])
+        self.assertIn("aunt", RELATIVE_NOUNS["aunt"])
 
 
 class ExtractJsonTests(SimpleTestCase):
@@ -175,6 +190,50 @@ class RuleParserTests(SimpleTestCase):
             self.assertEqual(plan["fact_focus"], "death", question)
             self.assertEqual(plan["kinship_path"], [], question)
             self.assertEqual(plan["person_name"], "", question)
+            self.assertEqual(plan["name_filter"], "", question)
+
+    def test_named_uncle_birth_fills_template(self):
+        for question in (
+            "Wann wurde Onkel Albert geboren?",
+            "When was uncle Albert born?",
+        ):
+            plan = parse_question_rules(question)
+            self.assertIsNotNone(plan, question)
+            self.assertEqual(plan["intent"], "person_facts", question)
+            self.assertEqual(plan["kind"], "uncles", question)
+            self.assertEqual(plan["name_filter"], "Albert", question)
+            self.assertEqual(plan["fact_focus"], "birth", question)
+            self.assertEqual(plan["kinship_path"], [], question)
+            self.assertEqual(plan["person_name"], "", question)
+            self.assertEqual(plan["place_filter"], "", question)
+
+    def test_uncle_from_white_lodge_is_place_not_name(self):
+        plan = parse_question_rules(
+            "wann wurde mein Onkel aus White Lodge geboren?"
+        )
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["intent"], "person_facts")
+        self.assertEqual(plan["kind"], "uncles")
+        self.assertIn("White Lodge", plan["place_filter"])
+        self.assertEqual(plan["name_filter"], "")
+        self.assertEqual(plan["fact_focus"], "birth")
+        self.assertEqual(plan["person_name"], "")
+
+    def test_uncle_from_quoted_york_cottage(self):
+        for question in (
+            'wann wurde mein Onkel aus "York cottage" geboren?',
+            "wann wurde mein Onkel aus York cottage geboren?",
+            'When was my uncle from "York Cottage" born?',
+            "wann wurde mein Onkel aus „York cottage“ geboren?",
+        ):
+            plan = parse_question_rules(question)
+            self.assertIsNotNone(plan, question)
+            self.assertEqual(plan["intent"], "person_facts", question)
+            self.assertEqual(plan["kind"], "uncles", question)
+            self.assertEqual(plan["name_filter"], "", question)
+            self.assertEqual(plan["person_name"], "", question)
+            self.assertEqual(plan["fact_focus"], "birth", question)
+            self.assertEqual(plan["place_filter"].casefold(), "york cottage", question)
 
 
 class NaturalLanguagePipelineTests(TestCase):
@@ -478,6 +537,39 @@ class NaturalLanguagePipelineTests(TestCase):
         self.assertEqual(draft["kind"], "uncles")
         self.assertEqual(draft["place_filter"], "Berlin")
         self.assertEqual(draft["fact_focus"], "death")
+        self.assertEqual(draft.get("name_filter") or "", "")
+
+    @patch("genview.tree_query_parse.parse_question_via_llm")
+    def test_uncertain_named_uncle_sends_draft_to_llm(self, mock_llm):
+        mock_llm.return_value = {
+            "plan": {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "name_filter": "Albert",
+                "fact_focus": "birth",
+                "kinship_path": [],
+                "person_name": "Albert",
+                "person_id": 999999,
+            },
+            "raw": "{}",
+            "error": None,
+        }
+        parsed = parse_natural_language_question("Wann wurde Onkel Albert geboren?")
+        self.assertTrue(parsed["ok"], parsed.get("error"))
+        self.assertEqual(parsed["source"], "llm")
+        self.assertIsNone(parsed["plan"]["person_id"])
+        self.assertEqual(parsed["plan"]["intent"], "person_facts")
+        self.assertEqual(parsed["plan"]["kind"], "uncles")
+        self.assertEqual(parsed["plan"]["name_filter"], "Albert")
+        self.assertEqual(parsed["plan"]["person_name"], "")
+        self.assertEqual(parsed["plan"]["fact_focus"], "birth")
+        mock_llm.assert_called_once()
+        draft = mock_llm.call_args.kwargs["draft"]
+        self.assertEqual(draft["intent"], "person_facts")
+        self.assertEqual(draft["kind"], "uncles")
+        self.assertEqual(draft["name_filter"], "Albert")
+        self.assertEqual(draft["fact_focus"], "birth")
+        self.assertEqual(draft["person_name"], "")
 
     @patch("genview.tree_query_parse.parse_question_via_llm")
     def test_llm_list_relatives_upgraded_for_death_question(self, mock_llm):
@@ -563,6 +655,7 @@ class LlmClientTests(SimpleTestCase):
         self.assertIn("/api/chat", post.call_args.args[0])
         system = body["messages"][0]["content"]
         self.assertIn("place_filter", system)
+        self.assertIn("name_filter", system)
         self.assertIn("fact_focus", system)
         self.assertIn("Draft plan", body["messages"][1]["content"])
 

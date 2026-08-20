@@ -541,10 +541,7 @@ class TreeQueryExecutorTests(TestCase):
         self.assertIn("Berlin", result["answer"])
         self.assertIn("gestorben", result["answer"])
         self.assertNotIn("Franz", result["answer"])
-        death_idx = result["answer"].find("gestorben")
-        birth_idx = result["answer"].find("geboren")
-        if birth_idx >= 0:
-            self.assertLess(death_idx, birth_idx)
+        self.assertNotIn("geboren", result["answer"])
 
         listed = execute_tree_query(
             self.tree.id,
@@ -564,6 +561,110 @@ class TreeQueryExecutorTests(TestCase):
         self.assertEqual(names, ["Karl Onkel"])
         self.assertIn("Berlin", listed["answer"])
         self.assertNotIn("Franz", listed["answer"])
+
+    def test_person_facts_selects_uncle_by_name_and_birth_only(self):
+        white_lodge = Place.objects.create(
+            gedcom_tree=self.tree, name="White Lodge, Richmond Park"
+        )
+        hamburg = Place.objects.create(gedcom_tree=self.tree, name="Hamburg")
+        self.uncle.sex = Individual.Sex.MALE
+        self.uncle.save(update_fields=["sex"])
+        _mark_birth(self.tree, self.uncle, date(1894, 6, 23), place=white_lodge)
+
+        paternal_gf = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Wilhelm", surname="Opa", sex="M"
+        )
+        paternal_uncle = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Franz", surname="Onkel", sex="M"
+        )
+        _mark_deceased(self.tree, paternal_gf, 1910)
+        _mark_birth(self.tree, paternal_uncle, date(1902, 12, 20), place=hamburg)
+        _mark_deceased(self.tree, paternal_uncle, 1970, place=hamburg)
+        pgf_fam = Family.objects.create(
+            gedcom_tree=self.tree, husband=paternal_gf, wife=None
+        )
+        ChildFamilyLink.objects.create(child=self.father, family=pgf_fam)
+        ChildFamilyLink.objects.create(child=paternal_uncle, family=pgf_fam)
+
+        result = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "name_filter": "Karl",
+                "fact_focus": "birth",
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(result["ok"], result["answer"])
+        self.assertEqual(result["facts"]["subject"]["id"], self.uncle.pk)
+        self.assertIn("Karl", result["answer"])
+        self.assertIn("1894", result["answer"])
+        self.assertIn("geboren", result["answer"])
+        self.assertNotIn("Franz", result["answer"])
+        self.assertNotIn("gestorben", result["answer"])
+
+        by_place = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "place_filter": "White Lodge",
+                "fact_focus": "birth",
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(by_place["ok"], by_place["answer"])
+        self.assertIn("Karl", by_place["answer"])
+        self.assertIn("geboren", by_place["answer"])
+        self.assertNotIn("Franz", by_place["answer"])
+        self.assertNotIn("gestorben", by_place["answer"])
+
+    def test_person_facts_quoted_lowercase_place_matches_birth_only(self):
+        white_lodge = Place.objects.create(
+            gedcom_tree=self.tree,
+            name="White Lodge,Richmond Park,Surrey,England",
+        )
+        york_cottage = Place.objects.create(
+            gedcom_tree=self.tree,
+            name="York Cottage,Sandringham,Norfolk,England",
+        )
+        self.uncle.sex = Individual.Sex.MALE
+        self.uncle.save(update_fields=["sex"])
+        _mark_birth(self.tree, self.uncle, date(1894, 6, 23), place=white_lodge)
+
+        paternal_gf = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Wilhelm", surname="Opa", sex="M"
+        )
+        paternal_uncle = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Franz", surname="Onkel", sex="M"
+        )
+        _mark_deceased(self.tree, paternal_gf, 1910)
+        _mark_birth(self.tree, paternal_uncle, date(1902, 12, 20), place=york_cottage)
+        _mark_deceased(self.tree, paternal_uncle, 1970)
+        pgf_fam = Family.objects.create(
+            gedcom_tree=self.tree, husband=paternal_gf, wife=None
+        )
+        ChildFamilyLink.objects.create(child=self.father, family=pgf_fam)
+        ChildFamilyLink.objects.create(child=paternal_uncle, family=pgf_fam)
+
+        result = execute_tree_query(
+            self.tree.id,
+            {
+                "intent": "person_facts",
+                "kind": "uncles",
+                "place_filter": "York cottage",
+                "fact_focus": "birth",
+            },
+            apply_privacy=False,
+        )
+        self.assertTrue(result["ok"], result["answer"])
+        self.assertIn("Franz", result["answer"])
+        self.assertIn("1902", result["answer"])
+        self.assertIn("geboren", result["answer"])
+        self.assertNotIn("Karl", result["answer"])
+        self.assertNotIn("White Lodge", result["answer"])
+        self.assertNotIn("gestorben", result["answer"])
 
 
 class TreeQueryViewTests(TestCase):

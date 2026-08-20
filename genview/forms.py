@@ -494,7 +494,7 @@ class MediaObjectForm(forms.ModelForm):
             self.fields["individuals"].queryset = Individual.objects.none()
             if "families" in self.fields: self.fields["families"].queryset = Family.objects.none()
             if "sources" in self.fields: self.fields["sources"].queryset = Source.objects.none()
-            if "events" in self.fields: self.fields["events"].queryset = Event.objects.none()   
+            if "events" in self.fields: self.fields["events"].queryset = Event.objects.none() 
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen

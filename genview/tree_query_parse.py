@@ -1,7 +1,9 @@
 """Natural-language → tree_query plan (Phase 2).
 
-Rules handle common German/English kinship phrases without a model.
-Anything else is sent to the LLM client; the executor still validates the plan.
+Heuristics match incoming German and English questions via
+``tree_query_lexicon`` (canonical English keys, surface synonyms).
+``_()`` is only for outgoing errors. Anything unmatched goes to the LLM;
+the executor still validates the plan.
 """
 
 from __future__ import annotations
@@ -14,147 +16,50 @@ from django.utils.translation import gettext as _
 from .llm_client import llm_parser_enabled, parse_question_via_llm
 from .tree_query import ALLOWED_INTENTS, TreeQueryError, parse_plan
 from .tree_query_capabilities import FANOUT_KINDS, FACT_FOCUS_VALUES
+from .tree_query_lexicon import (
+    AGE_INTENT,
+    AGE_PLAN_FITS,
+    BIRTH_FOCUS,
+    CHILDREN_PLAN_FITS,
+    COUNT_CHILDREN,
+    DEATH_FOCUS,
+    DEMONYM_PATTERN,
+    KIND_DETECT_ORDER,
+    KIND_DETECT_PATTERNS,
+    KIND_QUESTION_PATTERNS,
+    LIST_CHILDREN_INTENT,
+    LIST_CHILDREN_KIND,
+    MARRIAGE,
+    NAME_FILTER_STOP,
+    NAMED_PERSON_PATTERNS,
+    OF_DETERMINER_PREFIX,
+    PATH_PHRASES,
+    PERSON_FACTS,
+    PLACE_CUE_PATTERNS,
+    PLACE_END_WORDS,
+    PLACE_LEADING_ARTICLES,
+    PLACE_QUOTES,
+    PLACE_STOPWORDS,
+    PLACE_STRIP_PREP,
+    PRONOUNS,
+    QUESTION_NAMES_RELATIVE,
+    RELATION_BETWEEN,
+    RELATION_BETWEEN_CUES,
+    RELATIVE_DETERMINER_PREFIX,
+    RELATIVE_NOUNS_ALT,
+    RELATIVE_NOUNS_BOUNDED,
+    SELF_CUES,
+    START_PERSON,
+    TREE_QUERY_HINT,
+    alt,
+)
 
 _UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
-
-_RELATIVE_NOUNS = (
-    r"urgrossmutter|urgrossvater|grossmutter|grossvater|grossvaeter|grossmuetter|"
-    r"grosseltern|oma|opa|mutter|vater|grandmother|grandfather|grandmothers|"
-    r"grandfathers|grandparents|mother|father|eltern|parents|kinder|children|"
-    r"onkel|tante|tanten|uncle|aunt|uncles|aunts|geschwister|sibling|siblings|"
-    r"bruder|schwester|brother|sister|enkel|sohn|tochter|son|daughter"
+_PLACE_QUOTE_RE = re.compile(
+    rf"^[{re.escape(PLACE_QUOTES)}](.+?)[{re.escape(PLACE_QUOTES)}]"
 )
+_PLACE_WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß][\w.\-äöüß']*")
 
-_PLACE_STOPWORDS = frozenset(
-    {
-        "dem",
-        "der",
-        "den",
-        "des",
-        "die",
-        "das",
-        "the",
-        "a",
-        "an",
-        "my",
-        "his",
-        "her",
-        "meiner",
-        "meinem",
-        "meinen",
-        "meines",
-        "jahr",
-        "jahre",
-        "stammbaum",
-    }
-)
-
-# Longest phrases first.
-_PATH_PHRASES: list[tuple[str, list[str]]] = [
-    # --- Great-Grandparents (Urgroßeltern) ---
-    ("urgrossmutter muetterlicherseits", ["mother", "mother", "mother"]),
-    ("urgrossvater vaeterlicherseits", ["father", "father", "father"]),
-    ("great grandmother on my mothers side", ["mother", "mother", "mother"]),
-    ("great grandfather on my fathers side", ["father", "father", "father"]),
-
-    # --- Grandparents (Großeltern) ---
-    ("grossmutter muetterlicherseits", ["mother", "mother"]),
-    ("grandmother on my mothers side", ["mother", "mother"]),
-    ("grandmother on mothers side", ["mother", "mother"]),
-    ("grandmother on my mother's side", ["mother", "mother"]),
-    ("muetterliche grossmutter", ["mother", "mother"]),
-    ("mutter meiner mutter", ["mother", "mother"]),
-    ("mutter der mutter", ["mother", "mother"]),
-    
-    ("grossmutter vaeterlicherseits", ["father", "mother"]),
-    ("grandmother on my fathers side", ["father", "mother"]),
-    ("grandmother on fathers side", ["father", "mother"]),
-    ("vaeterliche grossmutter", ["father", "mother"]),
-    ("mutter meines vaters", ["father", "mother"]),
-    ("mutter des vaters", ["father", "mother"]),
-    
-    ("grossvater muetterlicherseits", ["mother", "father"]),
-    ("grandfather on my mothers side", ["mother", "father"]),
-    ("grandfather on mothers side", ["mother", "father"]),
-    ("muetterlicher grossvater", ["mother", "father"]),
-    ("vater meiner mutter", ["mother", "father"]),
-    ("vater der mutter", ["mother", "father"]),
-    
-    ("grossvater vaeterlicherseits", ["father", "father"]),
-    ("grandfather on my fathers side", ["father", "father"]),
-    ("grandfather on fathers side", ["father", "father"]),
-    ("fathers father", ["father", "father"]),
-    ("father's father", ["father", "father"]),
-    ("vaeterlicher grossvater", ["father", "father"]),
-    ("vater meines vaters", ["father", "father"]),
-    ("vater des vaters", ["father", "father"]),
-    ("my father's father", ["father", "father"]),
-    ("my fathers father", ["father", "father"]),
-
-    # --- Uncles and Aunts (Onkel und Tanten) ---
-    ("onkel muetterlicherseits", ["mother", "brother"]),
-    ("bruder meiner mutter", ["mother", "brother"]),
-    ("bruder der mutter", ["mother", "brother"]),
-    ("maternal uncle", ["mother", "brother"]),
-    ("uncle on my mothers side", ["mother", "brother"]),
-    
-    ("onkel vaeterlicherseits", ["father", "brother"]),
-    ("bruder meines vaters", ["father", "brother"]),
-    ("bruder des vaters", ["father", "brother"]),
-    ("paternal uncle", ["father", "brother"]),
-    ("uncle on my fathers side", ["father", "brother"]),
-
-    ("tante muetterlicherseits", ["mother", "sister"]),
-    ("schwester meiner mutter", ["mother", "sister"]),
-    ("schwester der mutter", ["mother", "sister"]),
-    ("maternal aunt", ["mother", "sister"]),
-    ("aunt on my mothers side", ["mother", "sister"]),
-    
-    ("tante vaeterlicherseits", ["father", "sister"]),
-    ("schwester meines vaters", ["father", "sister"]),
-    ("schwester des vaters", ["father", "sister"]),
-    ("paternal aunt", ["father", "sister"]),
-    ("aunt on my fathers side", ["father", "sister"]),
-
-    # --- Unspecified "other" relatives ---
-    ("andere grossmutter", ["father", "mother"]),
-    ("other grandmother", ["father", "mother"]),
-    ("andere oma", ["father", "mother"]),
-    ("other grandma", ["father", "mother"]),
-    ("anderer grossvater", ["mother", "father"]),
-    ("andere grossvater", ["mother", "father"]),
-    ("other grandfather", ["mother", "father"]),
-    ("anderer opa", ["mother", "father"]),
-
-    # --- Direct family members (Eltern, Geschwister, Partner) ---
-    ("meine grossmutter", ["mother", "mother"]),
-    ("my grandmother", ["mother", "mother"]),
-    ("meine oma", ["mother", "mother"]),
-    ("my grandma", ["mother", "mother"]),
-    
-    ("mein grossvater", ["father", "father"]),
-    ("my grandfather", ["father", "father"]),
-    ("mein opa", ["father", "father"]),
-    ("my grandpa", ["father", "father"]),
-    
-    ("meine mutter", ["mother"]),
-    ("my mother", ["mother"]),
-    
-    ("mein vater", ["father"]),
-    ("my father", ["father"]),
-    
-    ("mein bruder", ["brother"]),
-    ("my brother", ["brother"]),
-    ("meine schwester", ["sister"]),
-    ("my sister", ["sister"]),
-    
-    ("ehepartner", ["spouse"]),
-    ("ehemann", ["spouse"]),
-    ("ehefrau", ["spouse"]),
-    ("my spouse", ["spouse"]),
-    ("my wife", ["spouse"]),
-    ("my husband", ["spouse"]),
-]
 
 def _fold(text: str) -> str:
     folded = (text or "").lower().translate(_UMLAUT)
@@ -164,7 +69,7 @@ def _fold(text: str) -> str:
 
 
 def _detect_path(folded: str) -> list[str]:
-    for phrase, path in _PATH_PHRASES:
+    for phrase, path in PATH_PHRASES:
         if phrase in folded:
             return list(path)
     return []
@@ -172,72 +77,24 @@ def _detect_path(folded: str) -> list[str]:
 
 def _is_about_self(folded: str) -> bool:
     """True if the subject is the tree starting person, not a relative."""
-    return bool(
-        re.search(
-            r"\b(ich|habe ich|hab ich|bin ich|war ich|"
-            r"do i|i have|am i|was i|startperson|starting person)\b",
-            folded,
-        )
-    )
+    return bool(re.search(alt(SELF_CUES, bounded=True), folded))
 
 
 def _question_names_relative(folded: str) -> bool:
-    return bool(
-        re.search(
-            r"grossmutter|grossvater|\boma\b|\bopa\b|grandmother|grandfather|"
-            r"grandma|grandpa|\bmutter\b|\bvater\b|\bmother\b|\bfather\b|"
-            r"ehepartner|ehemann|ehefrau|\bspouse\b|\bhusband\b|\bwife\b|"
-            r"onkel|tante|uncle|aunt|schwiegermutter|"
-            r"\bandere[rn]?\b|\bother\b",
-            folded,
-        )
-    )
+    return bool(re.search(QUESTION_NAMES_RELATIVE, folded))
 
 
 def _looks_like_tree_query(folded: str) -> bool:
     """True if the question is about kinship or person facts in the tree."""
     if _detect_path(folded) or _detect_relative_kind(folded):
         return True
-    return bool(
-        re.search(
-            r"grossmutter|grossvater|grosseltern|\boma\b|\bopa\b|"
-            r"grandmother|grandfather|grandma|grandpa|"
-            r"\bmutter\b|\bvater\b|\bmama\b|\bpapa\b|\bmother\b|\bfather\b|"
-            r"ehepartner|ehemann|ehefrau|\bspouse\b|\bhusband\b|\bwife\b|"
-            r"onkel|tante|uncle|aunt|geschwister|sibling|"
-            r"bruder|schwester|brother|sister|"
-            r"kinder|children|sohn|tochter|\bson\b|\bdaughter\b|"
-            r"eltern|parents|enkel|"
-            r"geboren|gestorben|\bstarb\b|verstorben|"
-            r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
-            r"when did|wann (?:ist|war|wurde|starb)|"
-            r"geburtsdatum|geburtstag|sterbedatum|"
-            r"wie ?alt|how old|\balter\b|"
-            r"verwandt|related|beziehung zwischen|"
-            r"startperson|stammbaum",
-            folded,
-        )
-    )
+    return bool(re.search(TREE_QUERY_HINT, folded))
 
-
-_KIND_QUESTION_CUES = {
-    "grandfathers": r"grossvaeter|grandfather|opas|\bopa\b",
-    "grandmothers": r"grossmuetter|grandmother|omas|\boma\b",
-    "grandparents": r"grosseltern|grandparent",
-    "parents": r"eltern|\bparents\b|\bmutter\b|\bvater\b|\bmother\b|\bfather\b",
-    "children": r"kinder|children|sohn|tochter|\bson\b|\bdaughter\b",
-    "siblings": r"geschwister|sibling|bruder|schwester|brother|sister",
-    "brothers": r"brueder|bruder|\bbrothers?\b",
-    "sisters": r"schwestern|schwester|\bsisters?\b",
-    "spouses": r"ehepartner|ehemann|ehefrau|\bspouses?\b|\bhusband\b|\bwife\b",
-    "uncles": r"onkel|\buncles?\b",
-    "aunts": r"tanten|\btante\b|\baunts?\b",
-    "grandchildren": r"enkel|grandchild",
-}
 
 _UNSUPPORTED_INTENTS = frozenset(
     {"unsupported", "unknown", "off_topic", "none", "refuse", "unrelated"}
 )
+
 
 def _off_topic_error() -> str:
     return _(
@@ -268,34 +125,26 @@ def _plan_fits_question(question: str, plan: dict[str, Any]) -> bool:
     target = str(plan.get("target_name") or "").strip()
     if target and not _name_mentioned(folded, target):
         return False
+    name_filter = str(plan.get("name_filter") or "").strip()
+    if name_filter and not _name_mentioned(folded, name_filter):
+        return False
 
     if intent in {"count_children", "list_children"}:
-        return bool(re.search(r"kinder|children|sohn|tochter|\bson\b|\bdaughter\b", folded))
+        return bool(re.search(CHILDREN_PLAN_FITS, folded))
     if intent == "list_relatives":
         kind = str(plan.get("kind") or plan.get("kinship_set") or "")
-        cue = _KIND_QUESTION_CUES.get(kind)
+        cue = KIND_QUESTION_PATTERNS.get(kind)
         return bool(cue and re.search(cue, folded))
     if intent == "person_age":
-        return bool(re.search(r"wie ?alt|how old|\balter\b|\bage\b|years old", folded))
+        return bool(re.search(AGE_PLAN_FITS, folded))
     if intent == "person_facts":
-        return bool(
-            re.search(
-                r"geboren|gestorben|\bstarb\b|verstorben|"
-                r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
-                r"when did|wann (?:ist|war|wurde|starb)|"
-                r"heirat|married|"
-                r"geburtsdatum|geburtstag|sterbedatum|todestag|"
-                r"birthdate|birth date|date of birth|date of death|death date",
-                folded,
-            )
-        )
+        return bool(re.search(PERSON_FACTS, folded))
     if intent == "relation_between":
-        return bool(
-            re.search(r"zwischen|between|verwandt|related|beziehung", folded)
-        )
+        return bool(re.search(RELATION_BETWEEN_CUES, folded))
     if intent == "resolve_kinship":
         if plan.get("kinship_path") and (
-            _question_names_relative(folded) or re.search(r"\bmama\b|\bpapa\b", folded)
+            _question_names_relative(folded)
+            or re.search(r"\bmama\b|\bpapa\b", folded)
         ):
             return True
         return bool(name)
@@ -313,56 +162,23 @@ def _drops_named_relative(question: str, plan: dict[str, Any]) -> bool:
 
 
 def _detect_relative_kind(folded: str) -> str | None:
-    if re.search(r"wie ?viele kinder|wieviele kinder|how many children|anzahl (der )?kinder", folded):
+    if re.search(COUNT_CHILDREN, folded):
         return None
-    if re.search(r"grossvaeter|grandfathers|\bopas\b|\bgrandpas\b", folded):
-        return "grandfathers"
-    if re.search(r"grossmuetter|grandmothers|\bomas\b|\bgrandmas\b", folded):
-        return "grandmothers"
-    if re.search(r"grosseltern|grandparents", folded):
-        return "grandparents"
-    if re.search(r"\bonkel\b|\buncles?\b", folded):
-        return "uncles"
-    if re.search(r"\btanten\b|\baunts?\b", folded):
-        return "aunts"
-    if re.search(r"\bbrueder\b|\bbrothers\b", folded):
-        return "brothers"
-    if re.search(r"\bschwestern\b|\bsisters\b", folded):
-        return "sisters"
-    if re.search(r"geschwister|\bsiblings\b", folded):
-        return "siblings"
-    if re.search(r"\beltern\b|\bparents\b", folded):
-        return "parents"
-    if re.search(r"enkelkinder|\benkel\b|grandchildren", folded):
-        return "grandchildren"
-    if re.search(
-        r"wie heissen die kinder|wer sind die kinder|welche kinder|"
-        r"list(e)? (the )?children|kinder auflisten|the children of",
-        folded,
-    ):
+    for kind in KIND_DETECT_ORDER:
+        if kind == "spouses":
+            continue
+        if re.search(KIND_DETECT_PATTERNS[kind], folded):
+            return kind
+    if re.search(LIST_CHILDREN_KIND, folded):
         return "children"
-    if re.search(r"ehepartner|\bspouses\b", folded):
+    if re.search(KIND_DETECT_PATTERNS["spouses"], folded):
         return "spouses"
     return None
 
 
-_NAMED_PERSON_RELATIVE: list[tuple[str, list[str]]] = [
-    (r"\burgrossmutter\b", ["mother", "mother", "mother"]),
-    (r"\burgrossvater\b", ["father", "father", "father"]),
-    (r"\bgrossmutter\b|\bgrandmother\b", ["mother", "mother"]),
-    (r"\bgrossvater\b|\bgrandfather\b", ["father", "father"]),
-    (r"\bmutter(?:s)?\b|\bmother\b|\bmama\b|\bmom\b|\bmum\b", ["mother"]),
-    (r"\bvater(?:s)?\b|\bfather\b|\bpapa\b|\bdad\b|\bdaddy\b", ["father"]),
-    (r"\behefrau\b|\behemann\b|\behepartner\b|\bwife\b|\bhusband\b|\bspouse\b", ["spouse"]),
-    (r"\bschwester\b|\bsister\b", ["sister"]),
-    (r"\bbruder\b|\bbrother\b", ["brother"]),
-    (r"\bsohn\b|\btochter\b|\bson\b|\bdaughter\b", ["child"]),
-]
-
-
 def _detect_named_person_relative(folded: str) -> list[str]:
     """Singular relative in 'Vater von NAME' / 'father of NAME' (word boundaries)."""
-    for pattern, path in _NAMED_PERSON_RELATIVE:
+    for pattern, path in NAMED_PERSON_PATTERNS:
         if re.search(pattern, folded):
             return list(path)
     return []
@@ -371,7 +187,7 @@ def _detect_named_person_relative(folded: str) -> list[str]:
 def _extract_of_person_name(question: str) -> str:
     """Name after 'von' / 'of', if it looks like a person rather than a relative."""
     match = re.search(
-        r"\b(?:von|of)\s+(.+?)(?:\?|$)",
+        rf"\b(?:{alt(('von', 'of'))})\s+(.+?)(?:\?|$)",
         question,
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -379,15 +195,11 @@ def _extract_of_person_name(question: str) -> str:
         return ""
     raw = " ".join(match.group(1).split()).strip(" .,!?\"'«»“”")
     folded = _fold(raw)
-    if not folded or folded in {"mir", "mich", "me", "uns", "ihm", "ihr"}:
+    if not folded or folded in PRONOUNS:
         return ""
-    if re.search(r"startperson|starting person", folded):
+    if re.search(alt(START_PERSON, bounded=True), folded):
         return ""
-    if re.match(
-        rf"^(dem |der |den |des |the |my |mein |meine |meiner |meinem |meinen |meines )?"
-        rf"({_RELATIVE_NOUNS})\b",
-        folded,
-    ):
+    if re.match(rf"^{OF_DETERMINER_PREFIX}{RELATIVE_NOUNS_BOUNDED}", folded):
         return ""
     if _detect_path(folded):
         return ""
@@ -395,48 +207,25 @@ def _extract_of_person_name(question: str) -> str:
 
 
 def _detect_intent(folded: str) -> str:
-    if re.search(
-        r"beziehung zwischen|verwandtschaft zwischen|relation between|"
-        r"how (?:are|is) .*related|wie sind .+ verwandt|wie ist .+ verwandt",
-        folded,
-    ):
+    if re.search(RELATION_BETWEEN, folded):
         return "relation_between"
-    if re.search(r"wie ?viele kinder|wieviele kinder|how many children|anzahl (der )?kinder", folded):
+    if re.search(COUNT_CHILDREN, folded):
         return "count_children"
-    if re.search(r"welche kinder|wer sind die kinder|list(e)? (the )?children|kinder auflisten", folded):
+    if re.search(LIST_CHILDREN_INTENT, folded):
         return "list_children"
-    if re.search(
-        r"wie alt|how old|years old|\balter\b|age of|welches alter",
-        folded,
-    ):
+    if re.search(AGE_INTENT, folded):
         return "person_age"
-    if re.search(
-        r"geboren|gestorben|\bstarb\b|verstorben|"
-        r"\bbirth\b|\bdeath\b|\bdied\b|\bdead\b|\bborn\b|"
-        r"when did|wann (?:ist|war|wurde|starb)|"
-        r"geburtsdatum|geburtstag|sterbedatum|todestag|"
-        r"birthdate|birth date|date of birth|date of death|death date",
-        folded,
-    ):
+    if re.search(PERSON_FACTS, folded):
         return "person_facts"
     return "resolve_kinship"
 
 
 def _detect_fact_focus(folded: str) -> str:
-    if re.search(
-        r"gestorben|\bstarb\b|verstorben|\bdied\b|\bdead\b|"
-        r"sterbedatum|todestag|date of death|death date|"
-        r"when did .+\bdie\b",
-        folded,
-    ):
+    if re.search(DEATH_FOCUS, folded):
         return "death"
-    if re.search(
-        r"geboren|geburtsdatum|geburtstag|birthdate|\bborn\b|\bbirth\b|"
-        r"date of birth|birth date",
-        folded,
-    ):
+    if re.search(BIRTH_FOCUS, folded):
         return "birth"
-    if re.search(r"heirat|married|hochzeit|marriage", folded):
+    if re.search(alt(MARRIAGE, bounded=True), folded):
         return "marriage"
     return ""
 
@@ -447,18 +236,14 @@ def _clean_extracted_name(raw: str) -> str:
 
 def _name_is_relative_or_pronoun(raw: str) -> bool:
     folded = _fold(raw)
-    if not folded or folded in {"mir", "mich", "me", "uns", "ihm", "ihr", "ich", "i"}:
+    if not folded or folded in PRONOUNS:
         return True
-    if re.search(r"startperson|starting person", folded):
+    if re.search(alt(START_PERSON, bounded=True), folded):
         return True
     if _detect_path(folded) or _detect_named_person_relative(folded):
         return True
     return bool(
-        re.match(
-            rf"^(dem |der |den |des |die |das |the |my |mein |meine |meiner |meinem |meinen |meines )?"
-            rf"({_RELATIVE_NOUNS})\b",
-            folded,
-        )
+        re.match(rf"^{RELATIVE_DETERMINER_PREFIX}{RELATIVE_NOUNS_BOUNDED}", folded)
     )
 
 
@@ -468,15 +253,20 @@ def _extract_subject_person_name(question: str) -> str:
         r"wie alt (?:ist|war|sind|waren)\s+(.+?)(?:\?|$)",
         r"how old (?:is|was|are|were)\s+(.+?)(?:\?|$)",
         r"(?:age of|alter von)\s+(.+?)(?:\?|$)",
-        r"wann (?:wurde|ist|war)\s+(.+?)\s+(?:geboren|gestorben)",
-        r"when was\s+(.+?)\s+(?:born|died)",
+        rf"wann (?:wurde|ist|war)\s+(.+?)\s+{alt(('geboren', 'gestorben'))}",
+        rf"when was\s+(.+?)\s+{alt(('born', 'died'))}",
     )
     for pattern in patterns:
         match = re.search(pattern, question, flags=re.IGNORECASE)
         if not match:
             continue
         raw = _clean_extracted_name(match.group(1))
-        raw = re.sub(r"^(der|die|das|the)\s+", "", raw, flags=re.IGNORECASE).strip()
+        raw = re.sub(
+            rf"^{alt(('der', 'die', 'das', 'the'))}\s+",
+            "",
+            raw,
+            flags=re.IGNORECASE,
+        ).strip()
         if raw and not _name_is_relative_or_pronoun(raw):
             return raw
     return ""
@@ -484,9 +274,9 @@ def _extract_subject_person_name(question: str) -> str:
 
 def _extract_between_names(question: str) -> tuple[str, str]:
     patterns = (
-        r"(?:zwischen|between)\s+(.+?)\s+(?:und|and)\s+(.+?)(?:\?|$)",
-        r"(?:wie sind|how are)\s+(.+?)\s+(?:und|and)\s+(.+?)\s+(?:verwandt|related)",
-        r"(?:wie ist|how is)\s+(.+?)\s+(?:mit|to)\s+(.+?)\s*(?:verwandt|related)?",
+        rf"(?:{alt(('zwischen', 'between'))})\s+(.+?)\s+(?:{alt(('und', 'and'))})\s+(.+?)(?:\?|$)",
+        rf"(?:wie sind|how are)\s+(.+?)\s+(?:{alt(('und', 'and'))})\s+(.+?)\s+(?:{alt(('verwandt', 'related'))})",
+        rf"(?:wie ist|how is)\s+(.+?)\s+(?:{alt(('mit', 'to'))})\s+(.+?)\s*(?:{alt(('verwandt', 'related'))})?",
     )
     for pattern in patterns:
         match = re.search(pattern, question, flags=re.IGNORECASE)
@@ -500,44 +290,88 @@ def _extract_between_names(question: str) -> tuple[str, str]:
 
 def _looks_like_place_token(token: str) -> bool:
     folded = _fold(token)
-    if not folded or folded in _PLACE_STOPWORDS:
+    if not folded or folded in PLACE_STOPWORDS:
         return False
-    if re.match(rf"^({_RELATIVE_NOUNS})$", folded):
+    if re.match(rf"^{RELATIVE_NOUNS_BOUNDED}$", folded):
         return False
     return True
 
 
-def _extract_place_filter(question: str) -> str:
-    """Place mentioned as a discriminator, e.g. 'aus Berlin' / 'from Berlin'."""
+def _is_place_end_token(token: str) -> bool:
+    folded = _fold(token)
+    if not folded or folded in PLACE_END_WORDS or folded in PLACE_STOPWORDS:
+        return True
+    return bool(re.match(rf"^{RELATIVE_NOUNS_BOUNDED}$", folded))
+
+
+def _extract_place_from_rest(rest: str) -> str:
+    rest = (rest or "").lstrip()
+    if not rest:
+        return ""
+    quoted = _PLACE_QUOTE_RE.match(rest)
+    if quoted:
+        raw = _clean_extracted_name(quoted.group(1))
+        first = raw.split()[0] if raw else ""
+        if raw and _looks_like_place_token(first):
+            return raw
+        return ""
+    collected: list[str] = []
+    for token in _PLACE_WORD_RE.findall(rest):
+        folded = _fold(token)
+        if not collected and folded in PLACE_LEADING_ARTICLES:
+            continue
+        if collected and _is_place_end_token(token):
+            break
+        if not collected and _is_place_end_token(token):
+            return ""
+        if not _looks_like_place_token(token):
+            if collected:
+                break
+            continue
+        collected.append(token)
+        if len(collected) >= 4:
+            break
+    return " ".join(collected)
+
+
+def _extract_relative_name_filter(question: str) -> str:
+    """Given name after a relative noun: 'Onkel Albert', 'uncle Albert'."""
     text = " ".join((question or "").split())
     if not text:
         return ""
-    demonym = re.search(
-        r"\b([A-ZÄÖÜ][\w\-äöüß]*)er\s+(?:onkel|tante|uncle|aunt)s?\b",
+    match = re.search(
+        rf"(?i)\b{RELATIVE_NOUNS_ALT}\s+"
+        rf"(?-i:([A-ZÄÖÜ][\w\-äöüß']+(?:\s+[A-ZÄÖÜ][\w\-äöüß']+){{0,2}}))",
         text,
     )
+    if not match:
+        return ""
+    raw = _clean_extracted_name(match.group(1))
+    first = raw.split()[0] if raw else ""
+    folded_first = _fold(first)
+    if not first or folded_first in PLACE_STOPWORDS or folded_first in NAME_FILTER_STOP:
+        return ""
+    if re.match(rf"^{RELATIVE_NOUNS_BOUNDED}$", folded_first):
+        return ""
+    return raw
+
+
+def _extract_place_filter(question: str) -> str:
+    """Place mentioned as a discriminator, e.g. 'aus Berlin' / 'from "York cottage"'."""
+    text = " ".join((question or "").split())
+    if not text:
+        return ""
+    demonym = re.search(DEMONYM_PATTERN, text)
     if demonym:
         stem = demonym.group(1)
         if _looks_like_place_token(stem):
             return stem
-    patterns = (
-        r"\b(?:aus|from)\s+(?!dem\b|der\b|den\b|des\b|die\b|das\b|the\b|my\b|meiner\b|meinem\b)([A-Za-zÄÖÜäöüß][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,3})",
-        r"\b(?:geboren|gestorben|born|died)\s+(?:in|at)\s+(?!dem\b|der\b|the\b)([A-Za-zÄÖÜäöüß][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,3})",
-        r"\bin\s+([A-ZÄÖÜ][\w.\-äöüß]*(?:\s+[A-ZÄÖÜ][\w.\-äöüß]*){0,2})",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, text)
+    for cue in PLACE_CUE_PATTERNS:
+        match = re.search(cue, text, flags=re.IGNORECASE)
         if not match:
             continue
-        raw = _clean_extracted_name(match.group(1))
-        raw = re.sub(
-            rf"\s+({_RELATIVE_NOUNS}|geboren|gestorben|born|died)\b.*$",
-            "",
-            raw,
-            flags=re.IGNORECASE,
-        ).strip(" .,!?\"'«»“”")
-        first = raw.split()[0] if raw else ""
-        if raw and _looks_like_place_token(first):
+        raw = _extract_place_from_rest(text[match.end() :])
+        if raw:
             return raw
     return ""
 
@@ -546,7 +380,7 @@ def _strip_place_from_name(name: str, place_filter: str) -> str:
     if not name or not place_filter:
         return name
     return re.sub(
-        rf"\s+(?:aus|from|in|of)\s+{re.escape(place_filter)}\s*$",
+        rf"\s+{PLACE_STRIP_PREP}\s+{re.escape(place_filter)}\s*$",
         "",
         name,
         flags=re.IGNORECASE,
@@ -561,6 +395,7 @@ def _rule_plan(
     person_name: str = "",
     target_name: str = "",
     place_filter: str = "",
+    name_filter: str = "",
     fact_focus: str = "",
 ) -> dict[str, Any]:
     return {
@@ -570,6 +405,7 @@ def _rule_plan(
         "person_name": person_name,
         "target_name": target_name,
         "place_filter": place_filter,
+        "name_filter": name_filter,
         "fact_focus": fact_focus,
         "anchor": "starting_individual",
     }
@@ -586,6 +422,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
     kind = _detect_relative_kind(folded)
     place_filter = _extract_place_filter(question)
     fact_focus = _detect_fact_focus(folded)
+    name_filter = _extract_relative_name_filter(question)
     person_name = _strip_place_from_name(_extract_of_person_name(question), place_filter)
     target_name = ""
     if not path and not kind:
@@ -594,6 +431,8 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
         person_name = _strip_place_from_name(
             _extract_subject_person_name(question), place_filter
         )
+    if name_filter and person_name and _fold(name_filter) in _fold(person_name):
+        person_name = ""
 
     if intent == "relation_between":
         person_name, target_name = _extract_between_names(question)
@@ -606,6 +445,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
             person_name=person_name,
             target_name=target_name,
             place_filter=place_filter,
+            name_filter=name_filter,
             fact_focus=fact_focus,
         )
     elif kind and intent in {"person_facts", "person_age"}:
@@ -624,6 +464,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
             kind=kind,
             person_name=person_name,
             place_filter=place_filter,
+            name_filter=name_filter,
             fact_focus=fact_focus,
         )
     elif kind:
@@ -642,6 +483,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
             kind=kind,
             person_name=person_name,
             place_filter=place_filter,
+            name_filter=name_filter,
             fact_focus=fact_focus,
         )
     elif not path and intent == "resolve_kinship":
@@ -662,6 +504,7 @@ def parse_question_rules(question: str) -> dict[str, Any] | None:
         person_name=person_name,
         target_name=target_name,
         place_filter=place_filter,
+        name_filter=name_filter,
         fact_focus=fact_focus,
     )
 
@@ -678,7 +521,8 @@ def sanitize_llm_plan(raw_plan: dict[str, Any]) -> dict[str, Any]:
         "kinship_set": raw_plan.get("kind") or raw_plan.get("kinship_set") or None,
         "person_name": str(raw_plan.get("person_name") or "").strip(),
         "target_name": str(raw_plan.get("target_name") or "").strip(),
-        "place_filter": str(raw_plan.get("place_filter") or "").strip(),
+        "place_filter": str(raw_plan.get("place_filter") or "").strip(" .,!?\"'«»“”„"),
+        "name_filter": str(raw_plan.get("name_filter") or "").strip(),
         "fact_focus": fact_focus,
         "anchor": "starting_individual",
         "person_id": None,
@@ -690,7 +534,7 @@ def rules_plan_is_certain(question: str, plan: dict[str, Any] | None) -> bool:
     """True when heuristics uniquely fill the capability template (no LLM needed)."""
     if not plan:
         return False
-    if plan.get("place_filter"):
+    if plan.get("place_filter") or plan.get("name_filter"):
         return False
     kind = plan.get("kind")
     intent = str(plan.get("intent") or "")
@@ -716,14 +560,26 @@ def _refine_llm_raw(question: str, raw: dict[str, Any]) -> dict[str, Any]:
     detected_kind = _detect_relative_kind(folded_q)
     place_filter = _extract_place_filter(question)
     fact_focus = _detect_fact_focus(folded_q)
-    if place_filter and not raw.get("place_filter"):
-        raw["place_filter"] = place_filter
+    name_filter = _extract_relative_name_filter(question)
+    if place_filter:
+        current = str(raw.get("place_filter") or "").strip(" .,!?\"'«»“”„")
+        if not current or _fold(current) in _fold(place_filter):
+            raw["place_filter"] = place_filter
     if fact_focus and not raw.get("fact_focus"):
         raw["fact_focus"] = fact_focus
+    if name_filter and not raw.get("name_filter"):
+        raw["name_filter"] = name_filter
     if raw.get("person_name"):
         raw["person_name"] = _strip_place_from_name(
             str(raw.get("person_name") or ""), raw.get("place_filter") or ""
         )
+    of_name = _extract_of_person_name(question)
+    kind = raw.get("kind") or detected_kind
+    person_name = str(raw.get("person_name") or "").strip()
+    if kind in FANOUT_KINDS and person_name and not of_name:
+        if not raw.get("name_filter"):
+            raw["name_filter"] = person_name
+        raw["person_name"] = ""
     if detected_kind and not raw.get("kind") and not raw.get("kinship_set"):
         raw["kind"] = detected_kind
     if (
@@ -737,7 +593,7 @@ def _refine_llm_raw(question: str, raw: dict[str, Any]) -> dict[str, Any]:
     if (
         raw.get("intent") == "relation_between"
         and not re.search(
-            r"zwischen|between|verwandt|related|beziehung", folded_q
+            RELATION_BETWEEN_CUES, folded_q
         )
     ):
         named_path = _detect_path(folded_q) or _detect_named_person_relative(folded_q)
@@ -769,8 +625,8 @@ def parse_natural_language_question(question: str) -> dict[str, Any]:
     Convert a question into a validated tree_query plan.
 
     Unambiguous templates are filled by heuristics. Anything with a place
-    filter or a group relative plus a date goes to the LLM, which fills the
-    capability template (optionally starting from the heuristic draft).
+    or name filter, or a group relative plus a date, goes to the LLM, which
+    fills the capability template (optionally starting from the heuristic draft).
     """
     question = (question or "").strip()
     if not question:
