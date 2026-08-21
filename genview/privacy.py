@@ -2,8 +2,8 @@
 
 A date is confidential when ``parsed + years > today``:
 - birth: 110 years
-- death: 80 years
-- marriage: 60 years
+- death: 30 years
+- marriage: 80 years
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 BIRTH_PRIVACY_YEARS = 110
-DEATH_PRIVACY_YEARS = 80
-MARRIAGE_PRIVACY_YEARS = 60
+DEATH_PRIVACY_YEARS = 30
+MARRIAGE_PRIVACY_YEARS = 80
 
 
 def add_years(parsed: date, years: int) -> date:
