@@ -357,9 +357,10 @@
                                                     </h6>
                                                     
                                                     {% if is_tree_admin %}
-                                                    {% url 'genview:event-detail' tree_id=tree_id pk=event.pk as detail_url %}
-                                                    {% url 'genview:event-delete' tree_id=tree_id pk=event.pk as delete_url %}
-                                                    {% action_buttons layout="toolbar" detail_url=detail_url delete_url=delete_url btn_extra="border-0 btn-sm" %}
+                                                        {% url 'genview:event-edit' tree_id=tree_id pk=event.pk as edit_url %}
+                                                        {% url 'genview:event-detail' tree_id=tree_id pk=event.pk as detail_url %}
+                                                        {% url 'genview:event-delete' tree_id=tree_id pk=event.pk as delete_url %}
+                                                        {% action_buttons layout="toolbar" edit_url=edit_url detail_url=detail_url delete_url=delete_url btn_extra="border-0 btn-sm" %}
                                                     {% endif %}
                                                 </div>
 

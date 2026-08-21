@@ -234,7 +234,7 @@ class FamilyForm(ModelForm):
         queryset=Place.objects.none(), 
         required=False,
         label=_("Heiratsort"),
-        widget=forms.Select(attrs={'class': 'form-select'})
+        widget=forms.Select(attrs={'class': 'form-control select2-place'})
     )
 
     class Meta:
@@ -279,6 +279,15 @@ class FamilyForm(ModelForm):
                 self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
             if "marriage_place" in self.fields:
                 self.fields["marriage_place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
+                sel_place = []
+                if self.instance and self.instance.pk:
+                    ev = self.instance.marriage_event
+                    if ev and ev.place:
+                        sel_place = [ev.place]
+                empty_label = self.fields["marriage_place"].empty_label or "---------"
+                self.fields["marriage_place"].widget.choices = [("", empty_label)] + [
+                    (obj.id, obj.name) for obj in sel_place
+                ]
         else:
             self.fields["husband"].queryset = Individual.objects.none()
             self.fields["wife"].queryset = Individual.objects.none()
@@ -644,7 +653,10 @@ class EventForm(forms.ModelForm):
                 self.fields["place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
                 # Beim Update den aktuell gewählten Ort behalten, sonst HTML leeren
                 sel_place = [self.instance.place] if self.instance and self.instance.place else []
-                self.fields["place"].widget.choices = [(obj.id, obj.name) for obj in sel_place]
+                empty_label = self.fields["place"].empty_label or "---------"
+                self.fields["place"].widget.choices = [("", empty_label)] + [
+                    (obj.id, obj.name) for obj in sel_place
+                ]
 
             # --- Quellen (Sources) filtern & optimieren ---
             if "sources" in self.fields:
@@ -672,6 +684,10 @@ class EventForm(forms.ModelForm):
                 # Feld verstecken, wenn die Person bereits übergeben wurde
                 if self.initial.get('individual'):
                     self.fields['individual'].widget = forms.HiddenInput()
+            if 'event_type' in self.fields:
+                self.fields['event_type'].queryset = EventType.objects.filter(
+                    category__in=[EventType.Category.INDIVIDUAL, EventType.Category.BOTH]
+                ).order_by('name')
                 
         elif target_type == 'family':
             if 'individual' in self.fields:
@@ -682,6 +698,10 @@ class EventForm(forms.ModelForm):
                 # Feld verstecken, wenn die Familie bereits übergeben wurde
                 if self.initial.get('family'):
                     self.fields['family'].widget = forms.HiddenInput()
+            if 'event_type' in self.fields:
+                self.fields['event_type'].queryset = EventType.objects.filter(
+                    category__in=[EventType.Category.FAMILY, EventType.Category.BOTH]
+                ).order_by('name')
 
 
 class EventTypeForm(forms.ModelForm):
@@ -706,6 +726,20 @@ class SourceForm(forms.ModelForm):
             "publication_facts": forms.TextInput(attrs={"class": "form-control"}),
             "text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
         }
+
+
+class SourceQuickCreateForm(forms.ModelForm):
+    """Compact source create used from Select2 modals (no GEDCOM-ID field)."""
+
+    class Meta:
+        model = Source
+        fields = ["title", "author", "publication_facts", "text"]
+
+    def clean_title(self):
+        title = (self.cleaned_data.get("title") or "").strip()
+        if not title:
+            raise forms.ValidationError(_("Titel ist erforderlich."))
+        return title
 
 
 class PlaceMergeForm(forms.Form):

@@ -270,13 +270,13 @@
         <div class="card shadow-sm h-100 border-0">
             <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
                 <span>⏳ Familien-Chronik</span>
-                <span class="badge bg-secondary rounded-pill">{{ family.events.count }} Einträge</span>
+                <span class="badge bg-secondary rounded-pill">{{ family_events|length }} Einträge</span>
             </div>
             
             <div class="card-body p-0">
-                {% if family.events.all %}
+                {% if family_events %}
                     <div class="list-group list-group-flush">
-                        {% for ev in family.events.all %}
+                        {% for ev in family_events %}
                             <div class="list-group-item p-3">
                                 <div class="d-flex w-100 justify-content-between align-items-start">
                                     <div>
@@ -335,37 +335,80 @@
         {% endif %}
     </div>
     <div class="card-body">
-        {% if family.media_objects.all %}
-            <div class="row g-3">
-                {% for media in family.media_objects.all %}
-                    <div class="col-sm-6 col-md-4 col-lg-3">
-                        <div class="card h-100 border text-center">
-                            {% if media.is_image %}
-                                <!-- Wenn es ein Bild ist, zeige es an -->
-                                <img src="{% url 'genview:media-file' tree_id=tree_id pk=media.pk %}" class="card-img-top" alt="{{ media.title }}" style="height: 150px; object-fit: cover;">
+        <h6 class="text-uppercase text-muted fw-bold mb-3 mt-1 border-bottom pb-2">🖼️ Fotos &amp; Portraits</h6>
+        {% if family_photos %}
+            <div class="row row-cols-2 row-cols-md-4 g-3 mb-4">
+                {% for media in family_photos %}
+                    <div class="col">
+                        <div class="card h-100 shadow-sm border-0 bg-light text-center">
+                            {% if media.file and media.file.name %}
+                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}">
+                                    {% if media.is_image or media.is_pdf %}
+                                        <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='small' %}" class="card-img-top rounded-top" alt="{{ media.title }}" style="height: 160px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="bg-light d-flex align-items-center justify-content-center" style="height: 160px;">
+                                            <span class="fs-1">📷</span>
+                                        </div>
+                                    {% endif %}
+                                </a>
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-truncate mb-0" title="{{ media.title|default:'Datei' }}">
+                                        {{ media.title|default:"Datei" }}
+                                    </h6>
+                                </div>
                             {% else %}
-                                <!-- Fallback für PDFs, Dokumente etc. -->
-                                <div class="bg-light d-flex align-items-center justify-content-center" style="height: 150px;">
-                                    <span class="fs-1">📄</span>
+                                <div class="p-3 text-muted">
+                                    <div class="fs-1 mb-2">📷</div>
+                                    <small>{{ media.title|default:"Ohne Titel" }}</small>
                                 </div>
                             {% endif %}
-                            
-                            <div class="card-body p-2">
-                                <h6 class="card-title text-truncate mb-1" title="{{ media.title|default:'Datei' }}">
-                                    <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" target="_blank" class="text-decoration-none stretched-link text-dark">
-                                        {{ media.title|default:"Datei" }}
-                                    </a>
-                                </h6>
-                                {% if media.description %}
-                                    <small class="text-muted text-truncate d-block">{{ media.description }}</small>
-                                {% endif %}
-                            </div>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <p class="text-muted mb-0 text-center py-3">Es sind noch keine Medien mit dieser Familie verknüpft.</p>
+            <p class="text-muted fst-italic small mb-4">Noch keine Fotos mit dieser Familie verknüpft.</p>
+        {% endif %}
+
+        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">📄 Dokumente, Urkunden &amp; Belege</h6>
+        {% if family_documents %}
+            <div class="row row-cols-2 row-cols-md-4 g-3">
+                {% for media in family_documents %}
+                    <div class="col">
+                        <div class="card h-100 shadow-sm border-0 bg-light text-center">
+                            {% if media.file and media.file.name %}
+                                <a href="{% url 'genview:media-detail' tree_id=tree_id pk=media.pk %}" class="position-relative d-block">
+                                    {% if media.is_image or media.is_pdf %}
+                                        <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=media.pk size='small' %}" class="card-img-top rounded-top" alt="{{ media.title }}" style="height: 160px; object-fit: cover;">
+                                        {% if media.is_pdf %}
+                                            <span class="badge bg-danger position-absolute top-0 start-0 m-2 shadow-sm">PDF</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="bg-light d-flex align-items-center justify-content-center rounded-top" style="height: 160px;">
+                                            <span class="fs-1">📄</span>
+                                        </div>
+                                    {% endif %}
+                                </a>
+                                <div class="card-body p-2">
+                                    <h6 class="card-title text-truncate mb-1" title="{{ media.title|default:'Datei' }}">
+                                        {{ media.title|default:"Datei" }}
+                                    </h6>
+                                    {% if media.description %}
+                                        <small class="text-muted text-truncate d-block">{{ media.description }}</small>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <div class="p-3 text-muted">
+                                    <div class="fs-1 mb-2">📄</div>
+                                    <small>{{ media.title|default:"Ohne Titel" }}</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted fst-italic small mb-0">Noch keine Dokumente (z.B. Heiratsurkunden) verknüpft.</p>
         {% endif %}
     </div>
 </div>

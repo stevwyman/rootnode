@@ -1,0 +1,71 @@
+{% load i18n %}
+<div class="modal fade" id="sourceQuickCreateModal" tabindex="-1" aria-labelledby="sourceQuickCreateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="source-quick-create-form" data-create-url="{% url 'genview:api-create-source' tree_id=tree_id %}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sourceQuickCreateModalLabel">{% trans "Neue Quelle" %}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Schließen' %}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none quick-create-error" role="alert"></div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="source-quick-title">{% trans "Titel" %}</label>
+                        <input type="text" class="form-control" id="source-quick-title" name="title" required maxlength="255">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="source-quick-author">{% trans "Autor" %}</label>
+                        <input type="text" class="form-control" id="source-quick-author" name="author" maxlength="255">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="source-quick-publication">{% trans "Publikation" %}</label>
+                        <input type="text" class="form-control" id="source-quick-publication" name="publication_facts" maxlength="255">
+                    </div>
+                    <div class="mb-3 mb-0">
+                        <label class="form-label" for="source-quick-text">{% trans "Text" %}</label>
+                        <textarea class="form-control" id="source-quick-text" name="text" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Abbrechen" %}</button>
+                    <button type="submit" class="btn btn-success">{% trans "Quelle anlegen" %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="placeQuickCreateModal" tabindex="-1" aria-labelledby="placeQuickCreateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="place-quick-create-form" data-create-url="{% url 'genview:api-create-place' tree_id=tree_id %}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="placeQuickCreateModalLabel">{% trans "Neuen Ort" %}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Schließen' %}"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none quick-create-error" role="alert"></div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="place-quick-name">{% trans "Ortsname" %}</label>
+                        <input type="text" class="form-control" id="place-quick-name" name="name" required maxlength="255" placeholder="z.B. Berlin, Deutschland">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="place-quick-lat">{% trans "Breitengrad" %}</label>
+                            <input type="number" class="form-control" id="place-quick-lat" name="latitude" step="0.000001">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="place-quick-lng">{% trans "Längengrad" %}</label>
+                            <input type="number" class="form-control" id="place-quick-lng" name="longitude" step="0.000001">
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-3 mb-0">{% trans "Koordinaten sind optional. Sie können später über Nominatim ergänzt werden." %}</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% trans "Abbrechen" %}</button>
+                    <button type="submit" class="btn btn-success">{% trans "Ort anlegen" %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

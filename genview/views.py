@@ -13,6 +13,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Subquery, OuterRef, Prefetch, Value, IntegerField
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
@@ -60,6 +61,7 @@ from .forms import (
     AddExistingMediaForm,
     EventForm,
     SourceForm,
+    SourceQuickCreateForm,
     PlaceForm
 )
 from .mixins import (
@@ -69,6 +71,7 @@ from .mixins import (
     TreeEditAccessMixin,
     TreeAdminAccessMixin,
     user_can_edit_tree,
+    user_may_see_tree,
     apply_privacy_to_individual_qs,
     apply_privacy_to_family_qs,
     apply_privacy_to_media_qs,
@@ -1686,11 +1689,12 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                     queryset=ChildFamilyLink.objects.select_related("child").prefetch_related("child__media_objects"),
                 ),
                 
-                # 2. Alle Events (MARR, DIV, …) der Familie
+                # 2. Familien-Ereignisse (Heirat, Scheidung, …)
                 Prefetch(
                     "events",
-                    queryset=Event.objects.filter(event_type__tag='MARR'),
-                    to_attr="marriage_events",  # .marriage_events[0] ist das Event
+                    queryset=Event.objects.filter(event_type__is_visible=True)
+                    .select_related("event_type", "place")
+                    .order_by(F("parsed_date").asc(nulls_last=True), "pk"),
                 ),
                 
                 # 3. Medien-Objekte, die an die Familie selbst gebunden sind
@@ -1757,6 +1761,39 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         )
         ctx['wife_mother'] = _visible_relative(
             family.wife.mother if family.wife else None, apply_privacy
+        )
+
+        spouse_ids = [pk for pk in (family.husband_id, family.wife_id) if pk]
+        family_event_qs = Event.objects.filter(event_type__is_visible=True).filter(
+            Q(family=family)
+            | Q(
+                family__isnull=True,
+                individual_id__in=spouse_ids,
+                event_type__category__in=[
+                    EventType.Category.FAMILY,
+                    EventType.Category.BOTH,
+                ],
+            )
+        ).select_related("event_type", "place").order_by(
+            F("parsed_date").asc(nulls_last=True), "pk"
+        )
+        ctx["family_events"] = apply_privacy_to_event_qs(
+            family_event_qs, apply_privacy, ctx["tree_id"]
+        )
+
+        family_events = list(ctx["family_events"])
+        ctx["family_events"] = family_events
+        event_ids = [ev.pk for ev in family_events]
+        family_media = _visible_media_qs(
+            MediaObject.objects.filter(gedcom_tree_id=ctx["tree_id"])
+            .filter(Q(families=family) | Q(events__pk__in=event_ids))
+            .distinct(),
+            apply_privacy,
+            ctx["tree_id"],
+        )
+        ctx["family_photos"] = family_media.filter(category=MediaObject.Category.PHOTO)
+        ctx["family_documents"] = family_media.filter(
+            category=MediaObject.Category.DOCUMENT
         )
 
         return ctx
@@ -3120,21 +3157,41 @@ class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
     form_class = EventForm
     template_name = "genview/event_form.html"
 
+    def get_target_type(self):
+        if self.kwargs.get("target_type"):
+            return self.kwargs["target_type"]
+        if self.kwargs.get("family_pk") or self.request.GET.get("family"):
+            return "family"
+        return "individual"
+
+    def _resolve_person(self):
+        tree_id = self.kwargs.get("tree_id")
+        person_id = self.kwargs.get("person_pk") or self.request.GET.get("individual")
+        if not person_id:
+            return None
+        return get_object_or_404(Individual, pk=person_id, gedcom_tree_id=tree_id)
+
+    def _resolve_family(self):
+        tree_id = self.kwargs.get("tree_id")
+        family_id = self.kwargs.get("family_pk") or self.request.GET.get("family")
+        if not family_id:
+            return None
+        return get_object_or_404(Family, pk=family_id, gedcom_tree_id=tree_id)
+
     def get_initial(self):
         initial = super().get_initial()
-        
-        # Holt die IDs direkt aus der URL (?individual=3 oder ?family=5)
-        if 'individual' in self.request.GET:
-            initial['individual'] = self.request.GET.get('individual')
-        if 'family' in self.request.GET:
-            initial['family'] = self.request.GET.get('family')
-            
+        person = self._resolve_person()
+        family = self._resolve_family()
+        if person:
+            initial["individual"] = person.pk
+        if family:
+            initial["family"] = family.pk
         return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['target_type'] = self.kwargs.get('target_type', 'individual')
-        kwargs['tree_id'] = self.kwargs.get('tree_id')
+        kwargs["target_type"] = self.get_target_type()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
         return kwargs
 
     def form_valid(self, form):
@@ -3170,8 +3227,10 @@ class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["target_type"] = self.kwargs.get('target_type')
+        context["target_type"] = self.get_target_type()
         context["tree_id"] = self.kwargs.get("tree_id")
+        context["person"] = self._resolve_person()
+        context["family"] = self._resolve_family()
         return context
 
 
@@ -3526,6 +3585,75 @@ class IndividualSearchAPIView(GenericSelect2APIView):
 class SourceSearchAPIView(GenericSelect2APIView):
     model = Source
     search_fields = ['title', 'author', 'gedcom_id']
+
+    def get_display_text(self, obj):
+        return f"{obj.title} ({obj.gedcom_id})" if obj.gedcom_id else obj.title
+
+
+class _QuickCreateAPIView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    """JSON POST helper for creating records from Select2 modals."""
+
+    http_method_names = ["post"]
+
+    def handle_no_permission(self):
+        tree = getattr(self, "gedcom_tree", None)
+        if tree is None:
+            tree = Tree.objects.filter(pk=self.kwargs.get("tree_id")).first()
+        if not user_may_see_tree(self.request.user, tree):
+            raise Http404()
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse(
+                {"error": _("Keine Berechtigung, diesen Datensatz anzulegen.")},
+                status=403,
+            )
+        return super().handle_no_permission()
+
+
+class SourceQuickCreateAPIView(_QuickCreateAPIView):
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        form = SourceQuickCreateForm(request.POST)
+        if not form.is_valid():
+            return JsonResponse({"errors": form.errors}, status=400)
+
+        source = form.save(commit=False)
+        source.gedcom_tree_id = tree_id
+        source.save()
+        text = f"{source.title} ({source.gedcom_id})" if source.gedcom_id else source.title
+        return JsonResponse({"id": source.pk, "text": text})
+
+
+class PlaceQuickCreateAPIView(_QuickCreateAPIView):
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        name = (request.POST.get("name") or "").strip()
+        if name:
+            existing = Place.objects.filter(gedcom_tree_id=tree_id, name=name).first()
+            if existing:
+                return JsonResponse(
+                    {"id": existing.pk, "text": existing.name, "existing": True}
+                )
+
+        post = request.POST.copy()
+        if name:
+            post["name"] = name
+        form = PlaceForm(post)
+        if not form.is_valid():
+            return JsonResponse({"errors": form.errors}, status=400)
+
+        place = form.save(commit=False)
+        place.gedcom_tree_id = tree_id
+        try:
+            with transaction.atomic():
+                place.save()
+        except IntegrityError:
+            existing = Place.objects.filter(gedcom_tree_id=tree_id, name=place.name).first()
+            if existing:
+                return JsonResponse(
+                    {"id": existing.pk, "text": existing.name, "existing": True}
+                )
+            raise
+        return JsonResponse({"id": place.pk, "text": place.name})
 
 # --- Die API für Familien ---
 class FamilySearchAPIView(GenericSelect2APIView):

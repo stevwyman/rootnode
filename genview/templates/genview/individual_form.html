@@ -60,7 +60,14 @@
 
             {# -------- Quellen (ManyToMany) -------- #}
             <div class="mb-3">
-                <label class="form-label fw-bold">{{ form.sources.label }}</label>
+                <div class="d-flex justify-content-between align-items-center gap-2">
+                    <label class="form-label fw-bold mb-0">{{ form.sources.label }}</label>
+                    {% if can_edit %}
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-quick-create-open="source" data-quick-create-target=".select2-sources">
+                        + Neue Quelle
+                    </button>
+                    {% endif %}
+                </div>
                 {{ form.sources }}
                 {{ form.sources.errors }}
             </div>
@@ -122,9 +129,14 @@
 
 {% block extra_js %}
 {% include "genview/_select2_assets.html" %}
+{% if can_edit %}
+    {% include "genview/_quick_create_modals.html" %}
+{% endif %}
 <script>
 jQuery(document).ready(function($) {
-    initGenviewSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...");
+    initGenviewSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...", {
+        quickCreate: document.getElementById("sourceQuickCreateModal") ? { kind: "source" } : null
+    });
 });
 </script>
 {% endblock %}
