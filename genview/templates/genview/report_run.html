@@ -123,7 +123,16 @@
                         <tr>
                             {% for cell in row %}
                             <td class="{{ cell.css }}">
-                                {% if cell.url %}
+                                {% if cell.children %}
+                                    {% for part in cell.children %}
+                                        {% if not forloop.first %}<span class="text-muted">, </span>{% endif %}
+                                        {% if part.url %}
+                                        <a href="{{ part.url }}" title="{{ part.title }}">{{ part.text }}</a>
+                                        {% else %}
+                                        <span title="{{ part.title }}">{{ part.text }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% elif cell.url %}
                                 <a href="{{ cell.url }}" title="{{ cell.title }}">{{ cell.text }}</a>
                                 {% else %}
                                 <span title="{{ cell.title }}">{{ cell.text }}</span>

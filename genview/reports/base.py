@@ -43,6 +43,7 @@ class ReportCell:
     url: str | None = None
     css: str = ""
     title: str = ""
+    children: list["ReportCell"] = field(default_factory=list)
 
 
 @dataclass
@@ -192,6 +193,20 @@ def person_cell(person, *, apply_privacy: bool) -> ReportCell:
         return ReportCell(text=str(_("Vertrauliche Person")), css="text-muted fst-italic")
     name = person.full_name() if isinstance(person, Individual) else str(person)
     return ReportCell(text=name, url=person.get_absolute_url())
+
+
+def people_cell(people, *, apply_privacy: bool) -> ReportCell:
+    """One cell for several people, each name linked when possible."""
+    parts = [
+        person_cell(person, apply_privacy=apply_privacy)
+        for person in people
+        if person is not None
+    ]
+    if not parts:
+        return dash()
+    if len(parts) == 1:
+        return parts[0]
+    return ReportCell(text=", ".join(part.text for part in parts), children=parts)
 
 
 def text_cell(value, *, empty: str = "—") -> ReportCell:

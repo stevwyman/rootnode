@@ -23,6 +23,7 @@ from .base import (
     ReportParam,
     ReportResult,
     dash,
+    people_cell,
     person_cell,
     register,
     text_cell,
@@ -197,19 +198,25 @@ class DescendantReport(Report):
             ],
         )
         for node in nodes:
-            partners = ", ".join(
-                partner.full_name()
-                for partner in spouses_of(node.person)
-                if not (apply_privacy and partner.is_confidential)
+            partners = people_cell(
+                [
+                    partner
+                    for partner in spouses_of(node.person)
+                    if not (apply_privacy and partner.is_confidential)
+                ],
+                apply_privacy=apply_privacy,
             )
+            if node.generation == 0:
+                parents = dash()
+            else:
+                father, mother = parents_of(node.person)
+                parents = people_cell((father, mother), apply_privacy=apply_privacy)
             result.add_row(
                 [
                     ReportCell(text=str(node.generation)),
                     person_cell(node.person, apply_privacy=apply_privacy),
-                    person_cell(node.parent, apply_privacy=apply_privacy)
-                    if node.parent
-                    else dash(),
-                    text_cell(partners),
+                    parents,
+                    partners,
                     text_cell(event_date_text(event_for(node.person, BIRT))),
                     text_cell(event_date_text(event_for(node.person, DEAT))),
                 ],

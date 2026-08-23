@@ -151,6 +151,25 @@ class ReportHelperTests(TestCase):
         self.assertIn("Geburt ohne Quelle", texts)
         self.assertNotIn("Otto", texts)
 
+    def test_descendant_report_lists_both_parents(self):
+        report = get_report("descendants")
+        result = report.run(
+            self.tree,
+            {"person_id": self.father.pk, "generations": 2},
+            apply_privacy=False,
+        )
+        child_row = next(
+            row for row in result.rows if any(cell.text == self.child.full_name() for cell in row)
+        )
+        parent_names = (
+            [part.text for part in child_row[2].children]
+            if child_row[2].children
+            else [child_row[2].text]
+        )
+        self.assertIn(self.father.full_name(), parent_names)
+        self.assertIn(self.mother.full_name(), parent_names)
+        self.assertEqual(result.rows[0][2].text, "—")
+
 
 class ReportViewAccessTests(TestCase):
     def setUp(self):
@@ -199,6 +218,34 @@ class ReportViewAccessTests(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertContains(result, "Eva Beispiel")
         self.assertContains(result, "Generation")
+
+    def test_descendant_report_page_shows_both_parents(self):
+        spouse = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Adam", surname="Beispiel"
+        )
+        child = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Lea", surname="Beispiel"
+        )
+        family = Family.objects.create(
+            gedcom_tree=self.tree, husband=spouse, wife=self.person
+        )
+        ChildFamilyLink.objects.create(child=child, family=family)
+        self.client.login(username="member", password="password")
+        response = self.client.get(
+            reverse(
+                "genview:report-run",
+                kwargs={"tree_id": self.tree.pk, "slug": "descendants"},
+            ),
+            {"run": "1", "person_id": self.person.pk, "generations": 2},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, child.full_name())
+        self.assertContains(response, spouse.get_absolute_url())
+        self.assertContains(response, self.person.get_absolute_url())
+        content = response.content.decode()
+        child_block = content.split(child.full_name(), 1)[1]
+        self.assertIn(spouse.full_name(), child_block)
+        self.assertIn(self.person.full_name(), child_block)
 
     def test_public_tree_still_requires_login(self):
         self.tree.is_public = True
