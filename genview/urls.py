@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
+from . import report_views
 from . import views
 
 app_name = "genview"
@@ -21,6 +22,16 @@ urlpatterns = [
         'tree/<int:tree_id>/query/execute/',
         views.TreeQueryExecuteView.as_view(),
         name='tree-query-execute',
+    ),
+    path(
+        'tree/<int:tree_id>/reports/',
+        report_views.ReportListView.as_view(),
+        name='report-list',
+    ),
+    path(
+        'tree/<int:tree_id>/reports/<slug:slug>/',
+        report_views.ReportRunView.as_view(),
+        name='report-run',
     ),
     path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
     # 4. match users to trees and enable/disable public flag 

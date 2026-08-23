@@ -58,6 +58,9 @@
                                     <li><hr class="dropdown-divider"></li>
                                     {% endif %}
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-query' tree_id=tree_id %}">{% trans "Stammbaum fragen" %}</a></li>
+                                    {% if user.is_authenticated %}
+                                    <li><a class="dropdown-item" href="{% url 'genview:report-list' tree_id=tree_id %}">📊 {% trans "Berichte" %}</a></li>
+                                    {% endif %}
                                     <li><a class="dropdown-item" href="{% url 'genview:individual-list' tree_id %}">👤 {% trans "Personen" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:family-list' tree_id %}">👪 {% trans "Familien" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:event-list' tree_id %}">📅 {% trans "Ereignisse" %}</a></li>

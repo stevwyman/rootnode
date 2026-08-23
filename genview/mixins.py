@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Exists, OuterRef, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -390,6 +390,10 @@ def user_can_admin_tree(user, tree_id) -> bool:
         gedcom_tree_id=tree_id,
         role=TreeMembership.Role.ADMIN,
     ).exists()
+
+
+class AuthenticatedTreeAccessMixin(LoginRequiredMixin, TreeAccessMixin):
+    """Login required even on public trees (research reports, exports, …)."""
 
 
 class TreeEditAccessMixin(TreeAccessMixin):

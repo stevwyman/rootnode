@@ -246,8 +246,10 @@ class Individual(GedcomIdMixin):
     class Meta(GedcomIdMixin.Meta):
         ordering = ["surname", "given_name"]
         indexes = [
-            models.Index(fields=["surname", "given_name"]),
-            models.Index(fields=["sex"]),
+            models.Index(
+                fields=["gedcom_tree", "surname", "given_name"],
+                name="genview_ind_tree_name_idx",
+            ),
         ]
 
     # ------------------------------------------------------------------
@@ -839,7 +841,6 @@ class ChildFamilyLink(models.Model):
 
     class Meta:
         unique_together = ("child", "family")
-        indexes = [models.Index(fields=["child", "family"])]
 
     def __str__(self) -> str:
         return f"{self.child.full_name()} → {self.family}"
@@ -994,11 +995,21 @@ class Event(models.Model):
         verbose_name = "Ereignis"
         verbose_name_plural = "Ereignisse"
         
-        # 🔥 NEU: Der magische Performance-Turbo für deine Sortierung!
         indexes = [
-            models.Index(fields=['individual', 'event_type', 'parsed_date']),
-            # Falls du später auch nach Familien-Events (z.B. Heirat) sortierst:
-            models.Index(fields=['family', 'event_type', 'parsed_date']),
+            models.Index(fields=["individual", "event_type", "parsed_date"]),
+            models.Index(fields=["family", "event_type", "parsed_date"]),
+            models.Index(
+                fields=["gedcom_tree", "event_type", "parsed_date"],
+                name="genview_eve_tree_type_date_idx",
+            ),
+            models.Index(
+                fields=["gedcom_tree", "parsed_date"],
+                name="genview_eve_tree_date_idx",
+            ),
+            models.Index(
+                fields=["place", "parsed_date"],
+                name="genview_eve_place_date_idx",
+            ),
         ]
 
     def event_type_name(self):

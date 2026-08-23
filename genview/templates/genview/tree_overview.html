@@ -23,6 +23,11 @@
             <a href="{% url 'genview:tree-query' tree_id=tree_id %}" class="btn btn-outline-primary">
                 {% trans "Fragen" %}
             </a>
+            {% if user.is_authenticated %}
+            <a href="{% url 'genview:report-list' tree_id=tree_id %}" class="btn btn-outline-primary">
+                📊 {% trans "Berichte" %}
+            </a>
+            {% endif %}
             {% if starting_individual %}
             <a href="{% url 'genview:family_tree_view' tree_id=tree_id individual_id=starting_individual.pk %}" class="btn btn-primary">
                 🌳 {% trans "Baumansicht" %}

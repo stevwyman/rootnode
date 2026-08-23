@@ -1,0 +1,159 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ report.title }} — {% trans "Bericht" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+@media print {
+    .navbar, footer, .report-form, .report-actions { display: none !important; }
+    .card { border: 0 !important; box-shadow: none !important; }
+}
+.report-table thead th { white-space: nowrap; }
+.report-table td { vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4 report-actions">
+        <div>
+            <a href="{% url 'genview:report-list' tree_id=tree_id %}" class="small text-decoration-none">← {% trans "Alle Berichte" %}</a>
+            <h1 class="h3 mb-1">{{ report.title }}</h1>
+            <p class="text-muted mb-0">{{ report.description }}</p>
+        </div>
+        {% if ran %}
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+            🖨️ {% trans "Drucken" %}
+        </button>
+        {% endif %}
+    </div>
+
+    <form method="get" class="card shadow-sm mb-4 report-form">
+        <div class="card-body">
+            <input type="hidden" name="run" value="1">
+            <div class="row g-3">
+                {% for field in param_fields %}
+                <div class="col-md-6">
+                    {% if field.param.kind == "boolean" %}
+                    <div class="form-check mt-4">
+                        <input type="checkbox" class="form-check-input" name="{{ field.param.name }}" id="id_{{ field.param.name }}" value="1" {% if field.checked %}checked{% endif %}>
+                        <label class="form-check-label" for="id_{{ field.param.name }}">{{ field.param.label }}</label>
+                    </div>
+                    {% elif field.param.kind == "choice" %}
+                    <label class="form-label" for="id_{{ field.param.name }}">{{ field.param.label }}</label>
+                    <select name="{{ field.param.name }}" id="id_{{ field.param.name }}" class="form-select">
+                        {% for value, label in field.param.choices %}
+                        <option value="{{ value }}" {% if field.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% elif field.param.kind == "person" %}
+                    <label class="form-label" for="id_{{ field.param.name }}">{{ field.param.label }}</label>
+                    <select name="{{ field.param.name }}" id="id_{{ field.param.name }}" class="form-select js-report-person" style="width: 100%;">
+                        {% if field.selected_person %}
+                        <option value="{{ field.selected_person.pk }}" selected>{{ field.selected_person.full_name }}</option>
+                        {% endif %}
+                    </select>
+                    {% elif field.param.kind == "family" %}
+                    <label class="form-label" for="id_{{ field.param.name }}">{{ field.param.label }}</label>
+                    <select name="{{ field.param.name }}" id="id_{{ field.param.name }}" class="form-select js-report-family" style="width: 100%;">
+                        {% if field.selected_family %}
+                        <option value="{{ field.selected_family.pk }}" selected>{{ field.selected_family }}</option>
+                        {% endif %}
+                    </select>
+                    {% else %}
+                    <label class="form-label" for="id_{{ field.param.name }}">{{ field.param.label }}</label>
+                    <input type="{% if field.param.kind == 'integer' %}number{% else %}text{% endif %}"
+                           class="form-control"
+                           name="{{ field.param.name }}"
+                           id="id_{{ field.param.name }}"
+                           value="{{ field.value|default_if_none:'' }}"
+                           {% if field.param.min_value != None %}min="{{ field.param.min_value }}"{% endif %}
+                           {% if field.param.max_value != None %}max="{{ field.param.max_value }}"{% endif %}>
+                    {% endif %}
+                    {% if field.param.help_text %}
+                    <div class="form-text">{{ field.param.help_text }}</div>
+                    {% endif %}
+                    {% if param_errors|default:None %}
+                        {% for name, message in param_errors.items %}
+                            {% if name == field.param.name %}
+                            <div class="text-danger small">{{ message }}</div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">{% trans "Bericht erstellen" %}</button>
+            </div>
+        </div>
+    </form>
+
+    {% if ran and result %}
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {% if result.summary %}
+            <p class="fw-semibold">{{ result.summary }}</p>
+            {% endif %}
+            {% if result.notes %}
+            <div class="alert alert-info">
+                {% for note in result.notes %}
+                <div>{{ note }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if result.rows %}
+            <div class="table-responsive">
+                <table class="table table-sm table-striped report-table">
+                    <thead>
+                        <tr>
+                            {% for column in result.columns %}
+                            <th>{{ column }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group, row in result.iter_rows %}
+                        {% if group %}
+                        <tr class="table-light">
+                            <th colspan="{{ result.columns|length }}">{{ group }}</th>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            {% for cell in row %}
+                            <td class="{{ cell.css }}">
+                                {% if cell.url %}
+                                <a href="{{ cell.url }}" title="{{ cell.title }}">{{ cell.text }}</a>
+                                {% else %}
+                                <span title="{{ cell.title }}">{{ cell.text }}</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% elif not result.notes %}
+            <p class="text-muted mb-0">{% trans "Keine Daten für diesen Bericht." %}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    if ($('.js-report-person').length) {
+        initGenviewSelect2('.js-report-person', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "{% trans 'Person wählen…' %}");
+    }
+    if ($('.js-report-family').length) {
+        initGenviewSelect2('.js-report-family', "{% url 'genview:api-search-families' tree_id=tree_id %}", "{% trans 'Familie wählen…' %}");
+    }
+});
+</script>
+{% endblock %}
