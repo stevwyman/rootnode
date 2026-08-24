@@ -335,6 +335,7 @@ urlpatterns = [
     path('accounts/register/', views.RegisterView.as_view(), name='register'),
     path('admin/users/', views.UserManagementListView.as_view(), name='user-management-list'),
     path('admin/users/<int:user_id>/<str:action>/', views.UserManagementActionView.as_view(), name='user-management-action'),
+    path('admin/settings/', views.AppSettingsView.as_view(), name='app-settings'),
     
     # ----------------------------------------------
     # --- ADMIN

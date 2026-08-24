@@ -49,9 +49,11 @@
                 {% endif %}
             </p>
         </div>
+        {% if enable_face_recognition %}
         <a href="{% url 'genview:media-face-scan' tree_id=tree_id %}" class="btn btn-outline-secondary btn-sm">
             {% trans "Batch-Scan" %}
         </a>
+        {% endif %}
     </div>
 
     {% if face_tags %}

@@ -137,6 +137,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'genview.context_processors.app_version',
+                'genview.context_processors.app_features',
             ],
         },
     },

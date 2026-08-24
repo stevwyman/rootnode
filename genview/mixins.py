@@ -18,6 +18,19 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
 
     def test_func(self):
         return self.request.user.is_authenticated and self.request.user.is_superuser # type: ignore
+
+
+class FeatureRequiredMixin:
+    """404 when a site-wide feature flag is off."""
+
+    required_feature = ""
+
+    def dispatch(self, request, *args, **kwargs):
+        from core.features import feature_enabled
+
+        if self.required_feature and not feature_enabled(self.required_feature):
+            raise Http404()
+        return super().dispatch(request, *args, **kwargs)
     
 
 

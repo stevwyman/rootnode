@@ -1,0 +1,39 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Einstellungen" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 720px;">
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0">⚙️ {% trans "Anwendungseinstellungen" %}</h4>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                {% trans "Diese Schalter gelten für die gesamte Anwendung. Ausgeschaltete Funktionen sind in der Oberfläche unsichtbar und ihre Endpunkte antworten nicht." %}
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="border rounded p-3 mb-3">
+                    <div class="form-check form-switch fs-5">
+                        {{ field }}
+                        <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    </div>
+                    {% if field.help_text %}
+                    <div class="form-text ms-5">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% for error in field.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+                <button type="submit" class="btn btn-primary">
+                    {% trans "Speichern" %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

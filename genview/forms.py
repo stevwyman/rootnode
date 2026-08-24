@@ -4,6 +4,7 @@ from django.forms import ModelForm, DateInput
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, TreeMembership
+from core.models import AppSettings
 
 
 # ----------------------------------------------------------------------
@@ -912,4 +913,22 @@ class TreeMembershipForm(forms.ModelForm):
         if role not in valid:
             raise forms.ValidationError(_("Ungültige Rolle."))
         return role
+
+
+_SWITCH = {"class": "form-check-input", "role": "switch"}
+
+
+class AppSettingsForm(forms.ModelForm):
+    class Meta:
+        model = AppSettings
+        fields = (
+            "enable_tree_query",
+            "enable_ocr",
+            "enable_face_recognition",
+        )
+        widgets = {
+            "enable_tree_query": forms.CheckboxInput(attrs=_SWITCH),
+            "enable_ocr": forms.CheckboxInput(attrs=_SWITCH),
+            "enable_face_recognition": forms.CheckboxInput(attrs=_SWITCH),
+        }
 

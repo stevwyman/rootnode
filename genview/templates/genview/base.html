@@ -57,7 +57,9 @@
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     {% endif %}
+                                    {% if enable_tree_query %}
                                     <li><a class="dropdown-item" href="{% url 'genview:tree-query' tree_id=tree_id %}">{% trans "Stammbaum fragen" %}</a></li>
+                                    {% endif %}
                                     {% if user.is_authenticated %}
                                     <li><a class="dropdown-item" href="{% url 'genview:report-list' tree_id=tree_id %}">📊 {% trans "Berichte" %}</a></li>
                                     {% endif %}
@@ -79,13 +81,18 @@
                                         <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 {% trans "Bulk-Upload" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ {% trans "Baum verwalten" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍 {% trans "Orte bereinigen" %}</a></li>
+                                        {% if enable_face_recognition %}
                                         <li><a class="dropdown-item" href="{% url 'genview:media-face-scan' tree_id %}">👤 {% trans "Gesichter scannen" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:face-suggestion-review' tree_id %}">👤 {% trans "Gesichter zuordnen" %}</a></li>
+                                        {% endif %}
+                                        {% if enable_ocr %}
                                         <li><a class="dropdown-item" href="{% url 'genview:document-suggestion-review' tree_id %}">📜 {% trans "Dokument-Vorschläge" %}</a></li>
+                                        {% endif %}
                                     {% endif %}
                                     <li><hr class="dropdown-divider"></li>
                                     {% if user.is_superuser %}
                                         <li><a class="dropdown-item" href="{% url 'genview:gedcom-import' %}">📂 {% trans "GEDCOM importieren" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:app-settings' %}">⚙️ {% trans "Einstellungen" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:user-management-list' %}">🧑‍💼 {% trans "Benutzer" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:eventtype-list' %}">🗓️ {% trans "Ereignistypen" %}</a></li>
                                         <li><hr class="dropdown-divider"></li>

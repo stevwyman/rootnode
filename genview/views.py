@@ -63,14 +63,17 @@ from .forms import (
     EventForm,
     SourceForm,
     SourceQuickCreateForm,
-    PlaceForm
+    PlaceForm,
+    AppSettingsForm,
 )
+from core.features import FEATURE_FACE_RECOGNITION, FEATURE_OCR, FEATURE_TREE_QUERY, feature_enabled
 from .mixins import (
     SuperuserRequiredMixin,
     UserPassesTestMixin,
     TreeAccessMixin,
     TreeEditAccessMixin,
     TreeAdminAccessMixin,
+    FeatureRequiredMixin,
     user_can_edit_tree,
     user_can_admin_tree,
     user_may_see_tree,
@@ -281,19 +284,21 @@ class TreeOverviewView(TreeAccessMixin, TemplateView):
             context["maintenance_without_birth"] = max(without_birth, 0)
 
         if context.get("is_tree_admin"):
-            context["maintenance_unlinked_faces"] = FaceTag.objects.filter(
-                media__gedcom_tree_id=tree_id,
-                individual__isnull=True,
-            ).count()
-            context["maintenance_face_suggestions"] = FaceTag.objects.filter(
-                media__gedcom_tree_id=tree_id,
-                individual__isnull=True,
-                suggested_individual__isnull=False,
-            ).count()
-            context["maintenance_doc_suggestions"] = DocumentExtractionSuggestion.objects.filter(
-                media__gedcom_tree_id=tree_id,
-                status=DocumentExtractionSuggestion.Status.PENDING,
-            ).count()
+            if feature_enabled(FEATURE_FACE_RECOGNITION):
+                context["maintenance_unlinked_faces"] = FaceTag.objects.filter(
+                    media__gedcom_tree_id=tree_id,
+                    individual__isnull=True,
+                ).count()
+                context["maintenance_face_suggestions"] = FaceTag.objects.filter(
+                    media__gedcom_tree_id=tree_id,
+                    individual__isnull=True,
+                    suggested_individual__isnull=False,
+                ).count()
+            if feature_enabled(FEATURE_OCR):
+                context["maintenance_doc_suggestions"] = DocumentExtractionSuggestion.objects.filter(
+                    media__gedcom_tree_id=tree_id,
+                    status=DocumentExtractionSuggestion.Status.PENDING,
+                ).count()
 
         return context
 
@@ -743,10 +748,11 @@ def _run_tree_query(tree_id, payload: dict, apply_privacy: bool) -> dict:
     return execute_tree_query(tree_id, payload, apply_privacy)
 
 
-class TreeQueryView(TreeAccessMixin, TemplateView):
+class TreeQueryView(FeatureRequiredMixin, TreeAccessMixin, TemplateView):
     """Structured kinship query UI plus natural-language parse (Phase 2)."""
 
     template_name = "genview/tree_query.html"
+    required_feature = FEATURE_TREE_QUERY
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -816,10 +822,11 @@ class TreeQueryView(TreeAccessMixin, TemplateView):
         return self.render_to_response(ctx)
 
 
-class TreeQueryExecuteView(TreeAccessMixin, View):
+class TreeQueryExecuteView(FeatureRequiredMixin, TreeAccessMixin, View):
     """JSON execute endpoint for the structured tree query (LLM/MCP later)."""
 
     http_method_names = ["post"]
+    required_feature = FEATURE_TREE_QUERY
 
     def post(self, request, *args, **kwargs):
         try:
@@ -2301,16 +2308,26 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
         media = self.get_object()
 
         if "detect" in request.POST:
+            if not feature_enabled(FEATURE_FACE_RECOGNITION):
+                raise Http404()
             return self._handle_detection(request, media)
         elif "assign" in request.POST:
             return self._handle_assignment(request, media)
         elif "ocr" in request.POST:
+            if not feature_enabled(FEATURE_OCR):
+                raise Http404()
             return self._handle_ocr(request, media)
         elif "parse_suggestions" in request.POST:
+            if not feature_enabled(FEATURE_OCR):
+                raise Http404()
             return self._handle_parse_suggestions(request, media)
         elif "accept_doc_suggestion" in request.POST:
+            if not feature_enabled(FEATURE_OCR):
+                raise Http404()
             return self._handle_doc_suggestion_action(request, media, accept=True)
         elif "reject_doc_suggestion" in request.POST:
+            if not feature_enabled(FEATURE_OCR):
+                raise Http404()
             return self._handle_doc_suggestion_action(request, media, accept=False)
         elif "create_portrait" in request.POST:
             return self._handle_create_portrait(request, media)
@@ -2594,10 +2611,11 @@ def _face_scan_candidate_qs(tree_id):
     )
 
 
-class MediaFaceScanView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
+class MediaFaceScanView(FeatureRequiredMixin, LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Landing page: lists pending photos and drives one-by-one AJAX progress."""
 
     template_name = "genview/media_face_scan.html"
+    required_feature = FEATURE_FACE_RECOGNITION
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2611,10 +2629,11 @@ class MediaFaceScanView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
         return ctx
 
 
-class MediaFaceScanProcessView(LoginRequiredMixin, TreeAdminAccessMixin, View):
+class MediaFaceScanProcessView(FeatureRequiredMixin, LoginRequiredMixin, TreeAdminAccessMixin, View):
     """Process a single media object; called repeatedly by the progress UI."""
 
     http_method_names = ["post"]
+    required_feature = FEATURE_FACE_RECOGNITION
 
     def post(self, request, *args, **kwargs):
         import json
@@ -2656,11 +2675,12 @@ class MediaFaceScanProcessView(LoginRequiredMixin, TreeAdminAccessMixin, View):
         )
 
 
-class FaceSuggestionReviewView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
+class FaceSuggestionReviewView(FeatureRequiredMixin, LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Review queue for unlinked faces with optional person suggestions."""
 
     template_name = "genview/face_suggestion_review.html"
     paginate_by = 24
+    required_feature = FEATURE_FACE_RECOGNITION
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2728,10 +2748,11 @@ class FaceSuggestionReviewView(LoginRequiredMixin, TreeAdminAccessMixin, Templat
         return self._redirect_back(request, tree_id)
 
 
-class DocumentSuggestionReviewView(LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
+class DocumentSuggestionReviewView(FeatureRequiredMixin, LoginRequiredMixin, TreeAdminAccessMixin, TemplateView):
     """Central queue for OCR-derived event suggestions."""
 
     template_name = "genview/document_suggestion_review.html"
+    required_feature = FEATURE_OCR
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -4099,7 +4120,24 @@ class UserManagementActionView(SuperuserRequiredMixin, View):
             messages.success(request, _("Benutzer %(username)s wurde dauerhaft gelöscht.") % {"username": username})
             
         return redirect('genview:user-management-list')
-    
+
+
+class AppSettingsView(SuperuserRequiredMixin, UpdateView):
+    """Site-wide feature switches (OCR, face recognition, tree query)."""
+
+    form_class = AppSettingsForm
+    template_name = "genview/app_settings.html"
+    success_url = reverse_lazy("genview:app-settings")
+
+    def get_object(self, queryset=None):
+        from core.features import get_app_settings
+
+        return get_app_settings()
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Einstellungen gespeichert."))
+        return super().form_valid(form)
+
 
 class GedcomImportView(SuperuserRequiredMixin, FormView):
     """
