@@ -1,0 +1,40 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ role_label }} {% trans "zuordnen" %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <h1 class="mb-4">{{ role_label }} {% trans "zuordnen" %}</h1>
+        <p class="text-muted">
+            {% trans "Wähle eine bestehende Person. Die Person wird nicht neu angelegt." %}
+        </p>
+
+        <form method="post" class="card shadow-sm border-0">
+            {% csrf_token %}
+            <div class="card-body">
+                {{ form.non_field_errors }}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.individual.label }}</label>
+                    {{ form.individual }}
+                    {{ form.individual.errors }}
+                </div>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-between">
+                <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</a>
+                <button type="submit" class="btn btn-success">{% trans "Zuordnen" %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    initGenviewSelect2('.select2-individuals', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "{% trans 'Person suchen…' %}");
+});
+</script>
+{% endblock %}

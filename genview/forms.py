@@ -365,12 +365,12 @@ class ChildFamilyLinkForm(ModelForm):
         model = ChildFamilyLink
         fields = ["child", "family", "relationship_type"]
         widgets = {
-            "child": forms.Select(attrs={"class": "form-select"}),
+            "child": forms.Select(attrs={"class": "form-control select2-individuals"}),
             "family": forms.Select(attrs={"class": "form-select"}),
             "relationship_type": forms.Select(attrs={"class": "form-select"}),
         }
 
-    def __init__(self, *args, tree_id=None, **kwargs):
+    def __init__(self, *args, tree_id=None, family=None, **kwargs):
         super().__init__(*args, **kwargs)
         current_tree_id = tree_id
         if not current_tree_id and self.instance and self.instance.pk:
@@ -379,12 +379,85 @@ class ChildFamilyLinkForm(ModelForm):
                 current_tree_id = self.instance.family.gedcom_tree_id
             elif self.instance.child_id:
                 current_tree_id = self.instance.child.gedcom_tree_id
+        if family is not None and not current_tree_id:
+            current_tree_id = family.gedcom_tree_id
+
+        child_qs = Individual.objects.none()
+        family_qs = Family.objects.none()
         if current_tree_id:
-            self.fields["child"].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id)
-            self.fields["family"].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
+            child_qs = Individual.objects.filter(gedcom_tree_id=current_tree_id)
+            family_qs = Family.objects.filter(gedcom_tree_id=current_tree_id)
+
+        if family is not None:
+            exclude_ids = [
+                pk
+                for pk in (
+                    family.husband_id,
+                    family.wife_id,
+                    *family.children.values_list("child_id", flat=True),
+                )
+                if pk
+            ]
+            if self.instance and self.instance.child_id:
+                exclude_ids = [pk for pk in exclude_ids if pk != self.instance.child_id]
+            child_qs = child_qs.exclude(pk__in=exclude_ids)
+            self.fields["family"].queryset = family_qs
+            self.fields["family"].widget = forms.HiddenInput()
+            self.fields["family"].initial = family.pk
         else:
-            self.fields["child"].queryset = Individual.objects.none()
-            self.fields["family"].queryset = Family.objects.none()
+            self.fields["family"].queryset = family_qs
+
+        self.fields["child"].queryset = child_qs
+        selected = []
+        if self.instance and self.instance.child_id:
+            selected = [self.instance.child]
+        elif self.is_bound:
+            posted = self.data.get(self.add_prefix("child"))
+            if posted:
+                hit = child_qs.filter(pk=posted).first()
+                if hit:
+                    selected = [hit]
+        empty_label = self.fields["child"].empty_label or "---------"
+        self.fields["child"].widget.choices = [("", empty_label)] + [
+            (obj.pk, str(obj)) for obj in selected
+        ]
+
+
+class FamilyAssignSpouseForm(forms.Form):
+    individual = forms.ModelChoiceField(
+        queryset=Individual.objects.none(),
+        label=_("Person"),
+        widget=forms.Select(attrs={"class": "form-control select2-individuals"}),
+    )
+
+    def __init__(self, *args, tree_id=None, family=None, role=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = Individual.objects.none()
+        if tree_id:
+            qs = Individual.objects.filter(gedcom_tree_id=tree_id)
+        exclude_ids = []
+        if family is not None:
+            if role == "husband" and family.wife_id:
+                exclude_ids.append(family.wife_id)
+            elif role == "wife" and family.husband_id:
+                exclude_ids.append(family.husband_id)
+            exclude_ids.extend(
+                pk for pk in family.children.values_list("child_id", flat=True) if pk
+            )
+        if exclude_ids:
+            qs = qs.exclude(pk__in=exclude_ids)
+        self.fields["individual"].queryset = qs
+        selected = []
+        if self.is_bound:
+            posted = self.data.get("individual")
+            if posted:
+                hit = qs.filter(pk=posted).first()
+                if hit:
+                    selected = [hit]
+        empty_label = "---------"
+        self.fields["individual"].widget.choices = [("", empty_label)] + [
+            (obj.pk, str(obj)) for obj in selected
+        ]
 
 
 # ----------------------------------------------------------------------
@@ -635,6 +708,7 @@ class EventForm(forms.ModelForm):
         # 1. Variablen herausziehen und löschen
         target_type = kwargs.pop('target_type', 'individual')
         tree_id = kwargs.pop('tree_id', None)
+        birth_only = kwargs.pop('birth_only', False)
         
         # 2. Basis-Formular initialisieren
         super().__init__(*args, **kwargs)
@@ -685,11 +759,21 @@ class EventForm(forms.ModelForm):
                 if self.initial.get('individual'):
                     self.fields['individual'].widget = forms.HiddenInput()
             if 'event_type' in self.fields:
-                self.fields['event_type'].queryset = EventType.objects.filter(
-                    category__in=[EventType.Category.INDIVIDUAL, EventType.Category.BOTH]
-                ).order_by('name')
+                if birth_only:
+                    from .event_types import ensure_birth_event_type
+
+                    birt = ensure_birth_event_type()
+                    self.fields['event_type'].queryset = EventType.objects.filter(pk=birt.pk)
+                    self.fields['event_type'].initial = birt.pk
+                else:
+                    self.fields['event_type'].queryset = EventType.objects.filter(
+                        category__in=[EventType.Category.INDIVIDUAL, EventType.Category.BOTH]
+                    ).order_by('name')
                 
         elif target_type == 'family':
+            from .event_types import ensure_standard_family_event_types
+
+            ensure_standard_family_event_types()
             if 'individual' in self.fields:
                 del self.fields['individual']  # Personenfeld bei Familien-Events löschen
             

@@ -356,7 +356,7 @@
                                                         ⚡ {{ event.event_type_name }}
                                                     </h6>
                                                     
-                                                    {% if is_tree_admin %}
+                                                    {% if is_tree_admin or can_edit and event.family_id %}
                                                         {% url 'genview:event-edit' tree_id=tree_id pk=event.pk as edit_url %}
                                                         {% url 'genview:event-detail' tree_id=tree_id pk=event.pk as detail_url %}
                                                         {% url 'genview:event-delete' tree_id=tree_id pk=event.pk as delete_url %}
@@ -386,19 +386,24 @@
                                                 </div>
 
                                                 
-                                                {% if event.event_type.tag == 'MARR' and event.family %}
-                                                    {% if event.family.husband.pk == person.pk %}
+                                                {% if event.family_id %}
+                                                    <span class="badge bg-white text-secondary border mb-2">Familie</span>
+                                                {% endif %}
+                                                {% if event.family %}
+                                                    {% if event.family.husband_id == person.pk %}
                                                         {% if event.family.wife %}
                                                             {% if not apply_privacy or not event.family.wife.is_confidential %}
                                                     <div class="fst-italic text-secondary small mb-2">
-                                                        💍 Mit {{ event.family.wife.full_name }}
+                                                        {% if event.event_type.tag == 'DIV' %}💔{% elif event.event_type.tag == 'CENS' %}📝{% else %}💍{% endif %}
+                                                        Mit {{ event.family.wife.full_name }}
                                                     </div>
                                                             {% endif %}
                                                         {% endif %}
                                                     {% elif event.family.husband %}
                                                         {% if not apply_privacy or not event.family.husband.is_confidential %}
                                                     <div class="fst-italic text-secondary small mb-2">
-                                                        💍 Mit {{ event.family.husband.full_name }}
+                                                        {% if event.event_type.tag == 'DIV' %}💔{% elif event.event_type.tag == 'CENS' %}📝{% else %}💍{% endif %}
+                                                        Mit {{ event.family.husband.full_name }}
                                                     </div>
                                                         {% endif %}
                                                     {% endif %}

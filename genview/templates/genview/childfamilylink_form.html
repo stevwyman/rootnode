@@ -1,0 +1,55 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Kind mit Familie verknüpfen" %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <h1 class="mb-4">{% trans "Bestehendes Kind verknüpfen" %}</h1>
+        {% if family %}
+            <p class="text-muted">
+                {% trans "Die Person bleibt erhalten und wird dieser Familie als Kind zugeordnet." %}
+                <span class="font-monospace">{{ family.gedcom_id }}</span>
+            </p>
+        {% endif %}
+
+        <form method="post" class="card shadow-sm border-0">
+            {% csrf_token %}
+            <div class="card-body">
+                {{ form.non_field_errors }}
+                {% if form.family %}{{ form.family }}{% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.child.label }}</label>
+                    {{ form.child }}
+                    {{ form.child.errors }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">{{ form.relationship_type.label }}</label>
+                    {{ form.relationship_type }}
+                    {{ form.relationship_type.errors }}
+                </div>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-between">
+                {% if family %}
+                    <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</a>
+                {% else %}
+                    <a href="{% url 'genview:family-list' tree_id=tree_id %}" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</a>
+                {% endif %}
+                <button type="submit" class="btn btn-success">{% trans "Verknüpfen" %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    initGenviewSelect2('.select2-individuals', "{% url 'genview:api-search-individuals' tree_id=tree_id %}", "{% trans 'Person suchen…' %}");
+});
+</script>
+{% endblock %}

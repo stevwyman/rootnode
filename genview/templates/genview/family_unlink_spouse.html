@@ -1,0 +1,41 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ role_label }} {% trans "entfernen" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow border-warning border-opacity-50">
+                <div class="card-header bg-warning py-3 text-center">
+                    <h4 class="mb-0">{{ role_label }} {% trans "aus Familie entfernen" %}</h4>
+                </div>
+                <div class="card-body p-4 text-center">
+                    <h5 class="mb-4">
+                        {% blocktrans with name=person.full_name role=role_label %}
+                        Soll <strong>{{ name }}</strong> als {{ role }} aus dieser Familie entfernt werden?
+                        {% endblocktrans %}
+                    </h5>
+                    <div class="bg-light p-3 rounded mb-4 text-start border">
+                        <p class="mb-0 text-muted small">
+                            {% trans "Die Person selbst bleibt im Stammbaum. Familienereignisse (z. B. Heirat) bleiben an der Familie." %}
+                        </p>
+                    </div>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}" class="btn btn-outline-secondary px-4">
+                                {% trans "Abbrechen" %}
+                            </a>
+                            <button type="submit" class="btn btn-warning px-4 shadow-sm">
+                                {% trans "Aus Familie entfernen" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -214,7 +214,7 @@
                                 * {{ link.child.birth_year|default:"?" }} &nbsp;† {{ link.child.death_year|default:"?" }}
                             </div>
                             
-                            {% if link.relationship_type != 'BIOLOGICAL' %}
+                            {% if link.relationship_type != 'B' %}
                                 <span class="badge bg-info mt-1" style="font-size: 0.6rem;">{{ link.get_relationship_type_display }}</span>
                             {% endif %}
                         </a>
@@ -223,6 +223,102 @@
             </div>
         {% endif %}
 
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4 border-0">
+    <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+        <span>👨‍👩‍👧 Familienmitglieder</span>
+        {% if can_edit %}
+            <div class="btn-group">
+                <a href="{% url 'genview:family-add-child' tree_id=tree_id family_pk=family.pk %}" class="btn btn-sm btn-outline-primary">
+                    🔗 Kind verknüpfen
+                </a>
+                <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-primary">
+                    👶 Neues Kind
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <div class="row g-0">
+            <div class="col-md-6 border-end">
+                <h6 class="text-uppercase text-muted small fw-bold px-3 pt-3 mb-2">Eltern</h6>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Ehemann / Vater</div>
+                            {% if family.husband %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=family.husband.pk %}" class="text-decoration-none">
+                                    {{ family.husband.full_name }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted fst-italic">nicht zugeordnet</span>
+                            {% endif %}
+                        </div>
+                        {% if can_edit %}
+                            {% if family.husband %}
+                                <a href="{% url 'genview:family-unlink-spouse' tree_id=tree_id family_pk=family.pk role='husband' %}" class="btn btn-sm btn-outline-danger">Entfernen</a>
+                            {% else %}
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'genview:family-assign-spouse' tree_id=tree_id family_pk=family.pk role='husband' %}" class="btn btn-outline-primary">Zuordnen</a>
+                                    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ family.pk }}&role=husband" class="btn btn-outline-secondary">Neu</a>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Ehefrau / Mutter</div>
+                            {% if family.wife %}
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=family.wife.pk %}" class="text-decoration-none">
+                                    {{ family.wife.full_name }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted fst-italic">nicht zugeordnet</span>
+                            {% endif %}
+                        </div>
+                        {% if can_edit %}
+                            {% if family.wife %}
+                                <a href="{% url 'genview:family-unlink-spouse' tree_id=tree_id family_pk=family.pk role='wife' %}" class="btn btn-sm btn-outline-danger">Entfernen</a>
+                            {% else %}
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'genview:family-assign-spouse' tree_id=tree_id family_pk=family.pk role='wife' %}" class="btn btn-outline-primary">Zuordnen</a>
+                                    <a href="{% url 'genview:individual-add' tree_id=tree_id %}?fill_family={{ family.pk }}&role=wife" class="btn btn-outline-secondary">Neu</a>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-uppercase text-muted small fw-bold px-3 pt-3 mb-2">Kinder</h6>
+                {% if family.children.all %}
+                    <ul class="list-group list-group-flush">
+                        {% for link in family.children.all %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=link.child.pk %}" class="text-decoration-none">
+                                        {{ link.child.full_name }}
+                                    </a>
+                                    {% if link.relationship_type != 'B' %}
+                                        <span class="badge bg-info ms-1" style="font-size: 0.65rem;">{{ link.get_relationship_type_display }}</span>
+                                    {% endif %}
+                                    {% if can_edit and link.child_id not in child_ids_with_birth %}
+                                        <a href="{% url 'genview:event-add-for-person' tree_id=tree_id person_pk=link.child.pk %}?family={{ family.pk }}" class="d-block small mt-1">Geburt erfassen</a>
+                                    {% endif %}
+                                </div>
+                                {% if can_edit %}
+                                    <a href="{% url 'genview:link-delete' tree_id=tree_id pk=link.pk %}" class="btn btn-sm btn-outline-danger">Entfernen</a>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted fst-italic small px-3 pb-3 mb-0">Noch keine Kinder verknüpft.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -270,7 +366,14 @@
         <div class="card shadow-sm h-100 border-0">
             <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
                 <span>⏳ Familien-Chronik</span>
-                <span class="badge bg-secondary rounded-pill">{{ family_events|length }} Einträge</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary rounded-pill">{{ family_events|length }} Einträge</span>
+                    {% if can_edit %}
+                        <a href="{% url 'genview:event-add-for-family' tree_id=tree_id family_pk=family.pk %}" class="btn btn-sm btn-outline-primary">
+                            ✨ Ereignis
+                        </a>
+                    {% endif %}
+                </div>
             </div>
             
             <div class="card-body p-0">
@@ -284,7 +387,11 @@
                                             {% if ev.event_type.tag == 'MARR' %}💍 {% endif %}
                                             {% if ev.event_type.tag == 'DIV' %}💔 {% endif %}
                                             {% if ev.event_type.tag == 'CENS' %}📝 {% endif %}
+                                            {% if ev.event_type.tag == 'BIRT' %}👶 {% endif %}
                                             {{ ev.event_type.name|default:ev.event_type.tag }}
+                                            {% if ev.individual %}
+                                                <span class="fw-normal text-muted small">· {{ ev.individual.full_name }}</span>
+                                            {% endif %}
                                         </h6>
                                         
                                         {% if ev.place %}
@@ -301,6 +408,11 @@
                                             <span class="badge bg-light text-dark border w-100">{{ ev.parsed_date|date:"d.m.Y" }}</span>
                                         {% elif ev.raw_date %}
                                             <span class="badge bg-light text-dark border w-100">{{ ev.raw_date }}</span>
+                                        {% endif %}
+                                        {% if ev.can_mutate %}
+                                            <div class="mt-2">
+                                                {% action_buttons layout="toolbar" edit_url=ev.chronicle_edit_url delete_url=ev.chronicle_delete_url btn_extra="border-0 btn-sm" %}
+                                            </div>
                                         {% endif %}
                                     </div>
                                 </div>

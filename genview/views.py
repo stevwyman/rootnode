@@ -57,6 +57,7 @@ from .forms import (
     IndividualSearchForm,
     FamilyForm,
     ChildFamilyLinkForm,
+    FamilyAssignSpouseForm,
     MediaObjectForm,
     AddExistingMediaForm,
     EventForm,
@@ -71,6 +72,7 @@ from .mixins import (
     TreeEditAccessMixin,
     TreeAdminAccessMixin,
     user_can_edit_tree,
+    user_can_admin_tree,
     user_may_see_tree,
     apply_privacy_to_individual_qs,
     apply_privacy_to_family_qs,
@@ -1095,7 +1097,13 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         # -------------------------------------------------------------
         combined_events = Event.objects.filter(event_type__is_visible=True).filter(
             Q(individual=person) | Q(family__husband=person) | Q(family__wife=person)
-        ).select_related('event_type', 'place').prefetch_related('sources').order_by(
+        ).select_related(
+            "event_type",
+            "place",
+            "family",
+            "family__husband",
+            "family__wife",
+        ).prefetch_related("sources", "media_objects").order_by(
             F("parsed_date").asc(nulls_last=True)
         )
         combined_events = apply_privacy_to_event_qs(
@@ -1374,13 +1382,18 @@ class IndividualCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
         return response
 
     def get_success_url(self):
-        # WICHTIG: Die URL benötigt laut get_absolute_url die tree_id
+        tree_id = self.kwargs.get("tree_id")
+        family_id = self.request.GET.get("parent_family") or self.request.GET.get(
+            "fill_family"
+        )
+        if family_id:
+            return reverse_lazy(
+                "genview:family-detail",
+                kwargs={"tree_id": tree_id, "pk": family_id},
+            )
         return reverse_lazy(
-            "genview:individual-detail", 
-            kwargs={
-                "tree_id": self.kwargs.get("tree_id"), 
-                "pk": self.object.pk
-            }
+            "genview:individual-detail",
+            kwargs={"tree_id": tree_id, "pk": self.object.pk},
         )
 
 
@@ -1764,6 +1777,9 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         )
 
         spouse_ids = [pk for pk in (family.husband_id, family.wife_id) if pk]
+        child_ids = [
+            link.child_id for link in family.children.all() if link.child_id
+        ]
         family_event_qs = Event.objects.filter(event_type__is_visible=True).filter(
             Q(family=family)
             | Q(
@@ -1774,7 +1790,12 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                     EventType.Category.BOTH,
                 ],
             )
-        ).select_related("event_type", "place").order_by(
+            | Q(
+                family__isnull=True,
+                individual_id__in=child_ids,
+                event_type__tag="BIRT",
+            )
+        ).select_related("event_type", "place", "individual").order_by(
             F("parsed_date").asc(nulls_last=True), "pk"
         )
         ctx["family_events"] = apply_privacy_to_event_qs(
@@ -1782,7 +1803,31 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         )
 
         family_events = list(ctx["family_events"])
+        family_query = f"?family={family.pk}"
+        can_edit = ctx.get("can_edit")
+        can_manage_events = ctx.get("can_manage_events")
+        for ev in family_events:
+            is_birth = getattr(ev.event_type, "tag", None) == "BIRT"
+            ev.can_mutate = bool(
+                can_manage_events
+                or (can_edit and (ev.family_id or is_birth))
+            )
+            ev.chronicle_edit_url = reverse(
+                "genview:event-edit",
+                kwargs={"tree_id": ctx["tree_id"], "pk": ev.pk},
+            ) + family_query
+            ev.chronicle_delete_url = reverse(
+                "genview:event-delete",
+                kwargs={"tree_id": ctx["tree_id"], "pk": ev.pk},
+            ) + family_query
         ctx["family_events"] = family_events
+        ctx["child_ids_with_birth"] = {
+            ev.individual_id
+            for ev in family_events
+            if ev.individual_id
+            and ev.event_type_id
+            and getattr(ev.event_type, "tag", None) == "BIRT"
+        }
         event_ids = [ev.pk for ev in family_events]
         family_media = _visible_media_qs(
             MediaObject.objects.filter(gedcom_tree_id=ctx["tree_id"])
@@ -1907,6 +1952,16 @@ class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateV
     form_class = ChildFamilyLinkForm
     template_name = "genview/childfamilylink_form.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        self.family = None
+        tree_id = kwargs.get("tree_id")
+        family_pk = kwargs.get("family_pk") or request.GET.get("family")
+        if family_pk:
+            self.family = get_object_or_404(
+                Family, pk=family_pk, gedcom_tree_id=tree_id
+            )
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
@@ -1914,7 +1969,23 @@ class ChildFamilyLinkCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateV
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["tree_id"] = self.kwargs.get("tree_id")
+        kwargs["family"] = self.family
         return kwargs
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if self.family:
+            initial["family"] = self.family.pk
+        return initial
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Kind mit der Familie verknüpft."))
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["family"] = self.family
+        return ctx
 
     def get_success_url(self):
         return reverse_lazy(
@@ -1932,9 +2003,139 @@ class ChildFamilyLinkDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteV
         return ChildFamilyLink.objects.filter(family__gedcom_tree_id=tree_id)
 
     def get_success_url(self):
+        tree_id = self.kwargs.get("tree_id")
+        family_pk = self.object.family_id
+        messages.success(
+            self.request,
+            _("Kind wurde aus der Familie entfernt. Die Person selbst bleibt erhalten."),
+        )
         return reverse_lazy(
             "genview:family-detail",
-            kwargs={"tree_id": self.kwargs.get("tree_id"), "pk": self.object.family.pk},
+            kwargs={"tree_id": tree_id, "pk": family_pk},
+        )
+
+
+FAMILY_SPOUSE_ROLES = {
+    "husband": _("Ehemann"),
+    "wife": _("Ehefrau"),
+}
+
+
+class FamilyUnlinkSpouseView(LoginRequiredMixin, TreeEditAccessMixin, TemplateView):
+    """Remove husband or wife from a family without deleting the person."""
+
+    template_name = "genview/family_unlink_spouse.html"
+    http_method_names = ["get", "post"]
+
+    def dispatch(self, request, *args, **kwargs):
+        tree_id = kwargs.get("tree_id")
+        self.role = kwargs.get("role")
+        if self.role not in FAMILY_SPOUSE_ROLES:
+            raise Http404()
+        self.family = get_object_or_404(
+            Family, pk=kwargs.get("family_pk"), gedcom_tree_id=tree_id
+        )
+        self.person = getattr(self.family, self.role)
+        if self.person is None:
+            messages.info(
+                request,
+                _("Diese Familie hat derzeit keinen %(role)s.")
+                % {"role": FAMILY_SPOUSE_ROLES[self.role]},
+            )
+            return redirect(
+                "genview:family-detail", tree_id=tree_id, pk=self.family.pk
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["family"] = self.family
+        ctx["person"] = self.person
+        ctx["role"] = self.role
+        ctx["role_label"] = FAMILY_SPOUSE_ROLES[self.role]
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        setattr(self.family, self.role, None)
+        self.family.save(update_fields=[self.role])
+        messages.success(
+            request,
+            _("%(person)s wurde als %(role)s aus der Familie entfernt.")
+            % {
+                "person": self.person.full_name(),
+                "role": FAMILY_SPOUSE_ROLES[self.role],
+            },
+        )
+        return redirect(
+            "genview:family-detail",
+            tree_id=self.kwargs.get("tree_id"),
+            pk=self.family.pk,
+        )
+
+
+class FamilyAssignSpouseView(LoginRequiredMixin, TreeEditAccessMixin, FormView):
+    """Attach an existing person as husband or wife of a family."""
+
+    template_name = "genview/family_assign_spouse.html"
+    form_class = FamilyAssignSpouseForm
+
+    def dispatch(self, request, *args, **kwargs):
+        tree_id = kwargs.get("tree_id")
+        self.role = kwargs.get("role")
+        if self.role not in FAMILY_SPOUSE_ROLES:
+            raise Http404()
+        self.family = get_object_or_404(
+            Family, pk=kwargs.get("family_pk"), gedcom_tree_id=tree_id
+        )
+        if getattr(self.family, self.role_id_attr()):
+            messages.info(
+                request,
+                _("Diese Familie hat bereits einen %(role)s.")
+                % {"role": FAMILY_SPOUSE_ROLES[self.role]},
+            )
+            return redirect(
+                "genview:family-detail", tree_id=tree_id, pk=self.family.pk
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+    def role_id_attr(self):
+        return f"{self.role}_id"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        kwargs["family"] = self.family
+        kwargs["role"] = self.role
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["family"] = self.family
+        ctx["role"] = self.role
+        ctx["role_label"] = FAMILY_SPOUSE_ROLES[self.role]
+        return ctx
+
+    def form_valid(self, form):
+        person = form.cleaned_data["individual"]
+        setattr(self.family, self.role, person)
+        self.family.save(update_fields=[self.role])
+        messages.success(
+            self.request,
+            _("%(person)s wurde als %(role)s mit der Familie verknüpft.")
+            % {
+                "person": person.full_name(),
+                "role": FAMILY_SPOUSE_ROLES[self.role],
+            },
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse(
+            "genview:family-detail",
+            kwargs={
+                "tree_id": self.kwargs.get("tree_id"),
+                "pk": self.family.pk,
+            },
         )
 
 
@@ -3150,6 +3351,58 @@ class EventDetailView(TreeAccessMixin, DetailView):
 
         # 4. Nur wenn alles okay ist, wird das Ereignis an das Template übergeben
         return event
+
+
+def _event_return_family_id(request, event=None):
+    family_id = request.GET.get("family") or request.GET.get("next_family")
+    if family_id:
+        return family_id
+    if event is not None and getattr(event, "family_id", None):
+        return str(event.family_id)
+    return None
+
+
+def _event_success_url(request, tree_id, event):
+    family_id = _event_return_family_id(request, event)
+    if family_id and Family.objects.filter(
+        pk=family_id, gedcom_tree_id=tree_id
+    ).exists():
+        return reverse(
+            "genview:family-detail",
+            kwargs={"tree_id": tree_id, "pk": family_id},
+        )
+    if event.individual_id:
+        return reverse(
+            "genview:individual-detail",
+            kwargs={"tree_id": tree_id, "pk": event.individual_id},
+        )
+    if event.family_id:
+        return reverse(
+            "genview:family-detail",
+            kwargs={"tree_id": tree_id, "pk": event.family_id},
+        )
+    return reverse("genview:event-list", kwargs={"tree_id": tree_id})
+
+
+def _person_is_child_of_family(person_id, family_id, tree_id) -> bool:
+    return ChildFamilyLink.objects.filter(
+        child_id=person_id,
+        family_id=family_id,
+        family__gedcom_tree_id=tree_id,
+    ).exists()
+
+
+def _editor_may_mutate_event(event, tree_id) -> bool:
+    if event.family_id:
+        return True
+    if not event.individual_id:
+        return False
+    if getattr(event.event_type, "tag", None) != "BIRT":
+        return False
+    return ChildFamilyLink.objects.filter(
+        child_id=event.individual_id,
+        family__gedcom_tree_id=tree_id,
+    ).exists()
     
 
 class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
@@ -3157,12 +3410,32 @@ class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
     form_class = EventForm
     template_name = "genview/event_form.html"
 
+    def test_func(self):
+        tree_id = self.kwargs.get("tree_id")
+        if user_can_admin_tree(self.request.user, tree_id):
+            return True
+        if not user_can_edit_tree(self.request.user, tree_id):
+            return False
+        if self.get_target_type() == "family":
+            return True
+        return self._is_family_child_birth_context()
+
     def get_target_type(self):
         if self.kwargs.get("target_type"):
             return self.kwargs["target_type"]
+        if self.kwargs.get("person_pk") or self.request.GET.get("individual"):
+            return "individual"
         if self.kwargs.get("family_pk") or self.request.GET.get("family"):
             return "family"
         return "individual"
+
+    def _is_family_child_birth_context(self):
+        person = self._resolve_person()
+        family = self._resolve_family()
+        tree_id = self.kwargs.get("tree_id")
+        if not person or not family:
+            return False
+        return _person_is_child_of_family(person.pk, family.pk, tree_id)
 
     def _resolve_person(self):
         tree_id = self.kwargs.get("tree_id")
@@ -3192,6 +3465,7 @@ class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
         kwargs = super().get_form_kwargs()
         kwargs["target_type"] = self.get_target_type()
         kwargs["tree_id"] = self.kwargs.get("tree_id")
+        kwargs["birth_only"] = self._is_family_child_birth_context()
         return kwargs
 
     def form_valid(self, form):
@@ -3212,18 +3486,9 @@ class EventCreateView(LoginRequiredMixin, TreeAdminAccessMixin, CreateView):
         return response
 
     def get_success_url(self):
-        tree_id = self.kwargs.get("tree_id")
-        
-        # Zurück zur Person?
-        if self.object.individual:
-            return reverse("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
-            
-        # Zurück zur Familie?
-        elif self.object.family:
-            return reverse("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
-            
-        # Fallback zur Liste
-        return reverse("genview:event-list", kwargs={"tree_id": tree_id})
+        return _event_success_url(
+            self.request, self.kwargs.get("tree_id"), self.object
+        )
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3238,6 +3503,19 @@ class EventUpdateView(LoginRequiredMixin, TreeAdminAccessMixin, UpdateView):
     model = Event
     form_class = EventForm
     template_name = "genview/event_form.html"
+
+    def test_func(self):
+        tree_id = self.kwargs.get("tree_id")
+        if user_can_admin_tree(self.request.user, tree_id):
+            return True
+        if not user_can_edit_tree(self.request.user, tree_id):
+            return False
+        event = (
+            Event.objects.filter(pk=self.kwargs.get("pk"), gedcom_tree_id=tree_id)
+            .select_related("event_type")
+            .first()
+        )
+        return bool(event and _editor_may_mutate_event(event, tree_id))
 
     def get_queryset(self):
         # SECURITY FIX: Verhindert das Bearbeiten von fremden Events per geratener ID
@@ -3269,14 +3547,9 @@ class EventUpdateView(LoginRequiredMixin, TreeAdminAccessMixin, UpdateView):
         return super().form_valid(form)
     
     def get_success_url(self):
-        tree_id = self.kwargs.get("tree_id")
-        
-        if self.object.individual:
-            return reverse("genview:individual-detail", kwargs={"tree_id": tree_id, "pk": self.object.individual.pk})
-        elif self.object.family:
-            return reverse("genview:family-detail", kwargs={"tree_id": tree_id, "pk": self.object.family.pk})
-            
-        return reverse("genview:event-list", kwargs={"tree_id": tree_id})
+        return _event_success_url(
+            self.request, self.kwargs.get("tree_id"), self.object
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3330,32 +3603,29 @@ class EventDeleteView(LoginRequiredMixin, TreeAdminAccessMixin, DeleteView):
     model = Event
     template_name = "genview/event_confirm_delete.html"
 
+    def test_func(self):
+        tree_id = self.kwargs.get("tree_id")
+        if user_can_admin_tree(self.request.user, tree_id):
+            return True
+        if not user_can_edit_tree(self.request.user, tree_id):
+            return False
+        event = (
+            Event.objects.filter(pk=self.kwargs.get("pk"), gedcom_tree_id=tree_id)
+            .select_related("event_type")
+            .first()
+        )
+        return bool(event and _editor_may_mutate_event(event, tree_id))
+
     def get_queryset(self):
         return Event.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
-        
-        # 1. Prüfen: Gehörte das gelöschte Event zu einer Person?
-        if self.object.individual:
-            messages.success(self.request, _("Ereignis erfolgreich gelöscht."))
-            return reverse_lazy(
-                "genview:individual-detail", 
-                kwargs={"tree_id": tree_id, "pk": self.object.individual.pk}
-            )
-            
-        # 2. Prüfen: Gehörte das Event zu einer Familie?
-        elif self.object.family:
+        if self.object.family_id:
             messages.success(self.request, _("Familien-Ereignis erfolgreich gelöscht."))
-            return reverse_lazy(
-                "genview:family-detail", 
-                kwargs={"tree_id": tree_id, "pk": self.object.family.pk}
-            )
-            
-        # 3. Fallback
-        messages.success(self.request, _("Ereignis erfolgreich gelöscht."))
-        # Passe diesen Fallback an deine existierende Übersichtsseite an
-        return reverse_lazy("genview:tree-detail", kwargs={"tree_id": tree_id})
+        else:
+            messages.success(self.request, _("Ereignis erfolgreich gelöscht."))
+        return _event_success_url(self.request, tree_id, self.object)
 
    
 #

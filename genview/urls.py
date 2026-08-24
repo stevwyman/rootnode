@@ -144,7 +144,7 @@ urlpatterns = [
     path(
         'tree/<int:tree_id>/family/<int:family_pk>/event/add/', 
         views.EventCreateView.as_view(), 
-        name='event-create-family'
+        name='event-add-for-family'
     ),
     path(
         'tree/<int:tree_id>/family/<int:family_pk>/add-existing-media/', 
@@ -155,9 +155,24 @@ urlpatterns = [
     # ---- Child-Family-Link 
     # ----------------------------------------------
     path(
+        "tree/<int:tree_id>/families/<int:family_pk>/children/add/",
+        views.ChildFamilyLinkCreateView.as_view(),
+        name="family-add-child",
+    ),
+    path(
         "tree/<int:tree_id>/links/add/",
         views.ChildFamilyLinkCreateView.as_view(),
         name="link-add",
+    ),
+    path(
+        "tree/<int:tree_id>/families/<int:family_pk>/spouse/<str:role>/unlink/",
+        views.FamilyUnlinkSpouseView.as_view(),
+        name="family-unlink-spouse",
+    ),
+    path(
+        "tree/<int:tree_id>/families/<int:family_pk>/spouse/<str:role>/assign/",
+        views.FamilyAssignSpouseView.as_view(),
+        name="family-assign-spouse",
     ),
     path(
         "tree/<int:tree_id>/links/<int:pk>/delete/",

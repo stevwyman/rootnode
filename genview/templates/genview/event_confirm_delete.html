@@ -16,7 +16,7 @@
                     <div class="bg-light p-3 rounded mb-4 text-start border">
                         <ul class="list-unstyled mb-0 text-muted">
                             <li class="mb-1">
-                                <strong>Typ:</strong> {{ object.get_event_type_display }}
+                                <strong>Typ:</strong> {{ object.event_type_name }}
                             </li>
                             
                             <li class="mb-1">
@@ -38,7 +38,7 @@
                         </ul>
                     </div>
 
-                    <form method="post">
+                    <form method="post" action="?{{ request.GET.urlencode }}">
                         {% csrf_token %}
                         <div class="d-flex justify-content-center gap-3">
                             <button type="button" class="btn btn-outline-secondary px-4" onclick="history.back()">
