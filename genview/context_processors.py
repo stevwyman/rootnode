@@ -23,4 +23,5 @@ def app_features(request):
         "enable_tree_query": flags.enable_tree_query,
         "enable_ocr": flags.enable_ocr,
         "enable_face_recognition": flags.enable_face_recognition,
+        "enable_colorize": flags.enable_colorize,
     }

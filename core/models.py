@@ -32,6 +32,14 @@ class AppSettings(models.Model):
             "Benötigt den Gesichtsdienst (facenode)."
         ),
     )
+    enable_colorize = models.BooleanField(
+        default=False,
+        verbose_name=_("Fotos kolorisieren"),
+        help_text=_(
+            "Schwarz-Weiß-Fotos automatisch kolorisieren. "
+            "Benötigt den Kolorierungsdienst (colornode) und ist speicherintensiv."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Anwendungseinstellungen")

@@ -20,6 +20,7 @@ from typing import Tuple
 
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django.utils.translation import gettext as _
 
 from PIL import Image, ImageOps
 
@@ -523,6 +524,44 @@ def create_portrait_from_crop(
 
     portrait.refresh_from_db()
     return portrait
+
+
+def create_colorized_media(source_media: MediaObject, image_bytes: bytes) -> MediaObject:
+    """
+    Save ColorNode output as a new PHOTO linked to the same people/places as *source_media*.
+    The original file is left unchanged.
+    """
+    if not source_media.is_image:
+        raise ValueError("Source media is not an image")
+    if not image_bytes:
+        raise ValueError("Colorized image is empty")
+
+    source_title = source_media.title or f"Media {source_media.pk}"
+    filename = f"colorized_{source_media.pk}_{uuid.uuid4().hex[:8]}.jpg"
+
+    with transaction.atomic():
+        colorized = MediaObject(
+            gedcom_tree_id=source_media.gedcom_tree_id,
+            title=_("Kolorisiert: %(title)s") % {"title": source_title},
+            category=MediaObject.Category.PHOTO,
+            is_private=source_media.is_private,
+            description=(
+                _("Automatisch kolorisiert aus „%(title)s“ (Media #%(pk)s).")
+                % {"title": source_title, "pk": source_media.pk}
+            ),
+        )
+        colorized.save()
+        colorized.file.save(filename, ContentFile(image_bytes), save=True)
+        colorized.individuals.set(source_media.individuals.all())
+        colorized.families.set(source_media.families.all())
+        colorized.sources.set(source_media.sources.all())
+        colorized.events.set(source_media.events.all())
+
+    for size in ("mini", "small"):
+        generate_thumbnail_for_instance(colorized, size)
+
+    colorized.refresh_from_db()
+    return colorized
 
 
 _THUMB_UPLOAD_TO = {

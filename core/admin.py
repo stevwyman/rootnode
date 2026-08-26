@@ -9,6 +9,7 @@ class AppSettingsAdmin(admin.ModelAdmin):
         "enable_tree_query",
         "enable_ocr",
         "enable_face_recognition",
+        "enable_colorize",
     )
 
     def has_add_permission(self, request):

@@ -66,7 +66,7 @@ from .forms import (
     PlaceForm,
     AppSettingsForm,
 )
-from core.features import FEATURE_FACE_RECOGNITION, FEATURE_OCR, FEATURE_TREE_QUERY, feature_enabled
+from core.features import FEATURE_COLORIZE, FEATURE_FACE_RECOGNITION, FEATURE_OCR, FEATURE_TREE_QUERY, feature_enabled
 from .mixins import (
     SuperuserRequiredMixin,
     UserPassesTestMixin,
@@ -2331,6 +2331,10 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             return self._handle_doc_suggestion_action(request, media, accept=False)
         elif "create_portrait" in request.POST:
             return self._handle_create_portrait(request, media)
+        elif "colorize" in request.POST:
+            if not feature_enabled(FEATURE_COLORIZE):
+                raise Http404()
+            return self._handle_colorize(request, media)
 
         return redirect(request.path)
     
@@ -2455,6 +2459,41 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
             "genview:media-detail",
             tree_id=tree_id,
             pk=portrait.pk,
+        )
+
+    def _handle_colorize(self, request, media):
+        from .colorize_client import colorize_via_api
+        from .utils import create_colorized_media
+
+        if not media.is_image or not media.file or not media.file.name:
+            messages.error(request, _("Nur Bilddateien können kolorisiert werden."))
+            return redirect(request.path)
+
+        result = colorize_via_api(media.file.path)
+        if result["error"]:
+            messages.error(
+                request,
+                _("Kolorisierung fehlgeschlagen: %(detail)s") % {"detail": result["error"]},
+            )
+            return redirect(request.path)
+        if not result["image"]:
+            messages.error(request, _("ColorNode lieferte kein Bild."))
+            return redirect(request.path)
+
+        try:
+            colorized = create_colorized_media(media, result["image"])
+        except (ValueError, OSError) as exc:
+            messages.error(request, str(exc))
+            return redirect(request.path)
+
+        messages.success(
+            request,
+            _("Kolorisiertes Bild gespeichert. Das Original bleibt unverändert."),
+        )
+        return redirect(
+            "genview:media-detail",
+            tree_id=self.kwargs.get("tree_id"),
+            pk=colorized.pk,
         )
 
     # -------------------------------------------------

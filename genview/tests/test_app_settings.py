@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from core.features import (
+    FEATURE_COLORIZE,
     FEATURE_FACE_RECOGNITION,
     FEATURE_OCR,
     FEATURE_TREE_QUERY,
@@ -38,6 +41,7 @@ class AppSettingsPageTests(TestCase):
             enable_tree_query=True,
             enable_ocr=True,
             enable_face_recognition=True,
+            enable_colorize=False,
         )
 
     def test_superuser_can_open_settings(self):
@@ -48,6 +52,7 @@ class AppSettingsPageTests(TestCase):
         self.assertContains(response, "Stammbaum fragen")
         self.assertContains(response, "OCR / Texterkennung")
         self.assertContains(response, "Gesichtserkennung")
+        self.assertContains(response, "Fotos kolorisieren")
 
     def test_non_superuser_is_forbidden(self):
         self.client.login(username="settings_user", password="password")
@@ -62,15 +67,18 @@ class AppSettingsPageTests(TestCase):
         self.assertFalse(flags.enable_tree_query)
         self.assertFalse(flags.enable_ocr)
         self.assertFalse(flags.enable_face_recognition)
+        self.assertFalse(flags.enable_colorize)
         self.assertFalse(feature_enabled(FEATURE_TREE_QUERY))
         self.assertFalse(feature_enabled(FEATURE_OCR))
         self.assertFalse(feature_enabled(FEATURE_FACE_RECOGNITION))
+        self.assertFalse(feature_enabled(FEATURE_COLORIZE))
 
     def test_defaults_are_enabled(self):
         flags = get_app_settings()
         self.assertTrue(flags.enable_tree_query)
         self.assertTrue(flags.enable_ocr)
         self.assertTrue(flags.enable_face_recognition)
+        self.assertFalse(flags.enable_colorize)
 
 
 @override_settings(MEDIA_ROOT="/tmp/rootnode_test_media")
@@ -129,6 +137,7 @@ class FeatureFlagGatingTests(TestCase):
             enable_tree_query=True,
             enable_ocr=True,
             enable_face_recognition=True,
+            enable_colorize=False,
         )
 
     def test_enabled_features_are_visible(self):
@@ -201,4 +210,48 @@ class FeatureFlagGatingTests(TestCase):
                 {"accept_doc_suggestion": "1", "suggestion_id": "1"},
             ).status_code,
             404,
+        )
+
+    def test_colorize_hidden_and_404_when_disabled(self):
+        photo = self.client.get(self.photo_url)
+        self.assertEqual(photo.status_code, 200)
+        self.assertNotContains(photo, "Kolorisieren")
+        self.assertEqual(
+            self.client.post(self.photo_url, {"colorize": "1"}).status_code,
+            404,
+        )
+
+    def test_colorize_visible_when_enabled(self):
+        _set_flags(enable_colorize=True)
+        photo = self.client.get(self.photo_url)
+        self.assertContains(photo, "Kolorisieren")
+
+    def test_colorize_post_saves_a_copy(self):
+        from io import BytesIO
+
+        from PIL import Image
+
+        _set_flags(enable_colorize=True)
+        buffer = BytesIO()
+        Image.new("RGB", (8, 8), color=(12, 34, 56)).save(buffer, format="JPEG")
+        colorized_bytes = buffer.getvalue()
+        with patch("genview.colorize_client.colorize_via_api") as mock_colorize:
+            mock_colorize.return_value = {
+                "image": colorized_bytes,
+                "content_type": "image/jpeg",
+                "error": None,
+            }
+            response = self.client.post(self.photo_url, {"colorize": "1"})
+        self.assertEqual(response.status_code, 302)
+        copies = MediaObject.objects.filter(gedcom_tree=self.tree).exclude(pk=self.photo.pk)
+        colorized = copies.exclude(category=MediaObject.Category.DOCUMENT)
+        self.assertEqual(colorized.count(), 1)
+        new_media = colorized.first()
+        self.assertIn("Kolorisiert", new_media.title)
+        self.assertEqual(
+            response.url,
+            reverse(
+                "genview:media-detail",
+                kwargs={"tree_id": self.tree.id, "pk": new_media.pk},
+            ),
         )

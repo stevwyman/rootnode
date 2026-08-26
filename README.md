@@ -16,6 +16,7 @@ Main features:
 - multi language support
 - face detection support (would need [facenode](https://github.com/stevwyman/facenode))
 - ocr support (would need [textnode](https://github.com/stevwyman/textnode))
+- photo colorization (would need [colornode](https://github.com/stevwyman/colornode))
 
 The main driver of initiating this project has been to focus on security. This type of information can be very sensitive and therefore **privacy** needs attention. On the other hand you want to share as much as possible to either help others or to get others information, if they have same.
 
@@ -73,44 +74,41 @@ The system utilizes a **Hub-and-Spoke** microservices architecture. The containe
  │  • Handles UI, Database, and Business Logic                             │
  │  • Mounts Volume: genview_data (-> /data/genview:z)                     │
  │  • Network: backend_net                                                 │
- └─────────┬──────────────────────────┬──────────────────────────┬─────────┘
-           │                          │                          │
-           │ API Call (Network)       │ API Call (Network)       │ API Call (Network)
-           │                          │                          │
+ └─────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬─────────┘
+           │                          │                          │                          │
+           │ API Call (Network)       │ API Call (Network)       │ API Call (Network)       │ API Call (Network)
+           │                          │                          │                          │
+           ▼                          ▼                          ▼                          ▼
+ ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
+ │    TEXTNODE      │       │    FACENODE      │       │    COLORNODE     │       │     LLMNODE      │
+ │   (Isolated)     │       │   (Isolated)     │       │   (Isolated)     │       │  (LLM Wrapper)   │
+ │                  │       │                  │       │                  │       │                  │
+ │ • Extracts Text  │       │ • Face Embeddings│       │ • Colorize B/W   │       │ • Formats Prompt │
+ │ • EasyOCR        │       │ • DeepFace       │       │ • DDColor        │       │ • Parses Output  │
+ └─────────┬────────┘       └─────────┬────────┘       └─────────┬────────┘       └─────────┬────────┘
+           │                          │                          │                          │ Depends on
+           │                          │                          │                          ▼
+           │                          │                          │                ┌──────────────────┐
+           │                          │                          │                │      OLLAMA      │
+           │                          │                          │                │ (Model Executor) │
+           │                          │                          │                └──────────────────┘
            ▼                          ▼                          ▼
- ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
- │    TEXTNODE      │       │    FACENODE      │       │     LLMNODE      │
- │   (Isolated)     │       │   (Isolated)     │       │  (LLM Wrapper)   │
- │                  │       │                  │       │                  │
- │ • Extracts Text  │       │ • Face Embeddings│       │ • Formats Prompt │
- │ • EasyOCR        │       │ • DeepFace       │       │ • Parses Output  │
- └─────────┬────────┘       └─────────┬────────┘       └─────────┬────────┘
-           │                          │                          │ 
-           │                          │                          │ Depends on
-           │                          │                          ▼
-           │                          │                ┌──────────────────┐
-           │                          │                │      OLLAMA      │
-           │                          │                │ (Model Executor) │
-           │                          │                │                  │
-           │                          │                │ • Runs Inference │
-           │                          │                │ • Mounts Volume: │
-           │                          │                │   ollama_data    │
-           │                          │                └──────────────────┘
-           ▼                          ▼
  ┌─────────────────────────────────────────────────┐
  │            SHARED DOCKER VOLUME                 │
  │       models_data (shared_ml_models)            │
  │                                                 │
  │  • Mounted to TEXTNODE as: /app/.EasyOCR        │
  │  • Mounted to FACENODE as: /app/.deepface       │
+ │  • Mounted to COLORNODE as: /app/.ddcolor       │
  └─────────────────────────────────────────────────┘
 ```
 
 ### Component Roles
 
--**Rootnode (The Hub)**: Receives the initial user request. When a user uploads a document or photo, the Rootnode holds it in memory (or saves it to its local volume) and acts as an HTTP client, delegating heavy machine-learning tasks by making POST requests to the internal endpoints of the other two nodes.
+-**Rootnode (The Hub)**: Receives the initial user request. When a user uploads a document or photo, the Rootnode holds it in memory (or saves it to its local volume) and acts as an HTTP client, delegating heavy machine-learning tasks by making POST requests to the internal endpoints of the other nodes.
 -**Textnode (The OCR Spoke)**: Receives a file from the Rootnode, checks if it is a PDF or image, processes it purely in RAM, and returns a JSON string of the extracted text. It is entirely stateless.
 -**Facenode (The Vision Spoke)**: Receives an image from the Rootnode, aligns the face, calculates the vector embedding, and returns a JSON payload containing facial coordinates and the 512-dimension array. It immediately forgets the image after processing.
+-**Colornode (The Colorization Spoke)**: Receives an image from the Rootnode, runs DDColor, and returns a colorized JPEG. Rootnode stores that as a new media object and never overwrites the original scan.
 
 ### deployment
 
@@ -155,7 +153,19 @@ services:
       - backend_net
 
   # -------------------------------------------------
-  # 3️⃣ ROOTNODE (Public Facing)
+  # 3️⃣ COLORNODE (Isolated)
+  # -------------------------------------------------
+  colornode:
+    image: localhost/colornode:latest
+    container_name: colornode
+    restart: unless-stopped
+    volumes:
+      - models_data:/app/.ddcolor
+    networks:
+      - backend_net
+
+  # -------------------------------------------------
+  # 4️⃣ ROOTNODE (Public Facing)
   # -------------------------------------------------
   rootnode:
     image: localhost/rootnode:latest
@@ -172,6 +182,7 @@ services:
     depends_on:
       - textnode
       - facenode
+      - colornode
 
 ```
 
@@ -189,6 +200,7 @@ DJANGO_SUPERUSER_PASSWORD=admin
 
 FACE_RECOGNITION_URL=http://facenode:8000/detect
 OCR_RECOGNITION_URL=http://textnode:8000/extract
+COLORIZE_URL=http://colornode:8000
 
 # Optional Phase-2 parser (Ollama chat API, or a wrapper ending in /parse)
 TREE_QUERY_LLM_URL=http://localhost:11434
