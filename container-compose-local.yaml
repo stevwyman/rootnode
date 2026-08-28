@@ -6,19 +6,32 @@ volumes:
   models_data:
     name: shared_ml_models
   genview_data:
-    name: static_pictures_data
+    name: genview_data
   ollama_data:
     name: ollama_data
+  color_data:
+    name: color_data
 
 services:
   rootnode:
     image: localhost/rootnode:latest
     container_name: rootnode
     restart: unless-stopped
-    ports:
-      - 8010:8003
     volumes:
       - genview_data:/data/genview:z
+    ports:
+      - 8003:8003
+    networks:
+      - backend_net
+    env_file:
+      - .env
+
+  colornode:
+    image: localhost/colornode:latest
+    container_name: colornode
+    restart: unless-stopped
+    volumes:
+      - color_data:/app/.ddcolor
     networks:
       - backend_net
     env_file:

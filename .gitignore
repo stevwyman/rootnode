@@ -212,5 +212,8 @@ media/
 .DS_Store
 static/bootstrap5/
 .dockerignore
+TODO
 container-compose.yaml
 container-compose-local.yaml
+container-compose-full.yaml
+compose-prod.yaml

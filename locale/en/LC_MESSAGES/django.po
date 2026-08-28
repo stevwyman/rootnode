@@ -5,17 +5,18 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-06-29 18:54+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"PO-Revision-Date: 2026-08-28 20:51+0200\n"
+"Last-Translator: \n"
+"Language-Team: \n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.9\n"
 
 #: genview/forms.py:24
 msgid "Geburts-Datum (Roh-String, z. B. 'ABT 1900')"
@@ -39,29 +40,27 @@ msgstr "Search"
 
 #: genview/forms.py:202
 msgid "Heirats-Datum (Roh-String, z. B. '15 JUN 1890')"
-msgstr "Heirats-Datum (Roh-String, z. B. '15 JUN 1890')"
+msgstr "date of marriage (raw string, e.g. '15 JUN 1890')"
 
 #: genview/forms.py:209
 msgid "Heirats-Datum (geparst)"
-msgstr "Heirats-Datum (geparst)"
+msgstr "date of marriage (parsed)"
 
 #: genview/forms.py:221
 msgid "Heiratsort"
-msgstr "Heiratsort"
+msgstr "place of marriage"
 
 #: genview/forms.py:471
 msgid "Bestehende Medien suchen und auswählen"
-msgstr "Bestehende Medien suchen und auswählen"
+msgstr "search and select existing media"
 
 #: genview/forms.py:663
 msgid "GEDCOM-Datei"
-msgstr "GEDCOM-Datei"
+msgstr "GEDCOM-File"
 
 #: genview/forms.py:668
-#, fuzzy
-#| msgid "Stammbaum"
 msgid "Name des Stammbaums"
-msgstr "Family tree"
+msgstr "Name of Family Tree"
 
 #: genview/models.py:960
 msgid "Datei/Bild"
@@ -248,16 +247,12 @@ msgstr "Details"
 
 #: genview/templates/genview/event_form.html:5
 #: genview/templates/genview/event_form.html:17
-#, fuzzy
-#| msgid "Datei bearbeiten"
 msgid "Ereignis bearbeiten"
-msgstr "Edit file"
+msgstr "Edit event"
 
 #: genview/templates/genview/event_form.html:5
-#, fuzzy
-#| msgid "Ereignistypen"
 msgid "Ereignis hinzufügen"
-msgstr "Event types"
+msgstr "Add event"
 
 #: genview/templates/genview/global_search.html:5
 msgid "Globale Suche"
@@ -313,16 +308,12 @@ msgid "Familien ansehen"
 msgstr "View families"
 
 #: genview/templates/genview/individual_detail.html:147
-#, fuzzy
-#| msgid "Ort bearbeiten"
 msgid "Person bearbeiten"
-msgstr "Edit place"
+msgstr "Edit person"
 
 #: genview/templates/genview/individual_detail.html:159
-#, fuzzy
-#| msgid "Ort löschen"
 msgid "Person löschen"
-msgstr "Delete place"
+msgstr "Delete person"
 
 #: genview/templates/genview/individual_detail.html:277
 msgid "Lebenslauf"
@@ -521,7 +512,7 @@ msgstr "Upload a GEDCOM file or create your first family tree."
 #: genview/templates/genview/tree_membership_manage.html:72
 #: genview/templates/genview/tree_membership_manage.html:74
 msgid "Entfernen"
-msgstr ""
+msgstr "Remove"
 
 #: genview/templates/genview/user_management.html:64
 #: genview/templatetags/ui_tags.py:9
@@ -534,7 +525,7 @@ msgstr "Edit"
 
 #: genview/templatetags/ui_tags.py:10
 msgid "Öffnen"
-msgstr ""
+msgstr "Open"
 
 #: genview/views.py:156
 #, python-format
@@ -544,40 +535,34 @@ msgid ""
 msgstr "Family tree '%(name)s' and all related data were permanently deleted."
 
 #: genview/views.py:182
-#, fuzzy
-#| msgid "Personen"
 msgid "Person"
-msgstr "Persons"
+msgstr "Individual"
 
 #: genview/views.py:187 genview/views.py:254
 msgid "Datenschutzgeschützt"
-msgstr ""
+msgstr "protected"
 
 #: genview/views.py:191
 #, python-format
 msgid "Geboren: %(date)s"
-msgstr ""
+msgstr "Born: %(date)s"
 
 #: genview/views.py:253
-#, fuzzy
-#| msgid "Vertrauliche Person"
 msgid "Vertrauliche Familie"
-msgstr "Confidential person"
+msgstr "Confidential family"
 
 #: genview/views.py:258
 #, python-format
 msgid "Heirat: %(date)s"
-msgstr ""
+msgstr "Marriage: %(date)s"
 
 #: genview/views.py:267
-#, fuzzy
-#| msgid "Stammbaum"
 msgid "Ort im Stammbaum"
-msgstr "Family tree"
+msgstr "Place in family tree"
 
 #: genview/views.py:276
 msgid "Kein Autor angegeben"
-msgstr ""
+msgstr "no author added"
 
 #: genview/views.py:776
 #, python-format
