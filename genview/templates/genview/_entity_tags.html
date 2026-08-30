@@ -1,0 +1,40 @@
+{% load i18n %}
+{% if user.is_authenticated %}
+<div class="entity-tags d-inline-flex flex-wrap align-items-center gap-1 {{ wrapper_class|default:'' }}">
+    {% include "genview/_entity_tag_badges.html" with tags=tagged.entity_tags.all %}
+    {% if can_edit %}
+        <div class="dropdown d-inline-block">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle py-0 px-2"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    title="{% trans 'Markierungen setzen' %}">
+                🏷️
+            </button>
+            <div class="dropdown-menu dropdown-menu-end p-3 shadow" style="min-width: 240px;">
+                {% if available_entity_tags %}
+                    <form method="post" action="{% url 'genview:entity-tag-assign' tree_id=tree_id target=tag_target pk=tagged.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="small text-muted mb-2">{% trans "Markierungen" %}</div>
+                        {% for etag in available_entity_tags %}
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" name="tag_ids" value="{{ etag.pk }}" id="etag-{{ tag_target }}-{{ tagged.pk }}-{{ etag.pk }}"
+                                       {% if etag in tagged.entity_tags.all %}checked{% endif %}>
+                                <label class="form-check-label" for="etag-{{ tag_target }}-{{ tagged.pk }}-{{ etag.pk }}">
+                                    <span class="badge rounded-pill" style="{{ etag.badge_style }}">{{ etag.name }}</span>
+                                </label>
+                            </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">{% trans "Speichern" %}</button>
+                    </form>
+                {% else %}
+                    <p class="small text-muted mb-2">{% trans "Noch keine Markierungen definiert." %}</p>
+                    <a href="{% url 'genview:entity-tag-list' tree_id=tree_id %}" class="btn btn-sm btn-outline-primary w-100">{% trans "Markierungen anlegen" %}</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endif %}

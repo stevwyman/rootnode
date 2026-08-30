@@ -22,7 +22,10 @@
 
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>👨‍👩‍👧‍👦 Familie <span class="text-muted fs-4">({{ family.gedcom_id }})</span></h2>
+    <div>
+        <h2>👨‍👩‍👧‍👦 Familie <span class="text-muted fs-4">({{ family.gedcom_id }})</span></h2>
+        {% include "genview/_entity_tags.html" with tagged=family tag_target="family" wrapper_class="mt-1" %}
+    </div>
     <div>
         {% if can_edit %}
             {% url 'genview:family-edit' tree_id family.pk as edit_url %}
@@ -393,6 +396,7 @@
                                                 <span class="fw-normal text-muted small">· {{ ev.individual.full_name }}</span>
                                             {% endif %}
                                         </h6>
+                                        {% include "genview/_entity_tag_badges.html" with tags=ev.entity_tags.all %}
                                         
                                         {% if ev.place %}
                                             <p class="mb-1 small text-muted">📍 {{ ev.place }}</p>

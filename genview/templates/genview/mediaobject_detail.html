@@ -4,7 +4,10 @@
 {% block title %}{{ media.title }} - {% trans "Details" %}{% endblock %}
 
     {% block detail-head %}
+        <div>
         <h2>🏞️ {{ media.title }}</h2>
+        {% include "genview/_entity_tags.html" with tagged=media tag_target="media" wrapper_class="mt-2" %}
+        </div>
         <a href="javascript:history.back()" class="btn btn-outline-secondary">&larr; {% trans "Zurück zur Übersicht" %}</a>
     {% endblock%}
 

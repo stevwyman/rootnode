@@ -43,6 +43,7 @@ from .models import (
     Family,
     Event,
     EventType,
+    EntityTag,
     ChildFamilyLink,
     MediaObject,
     FaceTag,
@@ -61,6 +62,7 @@ from .forms import (
     MediaObjectForm,
     AddExistingMediaForm,
     EventForm,
+    EntityTagForm,
     SourceForm,
     SourceQuickCreateForm,
     PlaceForm,
@@ -904,6 +906,7 @@ class IndividualListView(TreeAccessMixin, SortableListViewMixin, FilterableListV
             # 🔥 NEU: Lädt die Todes-Events blitzschnell vorab ins Template
             Prefetch("events", queryset=death_qs, to_attr="death_events"),
             Individual.titl_events_prefetch(),
+            "entity_tags",
         )
 
         # 3. Filter anwenden (aus FilterableListViewMixin)
@@ -1002,7 +1005,9 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
         
         # 🔥 OPTIMIERT: Alle Prefetches für die Profilbilder (Avatare) der Verwandten hinzugefügt!
         return Individual.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "entity_tags",
             "events__event_type",
+            "events__entity_tags",
             "events__media_objects",
             
             # Ehepartner + deren Profilbilder
@@ -1110,7 +1115,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
             "family",
             "family__husband",
             "family__wife",
-        ).prefetch_related("sources", "media_objects").order_by(
+        ).prefetch_related("sources", "media_objects", "entity_tags").order_by(
             F("parsed_date").asc(nulls_last=True)
         )
         combined_events = apply_privacy_to_event_qs(
@@ -1658,7 +1663,8 @@ class FamilyListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewM
             # Annotation 2: Deine bisherige Logik für die Anzahl der Kinder
             children_count=Count("children")
         ).prefetch_related(
-            Prefetch("events", queryset=marriage_qs, to_attr="marriage_events")
+            Prefetch("events", queryset=marriage_qs, to_attr="marriage_events"),
+            "entity_tags",
         )
 
         # 3. Filter anwenden (aus deinem Mixin)
@@ -1701,6 +1707,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
             Family.objects.filter(gedcom_tree_id=tree_id)
             .select_related("husband", "wife")
             .prefetch_related(
+                "entity_tags",
                 # 1. Kinder-Links inkl. zugehörigem Child-Individual
                 # 🔥 UPDATE: Wir hängen hier direkt .prefetch_related("child__media_objects") an, 
                 # damit Django für alle gefundenen Kinder sofort auch deren Bilder lädt!
@@ -1714,6 +1721,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                     "events",
                     queryset=Event.objects.filter(event_type__is_visible=True)
                     .select_related("event_type", "place")
+                    .prefetch_related("entity_tags")
                     .order_by(F("parsed_date").asc(nulls_last=True), "pk"),
                 ),
                 
@@ -1802,7 +1810,9 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
                 individual_id__in=child_ids,
                 event_type__tag="BIRT",
             )
-        ).select_related("event_type", "place", "individual").order_by(
+        ).select_related("event_type", "place", "individual").prefetch_related(
+            "entity_tags"
+        ).order_by(
             F("parsed_date").asc(nulls_last=True), "pk"
         )
         ctx["family_events"] = apply_privacy_to_event_qs(
@@ -2251,6 +2261,7 @@ class MediaObjectDetailView(TreeAccessMixin, DetailView):
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         return MediaObject.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "entity_tags",
             "individuals",
             "families__husband",
             "families__wife",
@@ -2620,7 +2631,7 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         qs = apply_privacy_to_media_qs(
             qs, self.get_apply_privacy(), self.kwargs["tree_id"]
         )
-        return qs.prefetch_related('individuals', 'families', 'events')
+        return qs.prefetch_related('individuals', 'families', 'events', 'entity_tags')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3109,7 +3120,7 @@ class PlaceListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
         tree_id = self.kwargs.get("tree_id")
         # Fetch places for this tree, count the linked events, and sort alphabetically
         qs = Place.objects.filter(gedcom_tree_id=tree_id).annotate(
-            event_count=Count('events'))
+            event_count=Count('events')).prefetch_related("entity_tags")
         
         # 2. Filter aus dem Mixin anwenden (durchsucht die search_fields)
         filters = self.get_queryset_filters()
@@ -3146,12 +3157,13 @@ class PlaceDetailView(TreeAccessMixin, DetailView):
                 "individual",
                 "family__husband",
                 "family__wife",
-            ).order_by(F("parsed_date").asc(nulls_last=True)),
+            ).prefetch_related("entity_tags").order_by(F("parsed_date").asc(nulls_last=True)),
             apply_privacy,
             tree_id,
         )
 
         return Place.objects.filter(gedcom_tree_id=tree_id).prefetch_related(
+            "entity_tags",
             Prefetch("events", queryset=sorted_events_qs)
         )
 
@@ -3168,6 +3180,11 @@ class PlaceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
     form_class = PlaceForm
     template_name = "genview/place_form.html"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
     def form_valid(self, form):
         form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
         messages.success(self.request, _("Ort erfolgreich hinzugefügt."))
@@ -3181,6 +3198,11 @@ class PlaceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     model = Place
     form_class = PlaceForm
     template_name = "genview/place_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
 
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
@@ -3344,7 +3366,7 @@ class EventListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
         # FIX 1: 'event_type' zu select_related hinzugefügt für optimale Performance!
         qs = Event.objects.filter(gedcom_tree_id=tree_id).select_related(
             'individual', 'family__husband', 'family__wife', 'event_type'
-        ).annotate(
+        ).prefetch_related("entity_tags").annotate(
             person_sort=Coalesce(
                 'individual__surname',
                 'family__husband__surname',
@@ -3389,7 +3411,7 @@ class EventDetailView(TreeAccessMixin, DetailView):
         tree_id = self.kwargs.get("tree_id")
         return Event.objects.filter(gedcom_tree_id=tree_id).select_related(
             'event_type', 'individual', 'family', 'place'
-        )
+        ).prefetch_related("entity_tags")
 
     # -----------------------------------------------------------------
     # Security Check for Data Privacy
@@ -3718,6 +3740,105 @@ class EventTypeDeleteView(SuperuserRequiredMixin, DeleteView):
     model = EventType
     template_name = "genview/eventtype_confirm_delete.html"
     success_url = reverse_lazy('genview:eventtype-list')
+
+
+ENTITY_TAG_TARGETS = {
+    "individual": Individual,
+    "family": Family,
+    "event": Event,
+    "place": Place,
+    "media": MediaObject,
+}
+
+
+class EntityTagListView(LoginRequiredMixin, TreeAccessMixin, ListView):
+    model = EntityTag
+    template_name = "genview/entitytag_list.html"
+    context_object_name = "entity_tags"
+
+    def get_queryset(self):
+        return EntityTag.objects.filter(
+            gedcom_tree_id=self.kwargs.get("tree_id")
+        ).order_by("name")
+
+
+class EntityTagCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
+    model = EntityTag
+    form_class = EntityTagForm
+    template_name = "genview/entitytag_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
+        messages.success(self.request, _("Markierung angelegt."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse(
+            "genview:entity-tag-list",
+            kwargs={"tree_id": self.kwargs.get("tree_id")},
+        )
+
+
+class EntityTagUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
+    model = EntityTag
+    form_class = EntityTagForm
+    template_name = "genview/entitytag_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["tree_id"] = self.kwargs.get("tree_id")
+        return kwargs
+
+    def get_queryset(self):
+        return EntityTag.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Markierung gespeichert."))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse(
+            "genview:entity-tag-list",
+            kwargs={"tree_id": self.kwargs.get("tree_id")},
+        )
+
+
+class EntityTagDeleteView(LoginRequiredMixin, TreeEditAccessMixin, DeleteView):
+    model = EntityTag
+    template_name = "genview/entitytag_confirm_delete.html"
+
+    def get_queryset(self):
+        return EntityTag.objects.filter(gedcom_tree_id=self.kwargs.get("tree_id"))
+
+    def get_success_url(self):
+        messages.success(self.request, _("Markierung gelöscht."))
+        return reverse(
+            "genview:entity-tag-list",
+            kwargs={"tree_id": self.kwargs.get("tree_id")},
+        )
+
+
+class EntityTagAssignView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, tree_id, target, pk):
+        model = ENTITY_TAG_TARGETS.get(target)
+        if model is None:
+            raise Http404()
+        obj = get_object_or_404(model, pk=pk, gedcom_tree_id=tree_id)
+        tag_ids = request.POST.getlist("tag_ids")
+        tags = EntityTag.objects.filter(gedcom_tree_id=tree_id, pk__in=tag_ids)
+        obj.entity_tags.set(tags)
+        messages.success(request, _("Markierungen aktualisiert."))
+        next_url = request.POST.get("next") or ""
+        if not next_url.startswith("/") or next_url.startswith("//"):
+            next_url = obj.get_absolute_url()
+        return redirect(next_url)
 
 
 # --------------------------------------------------------------

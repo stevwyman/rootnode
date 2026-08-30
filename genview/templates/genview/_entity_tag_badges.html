@@ -1,0 +1,8 @@
+{% load i18n %}
+{% if user.is_authenticated %}
+    {% for etag in tags %}
+        <span class="badge rounded-pill"
+              style="{{ etag.badge_style }}"
+              title="{{ etag.description|default:etag.name }}">{{ etag.name }}</span>
+    {% endfor %}
+{% endif %}

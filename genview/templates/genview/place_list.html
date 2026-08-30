@@ -60,6 +60,7 @@
                                     <a href="{% url 'genview:place-detail' tree_id=tree_id pk=place.pk %}" class="text-decoration-none">
                                         {{ place.name }}
                                     </a>
+                                    <div class="mt-1">{% include "genview/_entity_tag_badges.html" with tags=place.entity_tags.all %}</div>
                                 </td>
                                 
                                 <td>

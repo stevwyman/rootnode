@@ -1,0 +1,17 @@
+{% load i18n %}
+{% if form.entity_tags %}
+<div class="mb-3">
+    <label class="form-label fw-bold">{{ form.entity_tags.label }}</label>
+    <div class="border rounded p-3 bg-light">
+        <style>
+            .entity-tag-choices { list-style: none; padding-left: 0; margin-bottom: 0; }
+            .entity-tag-choices li { margin-bottom: 0.35rem; }
+        </style>
+        {{ form.entity_tags }}
+        {{ form.entity_tags.errors }}
+        <div class="form-text">
+            {% trans "Markierungen gelten für diesen Datensatz. Neue Markierungen legst du unter Daten → Markierungen an." %}
+        </div>
+    </div>
+</div>
+{% endif %}

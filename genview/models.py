@@ -12,6 +12,7 @@ from django.db import models
 from django.db.models import Prefetch, Q
 from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -123,6 +124,58 @@ class TreeMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.gedcom_tree.name} ({self.role})"
+
+
+HEX_COLOR_VALIDATOR = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message=_("Farbe muss als Hex-Wert angegeben werden, z. B. #0d6efd."),
+)
+
+
+class EntityTag(models.Model):
+    """Tree-scoped research flag (complete, missing data, unclear, …)."""
+
+    gedcom_tree = models.ForeignKey(
+        Tree, on_delete=models.CASCADE, related_name="entity_tags"
+    )
+    name = models.CharField(max_length=80, verbose_name=_("Name"))
+    description = models.TextField(blank=True, verbose_name=_("Beschreibung"))
+    color = models.CharField(
+        max_length=7,
+        default="#6c757d",
+        validators=[HEX_COLOR_VALIDATOR],
+        verbose_name=_("Farbe"),
+        help_text=_("Hex-Farbe, z. B. #198754"),
+    )
+
+    class Meta:
+        verbose_name = _("Markierung")
+        verbose_name_plural = _("Markierungen")
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["gedcom_tree", "name"],
+                name="genview_entitytag_tree_name_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def text_color(self) -> str:
+        hexcolor = (self.color or "#000000").lstrip("#")
+        if len(hexcolor) != 6:
+            return "#ffffff"
+        red = int(hexcolor[0:2], 16)
+        green = int(hexcolor[2:4], 16)
+        blue = int(hexcolor[4:6], 16)
+        luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+        return "#000000" if luminance > 0.6 else "#ffffff"
+
+    @property
+    def badge_style(self) -> str:
+        return f"background-color: {self.color}; color: {self.text_color};"
 
 
 # ----------------------------------------------------------------------
@@ -241,6 +294,12 @@ class Individual(GedcomIdMixin):
         Source,
         blank=True,
         related_name="individuals",
+    )
+    entity_tags = models.ManyToManyField(
+        EntityTag,
+        blank=True,
+        related_name="individuals",
+        verbose_name=_("Markierungen"),
     )
 
     class Meta(GedcomIdMixin.Meta):
@@ -600,7 +659,8 @@ class Individual(GedcomIdMixin):
                 'description': event.description,
                 'place': event.place.name if event.place else "",
                 'icon': icon,
-                'age': None  # Wird unten berechnet
+                'age': None,  # Wird unten berechnet
+                'tags': list(event.entity_tags.all()),
             })
 
         # 2. Familien-Ereignisse (Heirat, Scheidung) und Kindergeburten
@@ -622,7 +682,8 @@ class Individual(GedcomIdMixin):
                     'description': f"mit {partner_name}",
                     'place': fam_event.place.name if fam_event.place else "",
                     'icon': icon,
-                    'age': None
+                    'age': None,
+                    'tags': list(fam_event.entity_tags.all()),
                 })
 
             # --- B) 🔥 NEU: Geburten der Kinder aus dieser Familie ---
@@ -640,7 +701,8 @@ class Individual(GedcomIdMixin):
                             'description': f"Sohn/Tochter: {child.full_name()}",
                             'place': child_birth.place.name if child_birth.place else "",
                             'icon': "🍼",
-                            'age': None
+                            'age': None,
+                            'tags': list(child_birth.entity_tags.all()),
                         })
 
         # 3. Sortieren (Älteste Ereignisse zuerst)
@@ -708,6 +770,12 @@ class Family(MPTTModel, GedcomIdMixin):
         Source,
         blank=True,
         related_name="families",
+    )
+    entity_tags = models.ManyToManyField(
+        EntityTag,
+        blank=True,
+        related_name="families",
+        verbose_name=_("Markierungen"),
     )
 
     gedcom_tree = models.ForeignKey(
@@ -860,6 +928,12 @@ class Place(GedcomIdMixin):
     # 9 digits total, 6 after the decimal point gives sub-meter accuracy!
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Breitengrad (Latitude)")
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Längengrad (Longitude)")
+    entity_tags = models.ManyToManyField(
+        EntityTag,
+        blank=True,
+        related_name="places",
+        verbose_name=_("Markierungen"),
+    )
 
     class Meta(GedcomIdMixin.Meta):
         # Prevent duplicate places in the same tree
@@ -987,6 +1061,12 @@ class Event(models.Model):
         related_name="events",
         verbose_name="Quellen"
     )
+    entity_tags = models.ManyToManyField(
+        EntityTag,
+        blank=True,
+        related_name="events",
+        verbose_name=_("Markierungen"),
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1038,6 +1118,12 @@ class Event(models.Model):
             
         # Baut alles zusammen: z.B. "Geburt von Max Mustermann (1990)"
         return f"{event_name}{owner}{date_str}"
+
+    def get_absolute_url(self):
+        return reverse(
+            "genview:event-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
 
     # --------------------------------------------------------------
     # Validierung: Es darf nie **beide** FK gleichzeitig gesetzt sein
@@ -1156,6 +1242,12 @@ class MediaObject(GedcomIdMixin):
         related_name='media_objects',
         help_text=_("Ereignisse, mit denen dieses Medium verknüpft ist")
     )
+    entity_tags = models.ManyToManyField(
+        EntityTag,
+        blank=True,
+        related_name="tagged_media",
+        verbose_name=_("Markierungen"),
+    )
 
     is_portrait = models.BooleanField(
         default=False,
@@ -1172,6 +1264,12 @@ class MediaObject(GedcomIdMixin):
 
     def __str__(self) -> str:
         return self.title or f"Media {self.id}"
+
+    def get_absolute_url(self):
+        return reverse(
+            "genview:media-detail",
+            kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
+        )
 
     @property
     def is_image(self) -> bool:

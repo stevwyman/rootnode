@@ -17,11 +17,14 @@
     {% endblock %}
 
     {% block detail-head %}
+        <div>
         <h2>⚡ {{ object.event_type_name }}-Ereignis
             {% if object.parsed_date %}
                 <span class="badge bg-primary px-3 py-2 fs-6">📅 {{ object.parsed_date|date:"d.m.Y" }}</span>
             {% endif %}
         </h2>
+        {% include "genview/_entity_tags.html" with tagged=object tag_target="event" wrapper_class="mt-2" %}
+        </div>
         <a href="{% url 'genview:event-list' tree_id=tree_id %}" class="btn btn-outline-secondary">&larr; {% trans "Zurück zur Übersicht" %}</a>
         
     {% endblock%}

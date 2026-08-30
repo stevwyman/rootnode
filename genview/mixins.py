@@ -5,7 +5,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from .models import TreeMembership, Tree
+from .models import TreeMembership, Tree, EntityTag
 from .privacy import (
     BIRTH_PRIVACY_YEARS,
     DEATH_PRIVACY_YEARS,
@@ -375,6 +375,12 @@ class TreeAccessMixin(UserPassesTestMixin):
             tree.starting_individual,
             context['apply_privacy'],
         )
+        if getattr(user, "is_authenticated", False):
+            context["available_entity_tags"] = list(
+                EntityTag.objects.filter(gedcom_tree_id=tree_id).order_by("name")
+            )
+        else:
+            context["available_entity_tags"] = []
 
         return context
     

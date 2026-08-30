@@ -288,6 +288,31 @@ urlpatterns = [
     ),
 
     # EventType Administration
+    path(
+        "tree/<int:tree_id>/tags/",
+        views.EntityTagListView.as_view(),
+        name="entity-tag-list",
+    ),
+    path(
+        "tree/<int:tree_id>/tags/add/",
+        views.EntityTagCreateView.as_view(),
+        name="entity-tag-add",
+    ),
+    path(
+        "tree/<int:tree_id>/tags/<int:pk>/edit/",
+        views.EntityTagUpdateView.as_view(),
+        name="entity-tag-edit",
+    ),
+    path(
+        "tree/<int:tree_id>/tags/<int:pk>/delete/",
+        views.EntityTagDeleteView.as_view(),
+        name="entity-tag-delete",
+    ),
+    path(
+        "tree/<int:tree_id>/tags/assign/<str:target>/<int:pk>/",
+        views.EntityTagAssignView.as_view(),
+        name="entity-tag-assign",
+    ),
     path('event-types/', views.EventTypeListView.as_view(), name='eventtype-list'),
     path('event-types/add/', views.EventTypeCreateView.as_view(), name='eventtype-add'),
     path('event-types/<int:pk>/edit/', views.EventTypeUpdateView.as_view(), name='eventtype-edit'),

@@ -3,8 +3,25 @@ from django import forms
 from django.forms import ModelForm, DateInput
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
-from .models import Individual, Family, ChildFamilyLink, Event, EventType, MediaObject, Source, Place, TreeMembership
+from .models import Individual, Family, ChildFamilyLink, Event, EventType, EntityTag, MediaObject, Source, Place, TreeMembership
 from core.models import AppSettings
+
+
+def bind_entity_tag_field(form, tree_id):
+    if "entity_tags" not in form.fields:
+        return
+    qs = EntityTag.objects.none()
+    if tree_id:
+        qs = EntityTag.objects.filter(gedcom_tree_id=tree_id).order_by("name")
+    form.fields["entity_tags"].queryset = qs
+    form.fields["entity_tags"].required = False
+    form.fields["entity_tags"].widget = forms.CheckboxSelectMultiple(
+        attrs={"class": "entity-tag-choices"}
+    )
+
+
+# ----------------------------------------------------------------------
+#  IndividualForm – für Person-Datensatz
 
 
 # ----------------------------------------------------------------------
@@ -56,6 +73,7 @@ class IndividualForm(ModelForm):
             "sex",
             "notes",
             "sources",
+            "entity_tags",
         ]
         widgets = {
             "gedcom_id": forms.TextInput(attrs={"class": "form-control"}),
@@ -81,6 +99,7 @@ class IndividualForm(ModelForm):
             self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
         elif "sources" in self.fields:
             self.fields["sources"].queryset = Source.objects.none()
+        bind_entity_tag_field(self, current_tree_id)
 
         # 1. Ist es eine komplett neue Person? 
         # (Bei existierenden Personen zum Bearbeiten ist der primary key (pk) bereits gesetzt)
@@ -247,6 +266,7 @@ class FamilyForm(ModelForm):
             "parent",  # MPTT-Hierarchie (optional)
             "notes",
             "sources",
+            "entity_tags",
         ]
         widgets = {
             "gedcom_id": forms.TextInput(attrs={"class": "form-control"}),
@@ -305,6 +325,8 @@ class FamilyForm(ModelForm):
                 self.fields["marriage_raw_date"].initial = ev.raw_date
                 self.fields["marriage_parsed_date"].initial = ev.parsed_date
                 self.fields["marriage_place"].initial = ev.place
+
+        bind_entity_tag_field(self, current_tree_id)
 
     # --------------------------------------------------------------
     #  Hilfsmethode: MARR-Event holen oder neu anlegen
@@ -482,6 +504,7 @@ class MediaObjectForm(forms.ModelForm):
             "families",
             "sources",
             "events",
+            "entity_tags",
             "is_portrait",
             "is_private"
         ]
@@ -578,6 +601,8 @@ class MediaObjectForm(forms.ModelForm):
             if "families" in self.fields: self.fields["families"].queryset = Family.objects.none()
             if "sources" in self.fields: self.fields["sources"].queryset = Source.objects.none()
             if "events" in self.fields: self.fields["events"].queryset = Event.objects.none() 
+
+        bind_entity_tag_field(self, current_tree_id) 
 
     # ------------------------------------------------------------------
     # Überschreiben von save() – Portrait-Logik sicher ausführen
@@ -678,18 +703,25 @@ class AddExistingMediaForm(forms.Form):
 class PlaceForm(forms.ModelForm):
     class Meta:
         model = Place
-        fields = ['name', 'latitude', 'longitude']
+        fields = ['name', 'latitude', 'longitude', 'entity_tags']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. Berlin, Deutschland'}),
             'latitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
             'longitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
         }
 
+    def __init__(self, *args, tree_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        current_tree_id = tree_id
+        if not current_tree_id and self.instance and self.instance.pk:
+            current_tree_id = self.instance.gedcom_tree_id
+        bind_entity_tag_field(self, current_tree_id)
+
 
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
-        fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'description', 'sources', 'individual', 'family'] 
+        fields = ['event_type', 'raw_date', 'parsed_date', 'place', 'description', 'sources', 'individual', 'family', 'entity_tags'] 
         widgets = {
             'event_type': forms.Select(attrs={'class': 'form-select'}),
             # FIX: Hieß vorher 'date_raw'
@@ -787,6 +819,44 @@ class EventForm(forms.ModelForm):
                 self.fields['event_type'].queryset = EventType.objects.filter(
                     category__in=[EventType.Category.FAMILY, EventType.Category.BOTH]
                 ).order_by('name')
+
+        bind_entity_tag_field(self, current_tree_id)
+
+
+class EntityTagForm(forms.ModelForm):
+    class Meta:
+        model = EntityTag
+        fields = ["name", "description", "color"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "color": forms.TextInput(attrs={"class": "form-control form-control-color", "type": "color"}),
+        }
+
+    def __init__(self, *args, tree_id=None, **kwargs):
+        self.tree_id = tree_id
+        super().__init__(*args, **kwargs)
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError(_("Name ist erforderlich."))
+        tree_id = self.tree_id
+        if not tree_id and self.instance and self.instance.pk:
+            tree_id = self.instance.gedcom_tree_id
+        if tree_id:
+            qs = EntityTag.objects.filter(gedcom_tree_id=tree_id, name=name)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(_("Diese Markierung existiert in diesem Stammbaum bereits."))
+        return name
+
+    def clean_color(self):
+        color = (self.cleaned_data.get("color") or "").strip()
+        if color and not color.startswith("#") and len(color) == 6:
+            color = f"#{color}"
+        return color.lower() if color else "#6c757d"
 
 
 class EventTypeForm(forms.ModelForm):

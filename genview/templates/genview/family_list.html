@@ -75,6 +75,7 @@
                                     <a href="{% url 'genview:family-detail' tree_id family.pk %}">
                                             {{ family.gedcom_id }}
                                     </a>
+                                    <div class="mt-1">{% include "genview/_entity_tag_badges.html" with tags=family.entity_tags.all %}</div>
                                 {% endif %}
                             </td>
                             <td>

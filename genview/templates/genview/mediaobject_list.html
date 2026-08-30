@@ -123,6 +123,7 @@
 
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-truncate" title="{{ item.title }}">{{ item.title }}</h5>
+                        <div class="mb-2">{% include "genview/_entity_tag_badges.html" with tags=item.entity_tags.all %}</div>
 
                         {% if item.description %}
                             <p class="card-text text-muted small">{{ item.description|truncatewords:15 }}</p>

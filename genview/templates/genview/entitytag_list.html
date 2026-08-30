@@ -1,0 +1,63 @@
+{% extends "genview/base.html" %}
+{% load i18n ui_tags %}
+
+{% block title %}{% trans "Markierungen" %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-1">🏷️ {% trans "Markierungen" %}</h1>
+        <p class="text-muted mb-0">
+            {% trans "Kennzeichne Personen, Familien, Ereignisse, Orte und Medien – z. B. vollständig, fehlende Daten oder unklar." %}
+        </p>
+    </div>
+    {% if can_edit %}
+        <a href="{% url 'genview:entity-tag-add' tree_id=tree_id %}" class="btn btn-primary">
+            + {% trans "Neue Markierung" %}
+        </a>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>{% trans "Farbe" %}</th>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "Beschreibung" %}</th>
+                    {% if can_edit %}
+                    <th class="text-end">{% trans "Aktionen" %}</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for etag in entity_tags %}
+                <tr>
+                    <td style="width: 4rem;">
+                        <span class="badge rounded-pill px-3 py-2" style="{{ etag.badge_style }}">&nbsp;</span>
+                    </td>
+                    <td class="fw-bold">
+                        <span class="badge rounded-pill" style="{{ etag.badge_style }}">{{ etag.name }}</span>
+                    </td>
+                    <td class="text-muted">{{ etag.description|default:"—" }}</td>
+                    {% if can_edit %}
+                    <td class="text-end">
+                        {% url 'genview:entity-tag-edit' tree_id=tree_id pk=etag.pk as edit_url %}
+                        {% url 'genview:entity-tag-delete' tree_id=tree_id pk=etag.pk as delete_url %}
+                        {% action_buttons layout="labeled" edit_url=edit_url delete_url=delete_url %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if can_edit %}4{% else %}3{% endif %}" class="text-center py-4 text-muted">
+                        {% trans "Noch keine Markierungen. Lege z. B. „Vollständig“, „Fehlende Daten“ oder „Unklar“ an." %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

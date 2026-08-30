@@ -5,7 +5,10 @@
 {% block title %}{{ place.name }} - {% trans "Ort" %}{% endblock %}
 
     {% block detail-head %}
+        <div>
         <h2>📍 {{ place.name }}</h2>
+        {% include "genview/_entity_tags.html" with tagged=place tag_target="place" wrapper_class="mt-2" %}
+        </div>
         <a href="{% url 'genview:place-list' tree_id=tree_id %}" class="btn btn-outline-secondary">&larr; {% trans "Zurück zur Übersicht" %}</a>
     {% endblock%}
 
@@ -22,6 +25,7 @@
                             <div class="list-group-item">
                                 <div class="d-flex w-100 justify-content-between">
                                     <h6 class="mb-1 fw-bold">{{ event.event_type_name }}</h6>
+                                    {% include "genview/_entity_tag_badges.html" with tags=event.entity_tags.all %}
                                     <small class="text-muted">
                                         {{ event.parsed_date|date:"j. F Y"|default:event.raw_date|default:"Ohne Datum" }}
                                     </small>

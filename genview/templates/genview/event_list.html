@@ -122,7 +122,8 @@
                                             <span class="badge bg-secondary">
                                                 {{ event.event_type_name }}
                                             </span>
-                                        </a> 
+                                        </a>
+                                        <div class="mt-1">{% include "genview/_entity_tag_badges.html" with tags=event.entity_tags.all %}</div> 
                                     {% endif %}
                                 </td>
                                 

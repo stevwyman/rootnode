@@ -145,6 +145,7 @@
                                     <span class="text-muted fst-italic">🔒 {% trans "Vertrauliche Person" %}</span>
                                 {% else %}
                                     <a href="{{ person.get_absolute_url }}">{{ person.surname }}</a>
+                                    <div class="mt-1">{% include "genview/_entity_tag_badges.html" with tags=person.entity_tags.all %}</div>
                                 {% endif %}
                             </td>
                             

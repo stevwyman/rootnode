@@ -69,6 +69,9 @@
                                     <li><a class="dropdown-item" href="{% url 'genview:place-list' tree_id %}">🌍 {% trans "Orte" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:media-list' tree_id %}">📷 {% trans "Medien" %}</a></li>
                                     <li><a class="dropdown-item" href="{% url 'genview:source-list' tree_id %}">📚 {% trans "Quellen" %}</a></li>
+                                    {% if user.is_authenticated %}
+                                    <li><a class="dropdown-item" href="{% url 'genview:entity-tag-list' tree_id=tree_id %}">🏷️ {% trans "Markierungen" %}</a></li>
+                                    {% endif %}
                                 </ul>
                             </li>
                             {% endif %}
