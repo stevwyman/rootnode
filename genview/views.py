@@ -3751,6 +3751,113 @@ ENTITY_TAG_TARGETS = {
 }
 
 
+class EntityTagBrowseView(LoginRequiredMixin, TreeAccessMixin, TemplateView):
+    """Authenticated overview of records that carry the selected tags."""
+
+    template_name = "genview/entitytag_browse.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tree_id = self.kwargs.get("tree_id")
+        apply_privacy = self.get_apply_privacy()
+        all_tags = list(
+            EntityTag.objects.filter(gedcom_tree_id=tree_id).order_by("name")
+        )
+        valid_ids = {tag.pk for tag in all_tags}
+        selected_ids = []
+        for raw in self.request.GET.getlist("tag"):
+            try:
+                tag_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if tag_id in valid_ids and tag_id not in selected_ids:
+                selected_ids.append(tag_id)
+
+        ctx["all_tags"] = all_tags
+        ctx["selected_tag_ids"] = set(selected_ids)
+        ctx["selected_tags"] = [tag for tag in all_tags if tag.pk in selected_ids]
+        ctx["individuals"] = []
+        ctx["families"] = []
+        ctx["events"] = []
+        ctx["places"] = []
+        ctx["media_items"] = []
+        ctx["result_count"] = 0
+        if not selected_ids:
+            return ctx
+
+        tag_filter = Q(entity_tags__in=selected_ids)
+        individuals = list(
+            apply_privacy_to_individual_qs(
+                Individual.objects.filter(gedcom_tree_id=tree_id)
+                .filter(tag_filter)
+                .distinct()
+                .prefetch_related("entity_tags")
+                .order_by("surname", "given_name"),
+                apply_privacy,
+            )
+        )
+        families = list(
+            apply_privacy_to_family_qs(
+                Family.objects.filter(gedcom_tree_id=tree_id)
+                .filter(tag_filter)
+                .select_related("husband", "wife")
+                .distinct()
+                .prefetch_related("entity_tags")
+                .order_by("gedcom_id"),
+                apply_privacy,
+                tree_id,
+            )
+        )
+        events = list(
+            apply_privacy_to_event_qs(
+                Event.objects.filter(gedcom_tree_id=tree_id)
+                .filter(tag_filter)
+                .select_related(
+                    "event_type",
+                    "individual",
+                    "family__husband",
+                    "family__wife",
+                )
+                .distinct()
+                .prefetch_related("entity_tags")
+                .order_by(F("parsed_date").asc(nulls_last=True), "pk"),
+                apply_privacy,
+                tree_id,
+            )
+        )
+        places = list(
+            Place.objects.filter(gedcom_tree_id=tree_id)
+            .filter(tag_filter)
+            .distinct()
+            .prefetch_related("entity_tags")
+            .order_by("name")
+        )
+        media_items = list(
+            apply_privacy_to_media_qs(
+                MediaObject.objects.filter(gedcom_tree_id=tree_id)
+                .filter(tag_filter)
+                .distinct()
+                .prefetch_related("entity_tags")
+                .order_by("title"),
+                apply_privacy,
+                tree_id,
+            )
+        )
+        ctx["individuals"] = individuals
+        ctx["families"] = families
+        ctx["events"] = events
+        ctx["places"] = places
+        ctx["media_items"] = media_items
+        ctx["result_count"] = (
+            len(individuals)
+            + len(families)
+            + len(events)
+            + len(places)
+            + len(media_items)
+        )
+        return ctx
+
+
 class EntityTagListView(LoginRequiredMixin, TreeAccessMixin, ListView):
     model = EntityTag
     template_name = "genview/entitytag_list.html"

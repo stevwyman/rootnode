@@ -294,6 +294,11 @@ urlpatterns = [
         name="entity-tag-list",
     ),
     path(
+        "tree/<int:tree_id>/tags/entries/",
+        views.EntityTagBrowseView.as_view(),
+        name="entity-tag-browse",
+    ),
+    path(
         "tree/<int:tree_id>/tags/add/",
         views.EntityTagCreateView.as_view(),
         name="entity-tag-add",

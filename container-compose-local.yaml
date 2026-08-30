@@ -20,18 +20,7 @@ services:
     volumes:
       - genview_data:/data/genview:z
     ports:
-      - 8003:8003
-    networks:
-      - backend_net
-    env_file:
-      - .env
-
-  colornode:
-    image: localhost/colornode:latest
-    container_name: colornode
-    restart: unless-stopped
-    volumes:
-      - color_data:/app/.ddcolor
+      - 8010:8003
     networks:
       - backend_net
     env_file:

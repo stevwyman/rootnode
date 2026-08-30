@@ -1,21 +1,26 @@
 {% extends "genview/base.html" %}
 {% load i18n ui_tags %}
 
-{% block title %}{% trans "Markierungen" %}{% endblock %}
+{% block title %}{% trans "Markierungen verwalten" %}{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="mb-1">🏷️ {% trans "Markierungen" %}</h1>
+        <h1 class="mb-1">🏷️ {% trans "Markierungen verwalten" %}</h1>
         <p class="text-muted mb-0">
             {% trans "Kennzeichne Personen, Familien, Ereignisse, Orte und Medien – z. B. vollständig, fehlende Daten oder unklar." %}
         </p>
     </div>
-    {% if can_edit %}
-        <a href="{% url 'genview:entity-tag-add' tree_id=tree_id %}" class="btn btn-primary">
-            + {% trans "Neue Markierung" %}
+    <div class="d-flex gap-2">
+        <a href="{% url 'genview:entity-tag-browse' tree_id=tree_id %}" class="btn btn-outline-secondary">
+            {% trans "Einträge anzeigen" %}
         </a>
-    {% endif %}
+        {% if can_edit %}
+            <a href="{% url 'genview:entity-tag-add' tree_id=tree_id %}" class="btn btn-primary">
+                + {% trans "Neue Markierung" %}
+            </a>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card shadow-sm">

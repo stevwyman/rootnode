@@ -1,0 +1,171 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Markierungen" %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="mb-1">🏷️ {% trans "Markierungen" %}</h1>
+        <p class="text-muted mb-0">
+            {% trans "Zeigt Personen, Familien, Ereignisse, Orte und Medien mit den gewählten Markierungen." %}
+        </p>
+    </div>
+    {% if can_edit %}
+        <a href="{% url 'genview:entity-tag-list' tree_id=tree_id %}" class="btn btn-outline-secondary">
+            {% trans "Markierungen verwalten" %}
+        </a>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        {% if all_tags %}
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label fw-bold" for="tag-filter">{% trans "Markierungen" %}</label>
+                    <select name="tag" id="tag-filter" class="form-select js-tag-filter" multiple>
+                        {% for etag in all_tags %}
+                            <option value="{{ etag.pk }}" {% if etag.pk in selected_tag_ids %}selected{% endif %}>{{ etag.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">
+                        {% trans "Mehrfachauswahl: es werden alle Einträge gezeigt, die mindestens eine der gewählten Markierungen tragen." %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary">{% trans "Anzeigen" %}</button>
+                    {% if selected_tag_ids %}
+                        <a href="{% url 'genview:entity-tag-browse' tree_id=tree_id %}" class="btn btn-outline-secondary">{% trans "Zurücksetzen" %}</a>
+                    {% endif %}
+                </div>
+            </form>
+        {% else %}
+            <p class="text-muted mb-0">
+                {% trans "Noch keine Markierungen definiert." %}
+                {% if can_edit %}
+                    <a href="{% url 'genview:entity-tag-add' tree_id=tree_id %}">{% trans "Jetzt anlegen" %}</a>
+                {% endif %}
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+{% if selected_tag_ids %}
+    <p class="text-muted mb-3">
+        {% blocktrans count counter=result_count %}{{ counter }} Eintrag{% plural %}{{ counter }} Einträge{% endblocktrans %}
+    </p>
+
+    {% if result_count %}
+        {% if individuals %}
+        <h2 class="h5 mt-4 mb-2">👤 {% trans "Personen" %} ({{ individuals|length }})</h2>
+        <div class="list-group shadow-sm mb-4">
+            {% for person in individuals %}
+            <a href="{{ person.get_absolute_url }}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <span>{{ person.civil_name }}{% if person.gedcom_id %} <span class="text-muted">({{ person.gedcom_id }})</span>{% endif %}</span>
+                    {% include "genview/_entity_tag_badges.html" with tags=person.entity_tags.all %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if families %}
+        <h2 class="h5 mt-4 mb-2">👪 {% trans "Familien" %} ({{ families|length }})</h2>
+        <div class="list-group shadow-sm mb-4">
+            {% for family in families %}
+            <a href="{{ family.get_absolute_url }}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <span>
+                        {% if family.husband %}{{ family.husband.civil_name }}{% else %}?{% endif %}
+                        /
+                        {% if family.wife %}{{ family.wife.civil_name }}{% else %}?{% endif %}
+                        {% if family.gedcom_id %}<span class="text-muted">({{ family.gedcom_id }})</span>{% endif %}
+                    </span>
+                    {% include "genview/_entity_tag_badges.html" with tags=family.entity_tags.all %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if events %}
+        <h2 class="h5 mt-4 mb-2">📅 {% trans "Ereignisse" %} ({{ events|length }})</h2>
+        <div class="list-group shadow-sm mb-4">
+            {% for event in events %}
+            <a href="{{ event.get_absolute_url }}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <span>{{ event }}</span>
+                    {% include "genview/_entity_tag_badges.html" with tags=event.entity_tags.all %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if places %}
+        <h2 class="h5 mt-4 mb-2">🌍 {% trans "Orte" %} ({{ places|length }})</h2>
+        <div class="list-group shadow-sm mb-4">
+            {% for place in places %}
+            <a href="{{ place.get_absolute_url }}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <span>{{ place.name }}</span>
+                    {% include "genview/_entity_tag_badges.html" with tags=place.entity_tags.all %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if media_items %}
+        <h2 class="h5 mt-4 mb-2">📷 {% trans "Medien" %} ({{ media_items|length }})</h2>
+        <div class="list-group shadow-sm mb-4">
+            {% for item in media_items %}
+            <a href="{{ item.get_absolute_url }}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <span>{{ item }}</span>
+                    {% include "genview/_entity_tag_badges.html" with tags=item.entity_tags.all %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% else %}
+        <div class="card shadow-sm">
+            <div class="card-body text-muted">
+                {% trans "Keine Einträge mit den gewählten Markierungen." %}
+            </div>
+        </div>
+    {% endif %}
+{% elif all_tags %}
+    <div class="card shadow-sm">
+        <div class="card-body text-muted">
+            {% trans "Wähle oben eine oder mehrere Markierungen, um die zugehörigen Einträge zu sehen." %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if all_tags %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    var $filter = $('.js-tag-filter');
+    if (!$filter.length) {
+        return;
+    }
+    $filter.select2({
+        placeholder: "{% trans 'Markierungen wählen…' %}",
+        allowClear: true,
+        closeOnSelect: false,
+        width: '100%'
+    });
+    $filter.on('select2:select select2:unselect select2:clear', function() {
+        this.closest('form').submit();
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

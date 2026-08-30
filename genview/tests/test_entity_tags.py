@@ -37,6 +37,9 @@ class EntityTagTests(TestCase):
         self.list_url = reverse(
             "genview:entity-tag-list", kwargs={"tree_id": self.tree.pk}
         )
+        self.browse_url = reverse(
+            "genview:entity-tag-browse", kwargs={"tree_id": self.tree.pk}
+        )
         self.person_url = reverse(
             "genview:individual-detail",
             kwargs={"tree_id": self.tree.pk, "pk": self.person.pk},
@@ -163,3 +166,57 @@ class EntityTagTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(EntityTag.objects.filter(pk=tag.pk).exists())
         self.assertFalse(self.person.entity_tags.exists())
+
+    def test_guest_cannot_browse_tagged_entries(self):
+        response = self.client.get(self.browse_url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url.lower())
+
+    def test_viewer_browses_entries_matching_any_selected_tag(self):
+        complete = EntityTag.objects.create(
+            gedcom_tree=self.tree, name="Vollständig", color="#198754"
+        )
+        missing = EntityTag.objects.create(
+            gedcom_tree=self.tree, name="Fehlende Daten", color="#DC3545"
+        )
+        other = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Otto", surname="OhneMarkierung"
+        )
+        self.person.entity_tags.add(complete)
+        self.family.entity_tags.add(missing)
+        self.place.entity_tags.add(complete)
+        self.event.entity_tags.add(missing)
+
+        self.client.login(username="viewer", password="password")
+        empty = self.client.get(self.browse_url)
+        self.assertEqual(empty.status_code, 200)
+        self.assertContains(empty, "Wähle oben")
+        self.assertNotContains(empty, "Muster")
+        self.assertNotContains(empty, "OhneMarkierung")
+
+        only_complete = self.client.get(self.browse_url, {"tag": complete.pk})
+        self.assertContains(only_complete, "Muster")
+        self.assertContains(only_complete, "Herford")
+        self.assertNotContains(only_complete, "OhneMarkierung")
+        self.assertNotContains(only_complete, self.marr.name)
+
+        both = self.client.get(
+            self.browse_url, {"tag": [complete.pk, missing.pk]}
+        )
+        self.assertContains(both, "Muster")
+        self.assertContains(both, "Herford")
+        self.assertContains(both, self.marr.name)
+        self.assertNotContains(both, "OhneMarkierung")
+        self.assertEqual(both.context["result_count"], 4)
+
+    def test_tag_pages_use_data_browse_and_admin_manage_nav(self):
+        self.client.login(username="viewer", password="password")
+        viewer_page = self.client.get(self.person_url)
+        self.assertContains(viewer_page, f'href="{self.browse_url}"')
+        self.assertNotContains(viewer_page, "Markierungen verwalten")
+
+        self.client.login(username="editor", password="password")
+        editor_page = self.client.get(self.person_url)
+        self.assertContains(editor_page, f'href="{self.browse_url}"')
+        self.assertContains(editor_page, "Markierungen verwalten")
+        self.assertContains(editor_page, f'href="{self.list_url}"')
