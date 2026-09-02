@@ -1,13 +1,14 @@
 # RootNode
 
 ![Python](https://img.shields.io/badge/Python-3.13-green.svg)
-![Django](https://img.shields.io/badge/Django-5.1.7-green.svg)
-[![Bootstrap](https://img.shields.io/badge/Bootstrap-7952B3?logo=bootstrap&logoColor=fff)]
-[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)]
+![Django](https://img.shields.io/pypi/frameworkversions/django/django-cms)
+![Bootstrap](https://img.shields.io/badge/-Bootstrap_5-7952B3?style=flat&logo=bootstrap&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)
+![AI](https://img.shields.io/badge/AI-Artificial%20Intelligence-brightgreen)
 
-A simple gedcom based management for family trees based on Django framework and bootstrap. Ready to run in a container.
+A simple gedcom based management for family trees based on Django framework and bootstrap. Ready to run in a container. Additional plugins/microservices to enable AI features.
 
-Main features:
+## Main features
 
 - gedcom file import (web and cli)
 - modification of data
@@ -17,6 +18,17 @@ Main features:
 - face detection support (would need [facenode](https://github.com/stevwyman/facenode))
 - ocr support (would need [textnode](https://github.com/stevwyman/textnode))
 - photo colorization (would need [colornode](https://github.com/stevwyman/colornode))
+
+### AI plugins
+
+- Colorize black/white photos, use [colornode](https://github.com/stevwyman/colornode)
+- Chat with the app to get information from your tree,use [parsenode](https://github.com/stevwyman/parsenode)
+- Recognize individuals on photos and get suggestions based on your tree, use [facenode](https://github.com/stevwyman/facenode)
+- Read image/pdf and extract text, currently only machine text, no handwriting, still use [textnode](https://github.com/stevwyman/textnode)
+
+All of the plugins can be en-/disabled by an admin-role. See below [components role](### Component Roles).
+
+### Privacy
 
 The main driver of initiating this project has been to focus on security. This type of information can be very sensitive and therefore **privacy** needs attention. On the other hand you want to share as much as possible to either help others or to get others information, if they have same.
 
@@ -39,7 +51,7 @@ flowchart TD
     B -->|No| K{Is User Authenticated && Is User assigned to Tree?}
     K --> |true| I["disable all privacy checks"]
     K --> |false| L[404]
-````
+```
 
 ![individual view](docu/individual_view.png "individual view")
 
@@ -210,9 +222,6 @@ TREE_QUERY_LLM_MODEL=llama3.2:3b
 ```
 
 ## ToDos
-
-- [ ] use hardened images, i.e. by Red Hat
-- 
 
 ## some tweaks
 
