@@ -13,11 +13,8 @@ A simple gedcom based management for family trees based on Django framework and 
 - gedcom file import (web and cli)
 - modification of data
 - media management
-- two factor authorizations
+- two factor authorization
 - multi language support
-- face detection support (would need [facenode](https://github.com/stevwyman/facenode))
-- ocr support (would need [textnode](https://github.com/stevwyman/textnode))
-- photo colorization (would need [colornode](https://github.com/stevwyman/colornode))
 
 ### AI plugins
 
