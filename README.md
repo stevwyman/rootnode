@@ -26,7 +26,7 @@ A simple gedcom based management for family trees based on Django framework and 
 - Recognize individuals on photos and get suggestions based on your tree, use [facenode](https://github.com/stevwyman/facenode)
 - Read image/pdf and extract text, currently only machine text, no handwriting, still use [textnode](https://github.com/stevwyman/textnode)
 
-All of the plugins can be en-/disabled by an admin-role. See below [components role](### Component Roles).
+All of the plugins can be en-/disabled by an admin-role. See below [components role](#Component Roles).
 
 ### Privacy
 
@@ -117,10 +117,10 @@ The system utilizes a **Hub-and-Spoke** microservices architecture. The containe
 
 ### Component Roles
 
--**Rootnode (The Hub)**: Receives the initial user request. When a user uploads a document or photo, the Rootnode holds it in memory (or saves it to its local volume) and acts as an HTTP client, delegating heavy machine-learning tasks by making POST requests to the internal endpoints of the other nodes.
--**Textnode (The OCR Spoke)**: Receives a file from the Rootnode, checks if it is a PDF or image, processes it purely in RAM, and returns a JSON string of the extracted text. It is entirely stateless.
--**Facenode (The Vision Spoke)**: Receives an image from the Rootnode, aligns the face, calculates the vector embedding, and returns a JSON payload containing facial coordinates and the 512-dimension array. It immediately forgets the image after processing.
--**Colornode (The Colorization Spoke)**: Receives an image from the Rootnode, runs DDColor, and returns a colorized JPEG. Rootnode stores that as a new media object and never overwrites the original scan.
+- **Rootnode (The Hub)**: Receives the initial user request. When a user uploads a document or photo, the Rootnode holds it in memory (or saves it to its local volume) and acts as an HTTP client, delegating heavy machine-learning tasks by making POST requests to the internal endpoints of the other nodes.
+- **Textnode (The OCR Spoke)**: Receives a file from the Rootnode, checks if it is a PDF or image, processes it purely in RAM, and returns a JSON string of the extracted text. It is entirely stateless.
+- **Facenode (The Vision Spoke)**: Receives an image from the Rootnode, aligns the face, calculates the vector embedding, and returns a JSON payload containing facial coordinates and the 512-dimension array. It immediately forgets the image after processing.
+- **Colornode (The Colorization Spoke)**: Receives an image from the Rootnode, runs DDColor, and returns a colorized JPEG. Rootnode stores that as a new media object and never overwrites the original scan.
 
 ### deployment
 
