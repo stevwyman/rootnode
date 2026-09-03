@@ -5,10 +5,12 @@ import os
 import hashlib
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 from django.db.models import Prefetch, Q
 from django.db.models.signals import post_delete
 from django.core.exceptions import ValidationError
@@ -928,6 +930,24 @@ class Place(GedcomIdMixin):
     # 9 digits total, 6 after the decimal point gives sub-meter accuracy!
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Breitengrad (Latitude)")
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Längengrad (Longitude)")
+    gov_id = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        verbose_name="GOV-Kennung",
+        help_text="Kennung im Geschichtlichen Ortsverzeichnis (z.B. NEURCHJO94KE).",
+    )
+    gov_data = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="GOV-Daten",
+        help_text="Zwischengespeicherte GOV-Objektdaten (Namen, Zeiten, Koordinaten).",
+    )
+    gov_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="GOV zuletzt geladen",
+    )
     entity_tags = models.ManyToManyField(
         EntityTag,
         blank=True,
@@ -954,6 +974,70 @@ class Place(GedcomIdMixin):
             # Teilt den String am ersten Komma und entfernt überflüssige Leerzeichen
             return self.name.split(',')[0].strip()
         return "Unbekannter Ort"
+
+    @property
+    def gov_item_url(self) -> str:
+        from .gov import gov_item_url
+
+        if not self.gov_id:
+            return ""
+        return gov_item_url(self.gov_id)
+
+    def name_at(self, when=None, language="deu") -> str:
+        """Historic GOV name at *when*, otherwise the GEDCOM short name."""
+        from .gov import name_at as gov_name_at
+
+        if self.gov_data:
+            found = gov_name_at(self.gov_data, when, language)
+            if found:
+                return found
+        return self.short_name
+
+    def gov_name_history(self) -> list:
+        from .gov import name_history
+
+        return name_history(self.gov_data)
+
+    def apply_gov_payload(self, payload: dict, *, fill_coords: bool = True) -> None:
+        from .gov import position_of
+
+        gov_id = (payload or {}).get("id") or self.gov_id
+        self.gov_id = gov_id or ""
+        self.gov_data = payload
+        self.gov_synced_at = timezone.now()
+        if fill_coords and (self.latitude is None or self.longitude is None):
+            lat, lon = position_of(payload)
+            if lat is not None and lon is not None:
+                try:
+                    if self.latitude is None:
+                        self.latitude = Decimal(str(round(lat, 6)))
+                    if self.longitude is None:
+                        self.longitude = Decimal(str(round(lon, 6)))
+                except (InvalidOperation, TypeError, ValueError):
+                    pass
+
+    def sync_from_gov(self, *, fill_coords: bool = True) -> dict:
+        from .gov import fetch_object
+
+        payload = fetch_object(self.gov_id)
+        self.apply_gov_payload(payload, fill_coords=fill_coords)
+        self.save(
+            update_fields=[
+                "gov_id",
+                "gov_data",
+                "gov_synced_at",
+                "latitude",
+                "longitude",
+                "updated_at",
+            ]
+        )
+        return payload
+
+    def clear_gov(self) -> None:
+        self.gov_id = ""
+        self.gov_data = None
+        self.gov_synced_at = None
+        self.save(update_fields=["gov_id", "gov_data", "gov_synced_at", "updated_at"])
     
     def get_absolute_url(self):
         return reverse(
@@ -1094,6 +1178,13 @@ class Event(models.Model):
 
     def event_type_name(self):
         return self.event_type.name if self.event_type else "Unbekanntes Ereignis"
+
+    @property
+    def place_name(self) -> str:
+        """Place label valid at this event's date, if GOV data is linked."""
+        if not self.place_id:
+            return ""
+        return self.place.name_at(self.parsed_date)
 
     def __str__(self):
         # 1. Den Namen des Events aus der neuen verknüpften Tabelle holen

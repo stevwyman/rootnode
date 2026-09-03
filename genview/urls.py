@@ -344,6 +344,10 @@ urlpatterns = [
     path('tree/<int:tree_id>/places/<int:pk>/delete/', views.PlaceDeleteView.as_view(), name='place-delete'),
     path('tree/<int:tree_id>/places/cleanup/', views.PlaceDeduplicationView.as_view(), name='place-deduplication'),
     path("tree/<int:tree_id>/places/geocode/", views.PlaceGeocodeView.as_view(), name="place-geocode"),
+    path("tree/<int:tree_id>/places/gov/search/", views.PlaceGovSearchView.as_view(), name="place-gov-search"),
+    path("tree/<int:tree_id>/places/<int:pk>/gov/link/", views.PlaceGovLinkView.as_view(), name="place-gov-link"),
+    path("tree/<int:tree_id>/places/<int:pk>/gov/unlink/", views.PlaceGovUnlinkView.as_view(), name="place-gov-unlink"),
+    path("tree/<int:tree_id>/places/<int:pk>/gov/refresh/", views.PlaceGovRefreshView.as_view(), name="place-gov-refresh"),
 
 
 

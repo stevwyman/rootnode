@@ -220,7 +220,7 @@
                                 {% if object.birth_event and object.birth_event.place %}
                                     <div class="small text-muted">
                                         <a href="{% url 'genview:place-detail' tree_id=tree_id pk=object.birth_event.place.id %}" class="text-decoration-none text-secondary">
-                                            📍 {{ object.birth_event.place.short_name }}
+                                            📍 {{ object.birth_event.place_name }}
                                         </a>
                                     </div>
                                 {% endif %}
@@ -244,7 +244,7 @@
                                 {% if object.death_event and object.death_event.place %}
                                     <div class="small text-muted">
                                         <a href="{% url 'genview:place-detail' tree_id=tree_id pk=object.death_event.place.id %}" class="text-decoration-none text-secondary">
-                                            📍 {{ object.death_event.place.short_name }}
+                                            📍 {{ object.death_event.place_name }}
                                         </a>
                                     </div>
                                 {% endif %}
@@ -382,7 +382,7 @@
                                                     
                                                     {% if event.place %}
                                                         <a href="{% url 'genview:place-detail' tree_id=tree_id pk=event.place.id %}" class="text-decoration-none text-secondary">
-                                                            📍 {{ event.place.name }}
+                                                            📍 {{ event.place_name }}
                                                         </a>
                                                     {% endif %}
                                                 </div>

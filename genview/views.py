@@ -89,6 +89,12 @@ from .mixins import (
     SortableListViewMixin,
     FilterableListViewMixin,
 )
+from .gov import (
+    GovError,
+    fetch_object,
+    normalize_gov_id,
+    search_places,
+)
 from .utils import get_similar_place_clusters, merge_multiple_places, geocode_place, build_flat_family_tree, generate_thumbnail_for_instance
 
 
@@ -3113,7 +3119,8 @@ class PlaceListView(TreeAccessMixin, SortableListViewMixin, FilterableListViewMi
 
     # --- Filter ---
     search_fields = [
-        'name'
+        'name',
+        'gov_id',
     ]
 
     def get_queryset(self):
@@ -3187,8 +3194,11 @@ class PlaceCreateView(LoginRequiredMixin, TreeEditAccessMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.gedcom_tree_id = self.kwargs.get("tree_id")
+        form.instance.gov_id = normalize_gov_id(form.cleaned_data.get("gov_id"))
         messages.success(self.request, _("Ort erfolgreich hinzugefügt."))
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        _sync_place_gov_if_changed(self.request, form.instance, previous_gov_id="")
+        return response
 
     def get_success_url(self):
         return reverse_lazy("genview:place-list", kwargs={"tree_id": self.kwargs.get("tree_id")})
@@ -3207,6 +3217,18 @@ class PlaceUpdateView(LoginRequiredMixin, TreeEditAccessMixin, UpdateView):
     def get_queryset(self):
         tree_id = self.kwargs.get("tree_id")
         return Place.objects.filter(gedcom_tree_id=tree_id)
+
+    def form_valid(self, form):
+        previous_gov_id = ""
+        if form.instance.pk:
+            previous_gov_id = (
+                Place.objects.filter(pk=form.instance.pk).values_list("gov_id", flat=True).first()
+                or ""
+            )
+        form.instance.gov_id = normalize_gov_id(form.cleaned_data.get("gov_id"))
+        response = super().form_valid(form)
+        _sync_place_gov_if_changed(self.request, form.instance, previous_gov_id=previous_gov_id)
+        return response
 
     def get_success_url(self):
         tree_id = self.kwargs.get("tree_id")
@@ -3333,7 +3355,137 @@ class PlaceGeocodeView(LoginRequiredMixin, TreeEditAccessMixin, View):
         messages.success(request,
                          _("Koordinaten (%(lat)s, %(lon)s) für „%(query)s“ gespeichert.") % {"lat": place.latitude, "lon": place.longitude, "query": query})
         return redirect(reverse('genview:place-detail', args=[tree_id, place.pk]))
-        
+
+
+def _place_gov_json_error(exc, *, status=502):
+    return JsonResponse({"status": "error", "error": str(exc)}, status=status)
+
+
+def _sync_place_gov_if_changed(request, place, *, previous_gov_id=""):
+    new_id = normalize_gov_id(place.gov_id)
+    if new_id == (previous_gov_id or ""):
+        return
+    if not new_id:
+        place.gov_data = None
+        place.gov_synced_at = None
+        place.save(update_fields=["gov_data", "gov_synced_at", "updated_at"])
+        return
+    try:
+        place.sync_from_gov()
+        messages.success(
+            request,
+            _("GOV-Daten für „%(id)s“ wurden geladen.") % {"id": place.gov_id},
+        )
+    except GovError as exc:
+        messages.warning(
+            request,
+            _("GOV-Kennung gespeichert, Daten konnten nicht geladen werden: %(detail)s")
+            % {"detail": exc},
+        )
+
+
+class PlaceGovSearchView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    """AJAX search against the GOV gazetteer."""
+
+    def get(self, request, *args, **kwargs):
+        query = (request.GET.get("q") or "").strip()
+        if len(query) < 2:
+            return JsonResponse({"status": "ok", "results": []})
+        try:
+            results = search_places(query)
+        except GovError as exc:
+            return _place_gov_json_error(exc)
+        return JsonResponse({"status": "ok", "results": results})
+
+
+class PlaceGovLinkView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    """Link a Place to a GOV object and cache the payload."""
+
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        place = get_object_or_404(Place, pk=kwargs["pk"], gedcom_tree_id=tree_id)
+        gov_id = normalize_gov_id(request.POST.get("gov_id"))
+        if not gov_id:
+            return HttpResponseBadRequest("Missing gov_id")
+
+        fill_coords = request.POST.get("fill_coords") != "0"
+        try:
+            payload = fetch_object(gov_id)
+        except GovError as exc:
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return _place_gov_json_error(exc)
+            messages.error(request, _("GOV-Fehler: %(detail)s") % {"detail": exc})
+            return redirect(reverse("genview:place-detail", args=[tree_id, place.pk]))
+
+        place.apply_gov_payload(payload, fill_coords=fill_coords)
+        place.save()
+
+        message = _("Ort mit GOV „%(id)s“ verknüpft.") % {"id": place.gov_id}
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "status": "ok",
+                    "gov_id": place.gov_id,
+                    "url": place.gov_item_url,
+                    "current_name": place.name_at(),
+                    "lat": str(place.latitude) if place.latitude is not None else None,
+                    "lon": str(place.longitude) if place.longitude is not None else None,
+                    "history": [
+                        {
+                            "value": entry["value"],
+                            "lang": entry["lang"],
+                            "lang_label": entry["lang_label"],
+                            "valid_from": entry["valid_from"].isoformat() if entry["valid_from"] else None,
+                            "valid_to": entry["valid_to"].isoformat() if entry["valid_to"] else None,
+                        }
+                        for entry in place.gov_name_history()
+                    ],
+                    "message": message,
+                }
+            )
+        messages.success(request, message)
+        return redirect(reverse("genview:place-detail", args=[tree_id, place.pk]))
+
+
+class PlaceGovUnlinkView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        place = get_object_or_404(Place, pk=kwargs["pk"], gedcom_tree_id=tree_id)
+        place.clear_gov()
+        message = _("GOV-Verknüpfung entfernt.")
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"status": "ok", "message": message})
+        messages.success(request, message)
+        return redirect(reverse("genview:place-detail", args=[tree_id, place.pk]))
+
+
+class PlaceGovRefreshView(LoginRequiredMixin, TreeEditAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        tree_id = self.kwargs.get("tree_id")
+        place = get_object_or_404(Place, pk=kwargs["pk"], gedcom_tree_id=tree_id)
+        if not place.gov_id:
+            return HttpResponseBadRequest("Missing gov_id")
+        try:
+            place.sync_from_gov(fill_coords=False)
+        except GovError as exc:
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return _place_gov_json_error(exc)
+            messages.error(request, _("GOV-Fehler: %(detail)s") % {"detail": exc})
+            return redirect(reverse("genview:place-detail", args=[tree_id, place.pk]))
+
+        message = _("GOV-Daten wurden aktualisiert.")
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "status": "ok",
+                    "gov_id": place.gov_id,
+                    "current_name": place.name_at(),
+                    "message": message,
+                }
+            )
+        messages.success(request, message)
+        return redirect(reverse("genview:place-detail", args=[tree_id, place.pk]))
+
 
 # --------------------------------------------------------------
 # 7️⃣ Events
@@ -4269,7 +4421,7 @@ class MediaSearchAPIView(GenericSelect2APIView):
 # --- Die API für Orte ---     
 class PlaceSearchAPIView(GenericSelect2APIView):
     model = Place
-    search_fields = ['name']
+    search_fields = ['name', 'gov_id']
     
     def get_display_text(self, obj):
         return obj.name

@@ -15,6 +15,7 @@ A simple gedcom based management for family trees based on Django framework and 
 - media management
 - two factor authorization
 - multi language support
+- places are connected to [GOV](https://wiki.genealogy.net/GOV)
 
 ### AI plugins
 

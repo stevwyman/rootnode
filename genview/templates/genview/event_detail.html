@@ -65,8 +65,11 @@
             <div class="card-body">
                 {% if object.place %}
                     <a href="{% url 'genview:place-detail' tree_id=tree_id pk=object.place.pk %}" class="text-decoration-none">
-                        📍 {{ object.place.name }}
+                        📍 {{ object.place_name }}
                     </a>
+                    {% if object.place.gov_id and object.place_name != object.place.name %}
+                        <div class="text-muted small mt-1">GEDCOM: {{ object.place.name }}</div>
+                    {% endif %}
                     {% if object.place.latitude and object.place.longitude %}
                         <small class="text-muted ms-2">({{ object.place.latitude }}, {{ object.place.longitude }})</small>
                     {% endif %}

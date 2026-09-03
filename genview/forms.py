@@ -703,11 +703,18 @@ class AddExistingMediaForm(forms.Form):
 class PlaceForm(forms.ModelForm):
     class Meta:
         model = Place
-        fields = ['name', 'latitude', 'longitude', 'entity_tags']
+        fields = ['name', 'latitude', 'longitude', 'gov_id', 'entity_tags']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. Berlin, Deutschland'}),
             'latitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
             'longitude': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+            'gov_id': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'z.B. NEURCHJO94KE',
+                    'autocomplete': 'off',
+                }
+            ),
         }
 
     def __init__(self, *args, tree_id=None, **kwargs):

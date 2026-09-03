@@ -103,7 +103,91 @@
                 <div id="geocode-result" class="mt-3"></div>
                 {% endif %}
             </div>
+        </div>
 
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Geschichtliches Ortsverzeichnis</h5>
+                {% if place.gov_id %}
+                    <span class="badge bg-success">GOV</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if place.gov_id %}
+                    <p class="mb-1 text-muted small">GOV-Kennung</p>
+                    <p class="fw-bold mb-2">
+                        <a href="{{ place.gov_item_url }}" target="_blank" rel="noopener">{{ place.gov_id }}</a>
+                    </p>
+                    <p class="mb-1 text-muted small">Name heute (laut GOV)</p>
+                    <p class="fw-bold">{{ place.name_at }}</p>
+                    {% if place.gov_synced_at %}
+                        <p class="text-muted small mb-3">Zuletzt geladen: {{ place.gov_synced_at|date:"d.m.Y H:i" }}</p>
+                    {% endif %}
+
+                    {% with history=place.gov_name_history %}
+                    {% if history %}
+                        <p class="mb-1 text-muted small">Namensgeschichte</p>
+                        <ul class="list-unstyled small mb-3">
+                            {% for entry in history %}
+                                <li class="mb-1">
+                                    <strong>{{ entry.value }}</strong>
+                                    {% if entry.lang_label %}
+                                        <span class="text-muted">({{ entry.lang_label }})</span>
+                                    {% endif %}
+                                    <span class="text-muted">
+                                        {% if entry.valid_from or entry.valid_to %}
+                                            ·
+                                            {% if entry.valid_from %}{{ entry.valid_from|date:"Y" }}{% else %}…{% endif %}
+                                            –
+                                            {% if entry.valid_to %}{{ entry.valid_to|date:"Y" }}{% else %}…{% endif %}
+                                        {% endif %}
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                    {% endwith %}
+
+                    {% if can_edit %}
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <form method="post" action="{% url 'genview:place-gov-refresh' tree_id=tree_id pk=place.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-primary btn-sm">Daten aktualisieren</button>
+                        </form>
+                        <form method="post" action="{% url 'genview:place-gov-unlink' tree_id=tree_id pk=place.pk %}"
+                              onsubmit="return confirm('GOV-Verknüpfung wirklich entfernen?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Verknüpfung lösen</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted small mb-3">
+                        Noch nicht mit dem Geschichtlichen Ortsverzeichnis verknüpft.
+                        Darüber lassen sich historische Namen und Länderwechsel zu einem Datum anzeigen.
+                    </p>
+                {% endif %}
+
+                {% if can_edit %}
+                <p class="mb-1 fw-semibold">GOV-Ort suchen und verknüpfen</p>
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="gov-search-q"
+                           value="{{ place.short_name }}"
+                           placeholder="Ortsname oder GOV-Kennung">
+                    <button type="button" class="btn btn-primary" id="gov-search-btn">Suchen</button>
+                </div>
+                <form method="post" action="{% url 'genview:place-gov-link' tree_id=tree_id pk=place.pk %}" class="mb-2">
+                    {% csrf_token %}
+                    <label class="form-label small text-muted mb-1" for="gov-id-input">Oder Kennung direkt eintragen</label>
+                    <div class="input-group">
+                        <input type="text" name="gov_id" id="gov-id-input" class="form-control"
+                               value="{{ place.gov_id }}" placeholder="z.B. NEURCHJO94KE" autocomplete="off">
+                        <button type="submit" class="btn btn-outline-success">Verknüpfen</button>
+                    </div>
+                </form>
+                <div id="gov-search-result"></div>
+                {% endif %}
+            </div>
         </div>
     {% endblock%}
 
@@ -111,66 +195,181 @@
         {% include "genview/_basic_system_information.html" with object=place %}
     {% endblock%}
 
-    {% if place.latitude and place.longitude %}
     {% block extra_js %}
         <script>
         document.addEventListener('DOMContentLoaded', function () {
-            
-            // ---- AJAX-Submission (optional) ----
-            const form = document.getElementById('geocode-form');
-            const resultDiv = document.getElementById('geocode-result');
+            const geocodeForm = document.getElementById('geocode-form');
+            const geocodeResult = document.getElementById('geocode-result');
+            if (geocodeForm && geocodeResult) {
+                geocodeForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const btn = document.getElementById('geocode-btn');
+                    btn.disabled = true;
+                    btn.textContent = 'Suche…';
 
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();                     // kein full-page reload
-                const btn = document.getElementById('geocode-btn');
-                btn.disabled = true;
-                btn.textContent = 'Suche…';
+                    const data = new FormData(geocodeForm);
+                    fetch(geocodeForm.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRFToken': data.get('csrfmiddlewaretoken')
+                        },
+                        body: data
+                    })
+                    .then(res => res.json())
+                    .then(json => {
+                        geocodeResult.replaceChildren();
+                        const box = document.createElement('div');
+                        if (json.status === 'ok') {
+                            box.className = 'alert alert-success';
+                            box.append(document.createTextNode(String(json.message || '')));
+                            box.append(document.createElement('br'));
+                            box.append(document.createTextNode(
+                                `Koordinaten: ${json.lat}, ${json.lon}`
+                            ));
+                        } else {
+                            box.className = 'alert alert-danger';
+                            box.append(document.createTextNode(
+                                `Fehler beim Geocode: ${json.error || 'Unbekannt'}`
+                            ));
+                        }
+                        geocodeResult.append(box);
+                    })
+                    .catch(err => {
+                        geocodeResult.replaceChildren();
+                        const box = document.createElement('div');
+                        box.className = 'alert alert-danger';
+                        box.append(document.createTextNode(
+                            `Netzwerk-/Server-Fehler: ${err}`
+                        ));
+                        geocodeResult.append(box);
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.textContent = 'Koordinaten suchen (Nominatim)';
+                    });
+                });
+            }
 
-                const data = new FormData(form);
-                fetch(form.action, {
+            const searchBtn = document.getElementById('gov-search-btn');
+            const searchInput = document.getElementById('gov-search-q');
+            const searchResult = document.getElementById('gov-search-result');
+            const govIdInput = document.getElementById('gov-id-input');
+            if (!searchBtn || !searchInput || !searchResult) {
+                return;
+            }
+
+            const searchUrl = "{% url 'genview:place-gov-search' tree_id=tree_id %}";
+            const linkUrl = "{% url 'genview:place-gov-link' tree_id=tree_id pk=place.pk %}";
+            const csrfToken = "{{ csrf_token }}";
+
+            function showGovMessage(text, ok) {
+                searchResult.replaceChildren();
+                const box = document.createElement('div');
+                box.className = ok ? 'alert alert-success' : 'alert alert-danger';
+                box.append(document.createTextNode(text));
+                searchResult.append(box);
+            }
+
+            function linkGovId(govId) {
+                const body = new URLSearchParams();
+                body.set('gov_id', govId);
+                body.set('csrfmiddlewaretoken', csrfToken);
+                return fetch(linkUrl, {
                     method: 'POST',
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest',   // Signal für AJAX
-                        'X-CSRFToken': data.get('csrfmiddlewaretoken')
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: data
+                    body: body.toString(),
+                }).then(res => res.json());
+            }
+
+            searchBtn.addEventListener('click', function () {
+                const query = searchInput.value.trim();
+                if (query.length < 2) {
+                    showGovMessage('Bitte mindestens zwei Zeichen eingeben.', false);
+                    return;
+                }
+                searchBtn.disabled = true;
+                searchBtn.textContent = 'Suche…';
+                fetch(searchUrl + '?q=' + encodeURIComponent(query), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
                 .then(res => res.json())
                 .then(json => {
-                    resultDiv.replaceChildren();
-                    const box = document.createElement('div');
-                    if (json.status === 'ok') {
-                        box.className = 'alert alert-success';
-                        box.append(document.createTextNode(String(json.message || '')));
-                        box.append(document.createElement('br'));
-                        box.append(document.createTextNode(
-                            `Koordinaten: ${json.lat}, ${json.lon}`
-                        ));
-                    } else {
-                        box.className = 'alert alert-danger';
-                        box.append(document.createTextNode(
-                            `Fehler beim Geocode: ${json.error || 'Unbekannt'}`
-                        ));
+                    searchResult.replaceChildren();
+                    if (json.status !== 'ok') {
+                        showGovMessage(json.error || 'GOV-Suche fehlgeschlagen.', false);
+                        return;
                     }
-                    resultDiv.append(box);
+                    const results = json.results || [];
+                    if (!results.length) {
+                        showGovMessage('Keine Treffer. GOV-Kennung ggf. von gov.genealogy.net kopieren.', false);
+                        return;
+                    }
+                    const list = document.createElement('div');
+                    list.className = 'list-group';
+                    results.forEach(function (hit) {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        const title = document.createElement('div');
+                        title.className = 'fw-semibold';
+                        title.append(document.createTextNode(hit.name || hit.id));
+                        item.append(title);
+                        const meta = document.createElement('div');
+                        meta.className = 'small text-muted';
+                        const extras = [];
+                        if (hit.id) extras.push(hit.id);
+                        if (hit.names && hit.names.length) extras.push(hit.names.join(' · '));
+                        meta.append(document.createTextNode(extras.join(' — ')));
+                        item.append(meta);
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'btn btn-sm btn-success mt-2';
+                        btn.append(document.createTextNode('Diesen Ort verknüpfen'));
+                        btn.addEventListener('click', function () {
+                            btn.disabled = true;
+                            linkGovId(hit.id).then(function (resp) {
+                                if (resp.status === 'ok') {
+                                    window.location.reload();
+                                } else {
+                                    showGovMessage(resp.error || 'Verknüpfen fehlgeschlagen.', false);
+                                    btn.disabled = false;
+                                }
+                            }).catch(function (err) {
+                                showGovMessage(String(err), false);
+                                btn.disabled = false;
+                            });
+                        });
+                        item.append(btn);
+                        list.append(item);
+                    });
+                    searchResult.append(list);
                 })
-                .catch(err => {
-                    resultDiv.replaceChildren();
-                    const box = document.createElement('div');
-                    box.className = 'alert alert-danger';
-                    box.append(document.createTextNode(
-                        `Netzwerk-/Server-Fehler: ${err}`
-                    ));
-                    resultDiv.append(box);
-                })
+                .catch(err => showGovMessage(String(err), false))
                 .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = 'Koordinaten suchen (Nominatim)';
+                    searchBtn.disabled = false;
+                    searchBtn.textContent = 'Suchen';
                 });
             });
+
+            if (searchInput) {
+                searchInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchBtn.click();
+                    }
+                });
+            }
+
+            if (govIdInput) {
+                govIdInput.addEventListener('change', function () {
+                    govIdInput.value = govIdInput.value.trim();
+                });
+            }
         });
         </script>
-        
     {% endblock %}
-    {% endif %}
     

@@ -179,6 +179,17 @@ def merge_multiple_places(master_place, duplicate_places):
     Verschiebt alle Referenzen von MEHREREN Duplikaten auf den Master-Ort.
     """
     with transaction.atomic():
+        if not master_place.gov_id:
+            for duplicate in duplicate_places:
+                if duplicate.gov_id:
+                    master_place.gov_id = duplicate.gov_id
+                    master_place.gov_data = duplicate.gov_data
+                    master_place.gov_synced_at = duplicate.gov_synced_at
+                    master_place.save(
+                        update_fields=["gov_id", "gov_data", "gov_synced_at"]
+                    )
+                    break
+
         related_objects = master_place._meta.related_objects
         
         for duplicate in duplicate_places:
