@@ -2637,7 +2637,16 @@ class MediaObjectListView(TreeAccessMixin, SortableListViewMixin, FilterableList
         qs = apply_privacy_to_media_qs(
             qs, self.get_apply_privacy(), self.kwargs["tree_id"]
         )
-        return qs.prefetch_related('individuals', 'families', 'events', 'entity_tags')
+        return qs.prefetch_related(
+            "individuals",
+            "families__husband",
+            "families__wife",
+            "events__event_type",
+            "events__individual",
+            "events__family__husband",
+            "events__family__wife",
+            "entity_tags",
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

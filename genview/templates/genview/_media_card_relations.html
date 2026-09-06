@@ -1,0 +1,71 @@
+{% load i18n %}
+{% with people=item.individuals.all families=item.families.all events=item.events.all %}
+{% if people or families or events %}
+    <div class="mt-auto mb-2 small media-gallery__relations">
+        {% if people %}
+            <div class="mb-1">
+                <strong>{% trans "Personen" %}:</strong>
+                <ul class="list-unstyled mb-0">
+                    {% for person in people|slice:":3" %}
+                        {% if not apply_privacy or not person.is_confidential %}
+                            <li>
+                                <a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}">
+                                    {{ person.given_name }} {{ person.surname }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if people|length > 3 %}
+                        <li><em>… {% trans "und" %} {{ people|length|add:"-3" }} {% trans "weitere" %}</em></li>
+                    {% endif %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if families %}
+            <div class="mb-1">
+                <strong>{% trans "Familien" %}:</strong>
+                <ul class="list-unstyled mb-0">
+                    {% for family in families|slice:":3" %}
+                        {% if not apply_privacy or not family.is_confidential %}
+                            <li>
+                                <a href="{% url 'genview:family-detail' tree_id=tree_id pk=family.pk %}">
+                                    {{ family.husband.surname|default:"?" }} &amp; {{ family.wife.surname|default:"?" }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if families|length > 3 %}
+                        <li><em>… {% trans "und" %} {{ families|length|add:"-3" }} {% trans "weitere" %}</em></li>
+                    {% endif %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if events %}
+            <div class="mb-1">
+                <strong>{% trans "Ereignisse" %}:</strong>
+                <ul class="list-unstyled mb-0">
+                    {% for event in events|slice:":3" %}
+                        {% if not apply_privacy or not event.is_confidential %}
+                            <li>
+                                <a href="{% url 'genview:event-detail' tree_id=tree_id pk=event.pk %}">
+                                    {{ event.event_type_name }}{% if event.parsed_date %}, {{ event.parsed_date|date:"d.m.Y" }}{% elif event.raw_date %}, {{ event.raw_date }}{% endif %}
+                                </a>
+                                {% if event.individual %}
+                                    <span class="text-muted d-block">👤 {{ event.individual.given_name }} {{ event.individual.surname }}</span>
+                                {% elif event.family %}
+                                    <span class="text-muted d-block">👪 {{ event.family.husband.surname|default:"?" }} &amp; {{ event.family.wife.surname|default:"?" }}</span>
+                                {% endif %}
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if events|length > 3 %}
+                        <li><em>… {% trans "und" %} {{ events|length|add:"-3" }} {% trans "weitere" %}</em></li>
+                    {% endif %}
+                </ul>
+            </div>
+        {% endif %}
+    </div>
+{% endif %}
+{% endwith %}

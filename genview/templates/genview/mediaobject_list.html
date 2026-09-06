@@ -129,19 +129,7 @@
                             <p class="card-text text-muted small">{{ item.description|truncatewords:15 }}</p>
                         {% endif %}
 
-                        {% if item.individuals.all %}
-                            <div class="mt-auto mb-2 small">
-                                <strong>Personen:</strong>
-                                <ul class="list-unstyled mb-0">
-                                    {% for person in item.individuals.all|slice:":3" %}
-                                        <li><a href="{% url 'genview:individual-detail' tree_id=tree_id pk=person.pk %}">{{ person.given_name }} {{ person.surname }}</a></li>
-                                    {% endfor %}
-                                    {% if item.individuals.count > 3 %}
-                                        <li><em>... und {{ item.individuals.count|add:"-3" }} weitere</em></li>
-                                    {% endif %}
-                                </ul>
-                            </div>
-                        {% endif %}
+                        {% include "genview/_media_card_relations.html" %}
                     </div>
 
                     <div class="card-footer bg-white border-top-0 d-flex justify-content-between flex-wrap gap-1">
