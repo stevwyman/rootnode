@@ -32,10 +32,11 @@ The main driver of initiating this project has been to focus on security. This t
 
 Therefore we have images that can be marked as private, but trees can be marked as public. A second tree flag, **show living people**, controls whether public visitors see living persons. When a public tree does not show living people, visitors only see information that complies with:
 
-- do not show birth events within the prior 110 years
-- do not show death events within the prior 30 years
+- do not show birth or christening events within the prior 110 years
+- do not show death, burial, or cremation events within the prior 30 years
 - do not show marriage events within the prior 80 years
 - do not show individuals or families where one of the above rules is active
+- people without a death date are still shown if they cannot reasonably be alive: birth/christening older than 110 years, any dated event older than 110 years, or a death/burial/cremation record (even without a date). People with no chronological evidence stay hidden.
 
 Private-tree members (including viewers) always see living people. Editors and admins bypass privacy even on a public tree with the living-people flag off. Unauthorized access to a private tree returns 404.
 

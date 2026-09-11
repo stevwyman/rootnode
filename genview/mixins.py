@@ -7,7 +7,10 @@ from django.shortcuts import get_object_or_404
 
 from .models import TreeMembership, Tree, EntityTag
 from .privacy import (
+    ASSUMED_DECEASED_YEARS,
     BIRTH_PRIVACY_YEARS,
+    BIRTH_PROXY_TAGS,
+    DEATH_EVIDENCE_TAGS,
     DEATH_PRIVACY_YEARS,
     MARRIAGE_PRIVACY_YEARS,
     cutoff_date,
@@ -37,27 +40,31 @@ class FeatureRequiredMixin:
 def filter_public_individuals(qs):
     """
     ORM approximation of Individual.is_confidential == False.
-    A person is public only if they have at least one parsed birth, death, or
-    marriage date and none of those dates fall inside the privacy windows.
+
+    A person is public when none of the living-person windows apply, and there
+    is evidence they are not a living person with unknown dates: a parsed birth
+    (or christening/baptism), death, or marriage; any event older than the max
+    lifespan; or a death/burial/cremation record even without a date.
     """
     from genview.models import Event
 
     today = date.today()
     death_cutoff = cutoff_date(DEATH_PRIVACY_YEARS, today)
     birth_cutoff = cutoff_date(BIRTH_PRIVACY_YEARS, today)
+    assumed_dead_cutoff = cutoff_date(ASSUMED_DECEASED_YEARS, today)
     marriage_cutoff = cutoff_date(MARRIAGE_PRIVACY_YEARS, today)
 
     has_recent_death = Exists(
         Event.objects.filter(
             individual_id=OuterRef("pk"),
-            event_type__tag="DEAT",
+            event_type__tag__in=DEATH_EVIDENCE_TAGS,
             parsed_date__gt=death_cutoff,
         )
     )
     has_recent_birth = Exists(
         Event.objects.filter(
             individual_id=OuterRef("pk"),
-            event_type__tag="BIRT",
+            event_type__tag__in=BIRTH_PROXY_TAGS,
             parsed_date__gt=birth_cutoff,
         )
     )
@@ -79,7 +86,7 @@ def filter_public_individuals(qs):
     has_dated_birth = Exists(
         Event.objects.filter(
             individual_id=OuterRef("pk"),
-            event_type__tag="BIRT",
+            event_type__tag__in=BIRTH_PROXY_TAGS,
             parsed_date__isnull=False,
         )
     )
@@ -91,6 +98,19 @@ def filter_public_individuals(qs):
             Q(family__husband_id=OuterRef("pk")) | Q(family__wife_id=OuterRef("pk"))
         )
     )
+    has_old_event = Exists(
+        Event.objects.filter(
+            individual_id=OuterRef("pk"),
+            parsed_date__isnull=False,
+            parsed_date__lte=assumed_dead_cutoff,
+        )
+    )
+    has_death_evidence = Exists(
+        Event.objects.filter(
+            individual_id=OuterRef("pk"),
+            event_type__tag__in=DEATH_EVIDENCE_TAGS,
+        )
+    )
     return qs.annotate(
         _has_recent_death=has_recent_death,
         _has_recent_birth=has_recent_birth,
@@ -98,6 +118,8 @@ def filter_public_individuals(qs):
         _has_dated_death=has_dated_death,
         _has_dated_birth=has_dated_birth,
         _has_dated_marriage=has_dated_marriage,
+        _has_old_event=has_old_event,
+        _has_death_evidence=has_death_evidence,
     ).filter(
         Q(_has_recent_death=False)
         & Q(_has_recent_birth=False)
@@ -106,6 +128,8 @@ def filter_public_individuals(qs):
             Q(_has_dated_death=True)
             | Q(_has_dated_birth=True)
             | Q(_has_dated_marriage=True)
+            | Q(_has_old_event=True)
+            | Q(_has_death_evidence=True)
         )
     )
 
@@ -188,11 +212,11 @@ def apply_privacy_to_event_qs(
         Q(individual_id__in=public_ids) | Q(family_id__in=public_family_ids)
     ).exclude(
         Q(
-            event_type__tag="BIRT",
+            event_type__tag__in=BIRTH_PROXY_TAGS,
             parsed_date__gt=cutoff_date(BIRTH_PRIVACY_YEARS, today),
         )
         | Q(
-            event_type__tag="DEAT",
+            event_type__tag__in=DEATH_EVIDENCE_TAGS,
             parsed_date__gt=cutoff_date(DEATH_PRIVACY_YEARS, today),
         )
         | Q(

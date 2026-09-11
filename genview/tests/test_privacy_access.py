@@ -87,7 +87,82 @@ class ConfidentialWindowTests(TestCase):
         )
         self.assertFalse(person.is_confidential)
 
-    def test_death_within_80_years_is_confidential(self):
+    def test_old_christening_without_birth_is_public(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Old", surname="Christening"
+        )
+        _event(
+            self.tree,
+            individual=person,
+            tag="CHR",
+            name="Taufe",
+            when=self.today - relativedelta(years=BIRTH_PRIVACY_YEARS + 1),
+        )
+        self.assertFalse(person.is_confidential)
+        public = apply_privacy_to_individual_qs(
+            Individual.objects.filter(gedcom_tree=self.tree), True
+        )
+        self.assertTrue(public.filter(pk=person.pk).exists())
+
+    def test_recent_christening_without_birth_is_confidential(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Recent", surname="Christening"
+        )
+        _event(
+            self.tree,
+            individual=person,
+            tag="CHR",
+            name="Taufe",
+            when=self.today - relativedelta(years=BIRTH_PRIVACY_YEARS - 1),
+        )
+        self.assertTrue(person.is_confidential)
+
+    def test_undated_death_event_is_assumed_deceased(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Died", surname="UnknownDate"
+        )
+        _event(self.tree, individual=person, tag="DEAT", when=None)
+        self.assertFalse(person.is_confidential)
+        public = apply_privacy_to_individual_qs(
+            Individual.objects.filter(gedcom_tree=self.tree), True
+        )
+        self.assertTrue(public.filter(pk=person.pk).exists())
+
+    def test_old_occupation_without_vital_dates_is_public(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Old", surname="Occupation"
+        )
+        _event(
+            self.tree,
+            individual=person,
+            tag="OCCU",
+            name="Beruf",
+            when=self.today - relativedelta(years=BIRTH_PRIVACY_YEARS + 20),
+        )
+        self.assertFalse(person.is_confidential)
+        public = apply_privacy_to_individual_qs(
+            Individual.objects.filter(gedcom_tree=self.tree), True
+        )
+        self.assertTrue(public.filter(pk=person.pk).exists())
+
+    def test_recent_occupation_without_vital_dates_is_confidential(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree, given_name="Recent", surname="Occupation"
+        )
+        _event(
+            self.tree,
+            individual=person,
+            tag="OCCU",
+            name="Beruf",
+            when=self.today - relativedelta(years=40),
+        )
+        self.assertTrue(person.is_confidential)
+        public = apply_privacy_to_individual_qs(
+            Individual.objects.filter(gedcom_tree=self.tree), True
+        )
+        self.assertFalse(public.filter(pk=person.pk).exists())
+
+    def test_death_within_privacy_window_is_confidential(self):
         person = Individual.objects.create(
             gedcom_tree=self.tree, given_name="Recent", surname="Death"
         )

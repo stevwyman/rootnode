@@ -573,38 +573,51 @@ class Individual(GedcomIdMixin):
     def is_confidential(self):
         """
         True when living-person rules hide this person:
-        - birth + 110 years is still after today
-        - death + 80 years is still after today
-        - marriage + 60 years is still after today
-        - no parsed birth, death, or marriage date (fail closed)
+        - birth/christening/baptism + 110 years is still after today
+        - death + 30 years is still after today
+        - marriage + 80 years is still after today
+        - no evidence they cannot be living (fail closed)
+
+        Missing death dates do not keep historical people hidden: a birth or
+        other event older than 110 years, or a death/burial/cremation record
+        without a date, counts as assumed deceased.
         """
         from .privacy import (
+            ASSUMED_DECEASED_YEARS,
             BIRTH_PRIVACY_YEARS,
+            BIRTH_PROXY_TAGS,
+            DEATH_EVIDENCE_TAGS,
             DEATH_PRIVACY_YEARS,
             MARRIAGE_PRIVACY_YEARS,
+            cutoff_date,
             is_within_privacy_window,
         )
 
-        has_any_date = False
+        has_evidence = False
+        assumed_dead_cutoff = cutoff_date(ASSUMED_DECEASED_YEARS)
 
-        if self.death_date:
-            has_any_date = True
-            if is_within_privacy_window(self.death_date, DEATH_PRIVACY_YEARS):
-                return True
-
-        if self.birth_date:
-            has_any_date = True
-            if is_within_privacy_window(self.birth_date, BIRTH_PRIVACY_YEARS):
-                return True
+        for event in self.events.all():
+            tag = getattr(event.event_type, "tag", None) if event.event_type_id else None
+            if tag in DEATH_EVIDENCE_TAGS:
+                has_evidence = True
+                if is_within_privacy_window(event.parsed_date, DEATH_PRIVACY_YEARS):
+                    return True
+            if event.parsed_date:
+                if tag in BIRTH_PROXY_TAGS and is_within_privacy_window(
+                    event.parsed_date, BIRTH_PRIVACY_YEARS
+                ):
+                    return True
+                if event.parsed_date <= assumed_dead_cutoff:
+                    has_evidence = True
 
         for spousal_link in self.spousal_families:
             marriage_date = getattr(spousal_link, "marriage_date_parsed", None)
             if marriage_date:
-                has_any_date = True
+                has_evidence = True
                 if is_within_privacy_window(marriage_date, MARRIAGE_PRIVACY_YEARS):
                     return True
 
-        return not has_any_date
+        return not has_evidence
     
     @property
     def profile_image(self):
@@ -1235,15 +1248,19 @@ class Event(models.Model):
         """Confidential if the owner is, or this event's own date is still in a privacy window."""
         from .privacy import (
             BIRTH_PRIVACY_YEARS,
+            BIRTH_PROXY_TAGS,
+            DEATH_EVIDENCE_TAGS,
             DEATH_PRIVACY_YEARS,
             MARRIAGE_PRIVACY_YEARS,
             is_within_privacy_window,
         )
 
         tag = getattr(self.event_type, "tag", None) if self.event_type_id else None
-        if tag == "BIRT" and is_within_privacy_window(self.parsed_date, BIRTH_PRIVACY_YEARS):
+        if tag in BIRTH_PROXY_TAGS and is_within_privacy_window(self.parsed_date, BIRTH_PRIVACY_YEARS):
             return True
-        if tag == "DEAT" and is_within_privacy_window(self.parsed_date, DEATH_PRIVACY_YEARS):
+        if tag in DEATH_EVIDENCE_TAGS and is_within_privacy_window(
+            self.parsed_date, DEATH_PRIVACY_YEARS
+        ):
             return True
         if tag == "MARR" and is_within_privacy_window(self.parsed_date, MARRIAGE_PRIVACY_YEARS):
             return True

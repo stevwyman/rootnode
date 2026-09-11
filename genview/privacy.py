@@ -1,9 +1,16 @@
 """Living-person privacy windows shared by models and queryset filters.
 
 A date is confidential when ``parsed + years > today``:
-- birth: 110 years
+- birth (or christening/baptism): 110 years
 - death: 30 years
 - marriage: 80 years
+
+People without a death date are still treated as deceased when there is
+chronological evidence they cannot be alive (GEDCOM best practice / max lifespan):
+- birth, christening, or baptism older than 110 years
+- any dated event older than 110 years
+- a death, burial, or cremation event, even without a date (``DEAT Y``)
+Otherwise, missing dates fail closed (treated as living).
 """
 
 from __future__ import annotations
@@ -15,6 +22,11 @@ from dateutil.relativedelta import relativedelta
 BIRTH_PRIVACY_YEARS = 110
 DEATH_PRIVACY_YEARS = 30
 MARRIAGE_PRIVACY_YEARS = 80
+# Same horizon as birth: nobody that old is treated as living.
+ASSUMED_DECEASED_YEARS = BIRTH_PRIVACY_YEARS
+
+BIRTH_PROXY_TAGS = ("BIRT", "CHR", "BAPM")
+DEATH_EVIDENCE_TAGS = ("DEAT", "BURI", "CREM")
 
 
 def add_years(parsed: date, years: int) -> date:
