@@ -6,12 +6,11 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/family-chart@latest/dist/styles/family-chart.css">
 <style>
-    /* Dunkle Linien für den hellen Hintergrund */
     #FamilyChart path.link, 
     #FamilyChart path.f3-link, 
     #FamilyChart .link {
         fill: none !important;
-        stroke: #333333 !important;  /* Kräftiges Dunkelgrau */
+        stroke: var(--bs-emphasis-color) !important;
         stroke-width: 2px !important;
         opacity: 0.8 !important;
     }
@@ -37,8 +36,7 @@
 
     <!-- Container, in den D3 das Diagramm rendert -->
     <div id="FamilyChart"
-         class="f3"
-         style="width:100%;height:900px;margin:auto;background-color:#f8f9fa;color:#212529;">
+         class="f3 family-chart-canvas">
     </div>
 
     <!-- Platz für Fehlermeldungen / “Mehr laden” -->

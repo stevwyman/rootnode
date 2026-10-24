@@ -12,9 +12,9 @@
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-5">
         {% for tree in trees %}
             <div class="col">
-                <div class="card h-100 shadow border-success border-opacity-25 hover-shadow transition">
+                <div class="card h-100 hover-shadow transition">
                     
-                    <div class="card-header bg-success text-white py-3">
+                    <div class="card-header bg-primary text-white py-3">
                         <h4 class="card-title mb-0 fw-bold text-center">
                             {% if tree.name %}{{ tree.name }}{% else %}{% trans "Unbenannter Stammbaum" %}{% endif %}
                         </h4>
@@ -44,20 +44,20 @@
                                 <small class="text-muted">👪 {% trans "Familien" %}</small>
                             </div>
                             <div class="col-4">
-                                <h3 class="mb-0 fw-bold text-success">{{ tree.places.count|default:"0" }}</h3>
+                                <h3 class="mb-0 fw-bold text-info">{{ tree.places.count|default:"0" }}</h3>
                                 <small class="text-muted">🌍 {% trans "Orte" %}</small>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="card-footer bg-light border-top-0 p-3">
+                    <div class="card-footer border-top-0 p-3">
                         <div class="d-grid gap-2">
-                            <a href="{% url 'genview:tree-overview' tree_id=tree.pk %}" class="btn btn-success">
+                            <a href="{% url 'genview:tree-overview' tree_id=tree.pk %}" class="btn btn-primary">
                                 🏠 {% trans "Übersicht öffnen" %}
                             </a>
 
                             {% if tree.visible_starting_individual %}
-                            <a href="{% url 'genview:family_tree_view' tree_id=tree.pk individual_id=tree.visible_starting_individual.pk %}" class="btn btn-primary">
+                            <a href="{% url 'genview:family_tree_view' tree_id=tree.pk individual_id=tree.visible_starting_individual.pk %}" class="btn btn-outline-primary">
                                 🌳 {% trans "Baumansicht starten" %}
                             </a>
                             <a href="{% url 'genview:individual-detail' tree_id=tree.pk pk=tree.visible_starting_individual.pk %}" class="btn btn-outline-primary">

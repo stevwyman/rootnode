@@ -17,14 +17,14 @@
         #graph {
             width: 100%;
             height: 500px;
-            background-color: #f9f9f9;
-            border: 1px solid #ccc;
+            background-color: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
             overflow: hidden;
             margin-top: 20px;
         }
         .node {
-            background-color: #ffffff;
-            border: 2px solid #4a90e2;
+            background-color: var(--bs-card-bg, #fff);
+            border: 2px solid var(--bs-primary);
             border-radius: 5px;
             padding: 10px;
             text-align: center;
@@ -32,16 +32,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .node:hover {
-            background-color: #e3f2fd;
+            background-color: var(--bs-primary-bg-subtle);
         }
         .linage {
             fill: none;
-            stroke: #333;
+            stroke: var(--bs-emphasis-color);
             stroke-width: 2px;
         }
         .marriage {
             fill: none;
-            stroke: #333;
+            stroke: var(--bs-emphasis-color);
             stroke-width: 2px;
             stroke-dasharray: 5, 5; /* Dashed line for partners */
         }
@@ -340,7 +340,7 @@
                             {% endif %}
                         </div>
 
-                        <div class="list-group list-group-flush position-relative">
+                        <div class="list-group list-group-flush position-relative timeline-events">
                             <div class="timeline-line position-absolute h-100 border-start border-2 border-primary ms-3 z-0"></div>
 
                             {% for event in timeline_events %}
@@ -479,9 +479,9 @@
 
                     <div class="tab-pane fade" id="media" role="tabpanel" aria-labelledby="media-tab">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4 class="mb-0 text-success">Medienarchiv</h4>
+                        <h4 class="mb-0 text-primary">Medienarchiv</h4>
                         {% if can_edit %}
-                        <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-outline-success shadow-sm">
+                        <a href="{% url 'genview:media-add-for-person' tree_id person.pk %}" class="btn btn-sm btn-outline-primary shadow-sm">
                             📎 Datei hochladen
                         </a>
                         <a href="{% url 'genview:add-existing-media-to-person' tree_id=tree_id person_pk=person.pk %}" class="btn btn-outline-primary btn-sm shadow-sm">
@@ -596,7 +596,7 @@
 
                     <div class="tab-pane fade" id="album" role="tabpanel" aria-labelledby="album-tab">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h4 class="mb-0 text-success">Album</h4>
+                            <h4 class="mb-0 text-primary">Album</h4>
                         </div>
                         
                         <h6 class="mt-4 mb-3 border-bottom pb-2">🖼️ Fotos & Portraits</h4>
@@ -936,7 +936,7 @@
                         </li>
                         {% endif %}
                     </ul>
-                    <div class="card-footer bg-white py-3 d-flex gap-2">
+                    <div class="card-footer bg-transparent py-3 d-flex gap-2">
                         {% if apply_privacy and fam.family.is_confidential %}
                         {% else %}
                             <a href="{% url 'genview:family-detail' tree_id=tree_id pk=fam.family.pk %}" class="btn btn-sm btn-outline-secondary w-100">
@@ -1088,7 +1088,7 @@
                 </div>
                 {# ---------- children footer ---------- #}
                 {% if can_edit %}
-                    <div class="card-footer bg-white py-3 d-flex gap-2">
+                    <div class="card-footer bg-transparent py-3 d-flex gap-2">
         
                         <a href="{% url 'genview:individual-add' tree_id=tree_id %}?parent_family={{ family.pk }}" class="btn btn-sm btn-outline-primary w-50">
                             👶 Kind hinzufügen
@@ -1125,7 +1125,7 @@
 
         <style>
             .hover-bg-light { transition: background-color 0.2s; }
-            .hover-bg-light:hover { background-color: #f8f9fa; }
+            .hover-bg-light:hover { background-color: var(--bs-tertiary-bg); }
         </style>
     </div>
 </div>

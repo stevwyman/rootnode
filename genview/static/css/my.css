@@ -19,7 +19,7 @@ progress {
   }
 
   th { 
-    border-bottom: 2px solid black;
+    border-bottom: 2px solid var(--bs-border-color);
     text-align: left;
   }
 
@@ -37,18 +37,18 @@ progress {
   }
 
   .line-bottom {
-    border-bottom: 1px solid black;
+    border-bottom: 1px solid var(--bs-border-color);
   }
 
   .line-left-down {
-    border-left: 1px solid black;
+    border-left: 1px solid var(--bs-border-color);
   }
 
   .line-left-up {
-    border-left: 1px solid black;
+    border-left: 1px solid var(--bs-border-color);
   }
 
   .line-left {
-    border-left: 1px solid white;
+    border-left: 1px solid var(--bs-body-bg);
   }
 }

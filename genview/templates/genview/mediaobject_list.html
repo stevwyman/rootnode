@@ -20,7 +20,7 @@
     </div>
 
     <!-- filter and search -->
-    <div class="card mb-4 shadow-sm border-0 bg-light">
+    <div class="card mb-4 shadow-sm border-0">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-center">
                 
@@ -132,7 +132,7 @@
                         {% include "genview/_media_card_relations.html" %}
                     </div>
 
-                    <div class="card-footer bg-white border-top-0 d-flex justify-content-between flex-wrap gap-1">
+                    <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between flex-wrap gap-1">
                         {% if not item.is_image and not item.is_pdf and item.file %}
                             <a href="{% url 'genview:media-file' tree_id=tree_id pk=item.pk %}" class="btn btn-sm btn-outline-primary" target="_blank">Öffnen</a>
                         {% else %}

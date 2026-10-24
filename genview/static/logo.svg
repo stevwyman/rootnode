@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-hidden="true">
+  <style>
+    .plate { fill: none; stroke: #0367a6; stroke-width: 3; }
+    .navy { fill: #0367a6; }
+    .mid { fill: #0378a6; }
+    .cyan { fill: #049dbf; }
+    .orange { fill: #f2a057; }
+    @media (prefers-color-scheme: dark) {
+      .plate { stroke: #f2ceae; }
+      .navy,
+      .mid { fill: #f2ceae; }
+    }
+  </style>
+  <rect class="plate" x="3.5" y="3.5" width="57" height="57" rx="14" />
+  <circle class="navy" cx="32" cy="19" r="6.5" />
+  <circle class="cyan" cx="19" cy="34" r="6" />
+  <circle class="orange" cx="45" cy="34" r="6" />
+  <circle class="mid" cx="32" cy="47" r="6" />
+</svg>

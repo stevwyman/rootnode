@@ -224,6 +224,26 @@ msgstr "Register"
 msgid "Stammbaum durchsuchen…"
 msgstr "Search family tree…"
 
+#: genview/templates/genview/base.html
+msgid "Farbschema umschalten"
+msgstr "Toggle color scheme"
+
+#: genview/templates/genview/base.html
+msgid "Farbschema"
+msgstr "Color scheme"
+
+#: genview/templates/genview/base.html
+msgid "Hell"
+msgstr "Light"
+
+#: genview/templates/genview/base.html
+msgid "Dunkel"
+msgstr "Dark"
+
+#: genview/templates/genview/base.html
+msgid "Automatisch"
+msgstr "Auto"
+
 #: genview/templates/genview/base.html:132
 msgid "Version"
 msgstr "Version"
