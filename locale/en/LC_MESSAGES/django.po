@@ -903,9 +903,6 @@ msgstr "Add GEDCOM to this family tree"
 msgid "Personen aus der Datei werden mit dem bestehenden Baum abgeglichen. Du entscheidest danach, wer zusammengeführt wird und wer neu angelegt wird."
 msgstr "People from the file are matched against the existing tree. You then decide who to merge and who to create as new."
 
-msgid "Zurück zur Übersicht"
-msgstr "Back to overview"
-
 msgid "Datei prüfen und zuordnen"
 msgstr "Check file and match people"
 
@@ -948,9 +945,6 @@ msgstr "Match"
 
 msgid "Manuell suchen"
 msgstr "Search manually"
-
-msgid "Neue Person anlegen"
-msgstr "Create as new person"
 
 msgid "Hohe Übereinstimmung — bitte prüfen."
 msgstr "Strong match — please review."
