@@ -573,6 +573,13 @@ msgstr "protected"
 msgid "Geboren: %(date)s"
 msgstr "Born: %(date)s"
 
+#, python-format
+msgid "Gestorben: %(date)s"
+msgstr "Died: %(date)s"
+
+msgid "Keine Daten"
+msgstr "No dates"
+
 #: genview/views.py:253
 msgid "Vertrauliche Familie"
 msgstr "Confidential family"

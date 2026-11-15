@@ -30,24 +30,12 @@ Nur das <tbody>-Fragment – wird von Ajax ersetzt.
 
         {# ---- Geburtsdatum ---- #}
         <td>
-            {% if person.birth_date %}
-                <span class="badge bg-primary">{{ person.birth_date|date:"Y M d" }}</span>
-            {% elif person.birth_date_raw %}
-                <span class="badge bg-secondary">{{ person.birth_date_raw }}</span>
-            {% else %}
-                <span class="text-muted">-</span>
-            {% endif %}
+            {% include "genview/_vital_date.html" with parsed=person.birth_date raw=person.birth_date_raw %}
         </td>
         {# ---- Sterbedatum (optional) ---- #}
         <td>
             {% if person.is_deceased %}
-                {% if person.death_date %}
-                    <span class="badge bg-primary">{{ person.death_date|date:"Y M d" }}</span>
-                {% elif person.death_date_raw %}
-                    <span class="badge bg-secondary">{{ person.death_date_raw }}</span>
-                {% else %}
-                    <span class="text-muted">-</span>
-                {% endif %}
+                {% include "genview/_vital_date.html" with parsed=person.death_date raw=person.death_date_raw %}
             {% else %}
                 <span class="text-muted">-</span>
             {% endif %}

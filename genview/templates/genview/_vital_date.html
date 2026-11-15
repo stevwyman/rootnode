@@ -1,0 +1,10 @@
+{% if parsed %}
+    <span class="badge bg-primary">{{ parsed|date:"d.m.Y" }}</span>
+    {% if raw %}
+        <div class="small text-muted mt-1">{{ raw }}</div>
+    {% endif %}
+{% elif raw %}
+    <span class="badge bg-secondary">{{ raw }}</span>
+{% else %}
+    <span class="text-muted">-</span>
+{% endif %}

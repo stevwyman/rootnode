@@ -123,6 +123,33 @@ class IndividualListViewTests(TestCase):
         self.assertContains(response, "Test")
         self.assertContains(response, "Person")
 
+    def test_list_shows_parsed_and_raw_vital_dates(self):
+        from datetime import date
+
+        birt, _ = EventType.objects.get_or_create(tag="BIRT", defaults={"name": "Birth"})
+        deat, _ = EventType.objects.get_or_create(tag="DEAT", defaults={"name": "Death"})
+        Event.objects.create(
+            individual=self.person,
+            event_type=birt,
+            gedcom_tree=self.tree,
+            parsed_date=date(1885, 1, 12),
+            raw_date="ABT 12 JAN 1885",
+        )
+        Event.objects.create(
+            individual=self.person,
+            event_type=deat,
+            gedcom_tree=self.tree,
+            parsed_date=date(1950, 5, 5),
+            raw_date="5 MAY 1950",
+        )
+        self.client.login(username="auth_user", password="password")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "12.01.1885")
+        self.assertContains(response, "ABT 12 JAN 1885")
+        self.assertContains(response, "05.05.1950")
+        self.assertContains(response, "5 MAY 1950")
+
     def test_private_viewer_sees_living_names(self):
         """VIEWER on a private tree sees living people (privacy off)."""
         Individual.objects.create(
@@ -251,6 +278,38 @@ class GlobalSearchViewTests(TestCase):
         self.assertEqual(person_results.index(and_results[0]), 0)
         if or_results:
             self.assertGreater(person_results.index(or_results[0]), person_results.index(and_results[-1]))
+
+    def test_person_result_shows_parsed_and_raw_dates(self):
+        from datetime import date
+
+        birt, _ = EventType.objects.get_or_create(tag="BIRT", defaults={"name": "Birth"})
+        deat, _ = EventType.objects.get_or_create(tag="DEAT", defaults={"name": "Death"})
+        Event.objects.create(
+            individual=self.jane_doe,
+            event_type=birt,
+            gedcom_tree=self.tree,
+            parsed_date=date(1910, 3, 4),
+            raw_date="ABT 4 MAR 1910",
+        )
+        Event.objects.create(
+            individual=self.jane_doe,
+            event_type=deat,
+            gedcom_tree=self.tree,
+            parsed_date=date(1988, 11, 2),
+            raw_date="2 NOV 1988",
+        )
+        self.client.login(username="search_user", password="password")
+        response = self.client.get(self.url, {"q": "Jane"})
+        self.assertEqual(response.status_code, 200)
+        jane = [
+            r
+            for r in response.context["results"]
+            if getattr(r, "pk", None) == self.jane_doe.pk
+        ][0]
+        self.assertIn("04.03.1910", jane.search_desc)
+        self.assertIn("ABT 4 MAR 1910", jane.search_desc)
+        self.assertIn("02.11.1988", jane.search_desc)
+        self.assertIn("2 NOV 1988", jane.search_desc)
 
     def test_single_word_search_has_no_match_tiers(self):
         self.client.login(username="search_user", password="password")

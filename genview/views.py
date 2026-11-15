@@ -515,6 +515,16 @@ def _finalize_individual_search_results(
     return results
 
 
+def _format_search_vital_date(parsed, raw) -> str:
+    raw = (raw or "").strip()
+    if parsed:
+        parsed_s = parsed.strftime("%d.%m.%Y")
+        if raw and raw != parsed_s:
+            return f"{parsed_s} ({raw})"
+        return parsed_s
+    return raw
+
+
 def _annotate_individual_search_result(individual, apply_privacy, match: str | None = None):
     individual.search_type = _("Person")
     individual.search_icon = "👤"
@@ -526,7 +536,18 @@ def _annotate_individual_search_result(individual, apply_privacy, match: str | N
         individual.search_url = None
     else:
         individual.search_title = individual.full_name()
-        individual.search_desc = _("Geboren: %(date)s") % {"date": individual.birth_date_raw or "?"}
+        parts = []
+        birth = _format_search_vital_date(
+            individual.birth_date, individual.birth_date_raw
+        )
+        death = _format_search_vital_date(
+            individual.death_date, individual.death_date_raw
+        )
+        if birth:
+            parts.append(_("Geboren: %(date)s") % {"date": birth})
+        if death:
+            parts.append(_("Gestorben: %(date)s") % {"date": death})
+        individual.search_desc = " · ".join(parts) if parts else _("Keine Daten")
         individual.search_url = individual.get_absolute_url()
 
 

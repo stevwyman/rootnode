@@ -169,13 +169,7 @@
                                     <span class="text-muted fst-italic">🔒 vertraulich</span>
                                 {% else %}
                                     {% with b_event=person.birth_events|first %}
-                                        {% if b_event.parsed_date %}
-                                            <span class="badge bg-primary">{{ b_event.parsed_date|date:"d.m.Y" }}</span>
-                                        {% elif b_event.raw_date %}
-                                            <span class="badge bg-secondary">{{ b_event.raw_date }}</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
+                                        {% include "genview/_vital_date.html" with parsed=b_event.parsed_date raw=b_event.raw_date %}
                                     {% endwith %}
                                 {% endif %}
                             </td>
@@ -186,13 +180,7 @@
                                 {% else %}
                                     {% if person.is_deceased %}
                                         {% with d_event=person.death_events|first %}
-                                            {% if d_event.parsed_date %}
-                                                <span class="badge bg-primary">{{ d_event.parsed_date|date:"d.m.Y" }}</span>
-                                            {% elif d_event.raw_date %}
-                                                <span class="badge bg-secondary">{{ d_event.raw_date }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
+                                            {% include "genview/_vital_date.html" with parsed=d_event.parsed_date raw=d_event.raw_date %}
                                         {% endwith %}
                                     {% else %}
                                         <span class="text-muted">-</span>
