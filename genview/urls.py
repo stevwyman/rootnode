@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
+from . import gedcom_views
 from . import report_views
 from . import views
 
@@ -34,6 +35,26 @@ urlpatterns = [
         name='report-run',
     ),
     path('tree/<int:tree_id>/delete/', views.TreeDeleteView.as_view(), name='tree-delete'),
+    path(
+        'tree/<int:tree_id>/gedcom/export/',
+        gedcom_views.TreeGedcomExportView.as_view(),
+        name='tree-gedcom-export',
+    ),
+    path(
+        'tree/<int:tree_id>/gedcom/merge/',
+        gedcom_views.GedcomMergeUploadView.as_view(),
+        name='gedcom-merge-upload',
+    ),
+    path(
+        'tree/<int:tree_id>/gedcom/merge/match/',
+        gedcom_views.GedcomMergeMatchView.as_view(),
+        name='gedcom-merge-match',
+    ),
+    path(
+        'tree/<int:tree_id>/gedcom/merge/cancel/',
+        gedcom_views.GedcomMergeCancelView.as_view(),
+        name='gedcom-merge-cancel',
+    ),
     # 4. match users to trees and enable/disable public flag 
     path('tree/<int:tree_id>/memberships/', views.TreeMembershipManageView.as_view(), name='manage-memberships'),
 
@@ -82,6 +103,11 @@ urlpatterns = [
         "tree/<int:tree_id>/people/<int:pk>/delete/",
         views.IndividualDeleteView.as_view(),
         name="individual-delete",
+    ),
+    path(
+        "tree/<int:tree_id>/people/<int:pk>/gedcom/export/",
+        gedcom_views.IndividualGedcomExportView.as_view(),
+        name="individual-gedcom-export",
     ),
     path(
         "tree/<int:tree_id>/people/search/",

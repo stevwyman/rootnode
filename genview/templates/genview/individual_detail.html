@@ -145,6 +145,25 @@
                             </div>
 
 
+                            {% if user.is_authenticated %}
+                            <div class="dropdown ms-3">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle shadow-sm px-3" type="button" id="gedcomExportActions" data-bs-toggle="dropdown" aria-expanded="false">
+                                    📥 {% trans "GEDCOM" %}
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1" aria-labelledby="gedcomExportActions">
+                                    <li>
+                                        <a class="dropdown-item py-2" href="{% url 'genview:individual-gedcom-export' tree_id=tree_id pk=person.pk %}?scope=ancestors">
+                                            {% trans "Vorfahren herunterladen" %}
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item py-2" href="{% url 'genview:individual-gedcom-export' tree_id=tree_id pk=person.pk %}?scope=descendants">
+                                            {% trans "Nachkommen herunterladen" %}
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            {% endif %}
                             {% if can_edit or is_tree_admin %}
                             <div class="dropdown ms-3">
                                 <button class="btn btn-outline-primary btn-sm dropdown-toggle shadow-sm px-3" type="button" id="profileActions" data-bs-toggle="dropdown" aria-expanded="false">

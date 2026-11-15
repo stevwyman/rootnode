@@ -973,6 +973,15 @@ class GedcomImportForm(forms.Form):
         return f
 
 
+class GedcomMergeUploadForm(GedcomImportForm):
+    """Upload a GEDCOM to merge into an existing tree (no new tree name)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop("tree_name", None)
+        self.fields["gedcom_file"].widget.attrs.update({"class": "form-control"})
+
+
 class TreeMembershipForm(forms.ModelForm):
     # Ein unsichtbares Feld, um das Löschen per Checkbox im Formset abzufangen
     DELETE = forms.BooleanField(required=False, widget=forms.HiddenInput(attrs={'class': 'delete-flag'}))

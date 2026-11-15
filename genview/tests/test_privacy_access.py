@@ -453,6 +453,7 @@ class AdminToolAccessTests(TestCase):
             reverse("genview:face-suggestion-review", kwargs={"tree_id": self.tree.id}),
             reverse("genview:document-suggestion-review", kwargs={"tree_id": self.tree.id}),
             reverse("genview:manage-memberships", kwargs={"tree_id": self.tree.id}),
+            reverse("genview:gedcom-merge-upload", kwargs={"tree_id": self.tree.id}),
         ]
         for path in paths:
             with self.subTest(path=path):
@@ -466,6 +467,7 @@ class AdminToolAccessTests(TestCase):
             reverse("genview:event-create-person", kwargs={"tree_id": self.tree.id}),
             reverse("genview:bulk-media-upload", kwargs={"tree_id": self.tree.id}),
             reverse("genview:manage-memberships", kwargs={"tree_id": self.tree.id}),
+            reverse("genview:gedcom-merge-upload", kwargs={"tree_id": self.tree.id}),
         ]
         for path in paths:
             with self.subTest(path=path):

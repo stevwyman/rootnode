@@ -102,6 +102,8 @@
                                     {% if user.is_authenticated and tree_id and is_tree_admin|default:False %}
                                         <li><a class="dropdown-item" href="{% url 'genview:bulk-media-upload' tree_id %}">📷 {% trans "Bulk-Upload" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:manage-memberships' tree_id %}">⚙️ {% trans "Baum verwalten" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:gedcom-merge-upload' tree_id=tree_id %}">📂 {% trans "GEDCOM hinzufügen" %}</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'genview:tree-gedcom-export' tree_id=tree_id %}">📥 {% trans "GEDCOM herunterladen" %}</a></li>
                                         <li><a class="dropdown-item" href="{% url 'genview:place-deduplication' tree_id %}">📍 {% trans "Orte bereinigen" %}</a></li>
                                         {% if enable_face_recognition %}
                                         <li><a class="dropdown-item" href="{% url 'genview:media-face-scan' tree_id %}">👤 {% trans "Gesichter scannen" %}</a></li>

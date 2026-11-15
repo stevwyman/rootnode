@@ -38,6 +38,16 @@
             <a href="{% url 'genview:individual-list' tree_id=tree_id %}" class="btn btn-outline-secondary">
                 👥 {% trans "Personen" %}
             </a>
+            {% if user.is_authenticated %}
+            <a href="{% url 'genview:tree-gedcom-export' tree_id=tree_id %}" class="btn btn-outline-secondary">
+                📥 {% trans "GEDCOM herunterladen" %}
+            </a>
+            {% endif %}
+            {% if is_tree_admin %}
+            <a href="{% url 'genview:gedcom-merge-upload' tree_id=tree_id %}" class="btn btn-outline-secondary">
+                📂 {% trans "GEDCOM hinzufügen" %}
+            </a>
+            {% endif %}
         </div>
     </div>
 

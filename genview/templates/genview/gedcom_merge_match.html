@@ -1,0 +1,171 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Personen zuordnen" %} — {{ tree.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-lg-4 mt-4 mb-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="mb-1">{% trans "Personen zuordnen" %}</h1>
+            <p class="text-muted mb-0">
+                {% blocktrans with filename=filename %}Datei: {{ filename }}{% endblocktrans %}
+            </p>
+        </div>
+        <form method="post" action="{% url 'genview:gedcom-merge-cancel' tree_id=tree_id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</button>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-primary">{{ incoming_count }}</div>
+                <small class="text-muted">{% trans "Personen in der Datei" %}</small>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-success">{{ auto_matched }}</div>
+                <small class="text-muted">{% trans "Automatisch vorgeschlagen" %}</small>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold text-secondary">{{ new_count }}</div>
+                <small class="text-muted">{% trans "Als neu vorgeschlagen" %}</small>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 text-center py-3">
+                <div class="fs-3 fw-bold">{{ existing_count }}</div>
+                <small class="text-muted">{% trans "Personen im Stammbaum" %}</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-1" for="merge-filter">{% trans "Liste filtern" %}</label>
+                    <input type="search" id="merge-filter" class="form-control" placeholder="{% trans 'Name oder Datum…' %}">
+                </div>
+                <div class="col-md-6 d-flex flex-wrap gap-2 justify-content-md-end">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="merge-all-new">
+                        {% trans "Alle als neu" %}
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="merge-all-suggested">
+                        {% trans "Vorschläge wiederherstellen" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" id="merge-form">
+        {% csrf_token %}
+        <div class="table-responsive card shadow-sm">
+            <table class="table table-hover align-middle mb-0" id="merge-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>{% trans "Person in der Datei" %}</th>
+                        <th>{% trans "Daten" %}</th>
+                        <th style="min-width: 16rem;">{% trans "Zuordnung" %}</th>
+                        <th style="min-width: 14rem;">{% trans "Manuell suchen" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="merge-row" data-filter="{{ row.surname }} {{ row.given_name }} {{ row.birth_date }} {{ row.death_date }}">
+                        <td>
+                            <div class="fw-semibold">{{ row.given_name }} {{ row.surname }}</div>
+                            <div class="small text-muted">{{ row.xref }}
+                                {% if row.sex == "M" %}♂{% elif row.sex == "F" %}♀{% endif %}
+                            </div>
+                        </td>
+                        <td class="small">
+                            {% if row.birth_date %}
+                            <div>★ {{ row.birth_date }}{% if row.birth_place %} · {{ row.birth_place }}{% endif %}</div>
+                            {% endif %}
+                            {% if row.death_date %}
+                            <div>✝ {{ row.death_date }}</div>
+                            {% endif %}
+                            {% if not row.birth_date and not row.death_date %}
+                            <span class="text-muted">{% trans "keine Daten" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <select name="map_{{ row.key }}" class="form-select merge-map" data-suggested="{{ row.suggested_pk|default:'' }}">
+                                <option value="">{% trans "Neue Person anlegen" %}</option>
+                                {% for candidate in row.candidates %}
+                                <option value="{{ candidate.pk }}" {% if row.suggested_pk == candidate.pk %}selected{% endif %}>
+                                    {{ candidate.percent }}% — {{ candidate.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if row.suggested_pk %}
+                            <div class="form-text text-success">{% trans "Hohe Übereinstimmung — bitte prüfen." %}</div>
+                            {% elif row.candidates %}
+                            <div class="form-text">{% trans "Mögliche Treffer — manuell prüfen oder neu anlegen." %}</div>
+                            {% else %}
+                            <div class="form-text text-muted">{% trans "Kein Treffer gefunden." %}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <select name="manual_{{ row.key }}" class="form-control js-manual-match" style="width: 100%;" data-placeholder="{% trans 'Andere Person suchen…' %}">
+                                <option value=""></option>
+                            </select>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-4">{% trans "Keine Personen in der Datei." %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+                {% trans "Zuordnungen übernehmen" %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script>
+jQuery(document).ready(function($) {
+    initGenviewSelect2(
+        ".js-manual-match",
+        "{% url 'genview:api-search-individuals' tree_id=tree_id %}",
+        "{% trans 'Andere Person suchen…' %}"
+    );
+
+    $("#merge-filter").on("input", function() {
+        const q = $(this).val().toLowerCase();
+        $("#merge-table .merge-row").each(function() {
+            const hay = ($(this).data("filter") || "").toString().toLowerCase();
+            $(this).toggle(hay.indexOf(q) !== -1);
+        });
+    });
+
+    $("#merge-all-new").on("click", function() {
+        $(".merge-map").val("");
+        $(".js-manual-match").val(null).trigger("change");
+    });
+
+    $("#merge-all-suggested").on("click", function() {
+        $(".merge-map").each(function() {
+            const suggested = $(this).data("suggested");
+            $(this).val(suggested || "");
+        });
+        $(".js-manual-match").val(null).trigger("change");
+    });
+});
+</script>
+{% endblock %}

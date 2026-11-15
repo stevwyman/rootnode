@@ -119,6 +119,24 @@
         </div>
 
         <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📂 {% trans "GEDCOM" %}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">
+                        {% trans "Den aktuellen Stammbaum als GEDCOM herunterladen oder eine weitere Datei mit Personenabgleich hinzufügen." %}
+                    </p>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'genview:tree-gedcom-export' tree_id=tree.id %}" class="btn btn-outline-secondary">
+                            📥 {% trans "GEDCOM herunterladen" %}
+                        </a>
+                        <a href="{% url 'genview:gedcom-merge-upload' tree_id=tree.id %}" class="btn btn-outline-primary">
+                            📂 {% trans "GEDCOM hinzufügen" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">➕ Mitglied hinzufügen</h5>

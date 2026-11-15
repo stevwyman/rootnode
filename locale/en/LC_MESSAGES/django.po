@@ -855,6 +855,120 @@ msgstr "%(username)s is already a member of this family tree."
 msgid "Mitgliederlisten und Rollen erfolgreich aktualisiert."
 msgstr "Member list and roles updated successfully."
 
+msgid "Die Datei enthält keine Personen (INDI)."
+msgstr "The file does not contain any people (INDI)."
+
+msgid "Die GEDCOM-Datei konnte nicht gelesen werden."
+msgstr "The GEDCOM file could not be read."
+
+#, python-format
+msgid "%(people)s Personen und %(families)s Familien gelesen. Bitte prüfe die Zuordnungen."
+msgstr "%(people)s people and %(families)s families read. Please review the matches."
+
+msgid "Kein ausstehender GEDCOM-Abgleich. Bitte zuerst eine Datei hochladen."
+msgstr "No pending GEDCOM match. Please upload a file first."
+
+msgid "Eine Zuordnung zeigt auf eine Person, die nicht zu diesem Stammbaum gehört."
+msgstr "A match points to a person who does not belong to this family tree."
+
+#, python-format
+msgid "GEDCOM übernommen: %(created)s neu, %(matched)s zugeordnet, %(families)s Familien, %(events)s Ereignisse."
+msgstr "GEDCOM applied: %(created)s new, %(matched)s matched, %(families)s families, %(events)s events."
+
+msgid "GEDCOM-Abgleich abgebrochen."
+msgstr "GEDCOM matching cancelled."
+
+msgid "GEDCOM hinzufügen"
+msgstr "Add GEDCOM"
+
+msgid "GEDCOM herunterladen"
+msgstr "Download GEDCOM"
+
+msgid "GEDCOM zum Stammbaum hinzufügen"
+msgstr "Add GEDCOM to this family tree"
+
+msgid "Personen aus der Datei werden mit dem bestehenden Baum abgeglichen. Du entscheidest danach, wer zusammengeführt wird und wer neu angelegt wird."
+msgstr "People from the file are matched against the existing tree. You then decide who to merge and who to create as new."
+
+msgid "Zurück zur Übersicht"
+msgstr "Back to overview"
+
+msgid "Datei prüfen und zuordnen"
+msgstr "Check file and match people"
+
+msgid "Personen zuordnen"
+msgstr "Match people"
+
+#, python-format
+msgid "Datei: %(filename)s"
+msgstr "File: %(filename)s"
+
+msgid "Personen in der Datei"
+msgstr "People in the file"
+
+msgid "Automatisch vorgeschlagen"
+msgstr "Suggested automatically"
+
+msgid "Als neu vorgeschlagen"
+msgstr "Suggested as new"
+
+msgid "Personen im Stammbaum"
+msgstr "People in the tree"
+
+msgid "Liste filtern"
+msgstr "Filter list"
+
+msgid "Name oder Datum…"
+msgstr "Name or date…"
+
+msgid "Alle als neu"
+msgstr "All as new"
+
+msgid "Vorschläge wiederherstellen"
+msgstr "Restore suggestions"
+
+msgid "Person in der Datei"
+msgstr "Person in the file"
+
+msgid "Zuordnung"
+msgstr "Match"
+
+msgid "Manuell suchen"
+msgstr "Search manually"
+
+msgid "Neue Person anlegen"
+msgstr "Create as new person"
+
+msgid "Hohe Übereinstimmung — bitte prüfen."
+msgstr "Strong match — please review."
+
+msgid "Mögliche Treffer — manuell prüfen oder neu anlegen."
+msgstr "Possible matches — review manually or create as new."
+
+msgid "Kein Treffer gefunden."
+msgstr "No match found."
+
+msgid "Andere Person suchen…"
+msgstr "Search for another person…"
+
+msgid "keine Daten"
+msgstr "no dates"
+
+msgid "Keine Personen in der Datei."
+msgstr "No people in the file."
+
+msgid "Zuordnungen übernehmen"
+msgstr "Apply matches"
+
+msgid "Vorfahren herunterladen"
+msgstr "Download ancestors"
+
+msgid "Nachkommen herunterladen"
+msgstr "Download descendants"
+
+msgid "Den aktuellen Stammbaum als GEDCOM herunterladen oder eine weitere Datei mit Personenabgleich hinzufügen."
+msgstr "Download the current tree as GEDCOM, or add another file with person matching."
+
 #: rootnode/settings.py:168
 msgid "German"
 msgstr "German"
