@@ -26,6 +26,12 @@ msgstr "Birth date (raw string, e.g. 'ABT 1900')"
 msgid "Geburts-Datum (geparst)"
 msgstr "Birth date (parsed)"
 
+msgid "Geburtsort"
+msgstr "Place of birth"
+
+msgid "Sterbeort"
+msgstr "Place of death"
+
 #: genview/forms.py:36
 msgid "Sterbe-Datum (Roh-String)"
 msgstr "Death date (raw string)"

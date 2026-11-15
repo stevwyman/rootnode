@@ -3,8 +3,56 @@ from django import forms
 from django.forms import ModelForm, DateInput
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
+from .gedcom_text import format_gedcom_date
 from .models import Individual, Family, ChildFamilyLink, Event, EventType, EntityTag, MediaObject, Source, Place, TreeMembership
 from core.models import AppSettings
+
+
+def synced_raw_date(parsed, raw, initial_parsed=None):
+    """Keep the GEDCOM raw string aligned when the parsed date changes."""
+    raw = (raw or "").strip()
+    if parsed is None:
+        return raw
+    if initial_parsed is not None and parsed != initial_parsed:
+        return format_gedcom_date(parsed)
+    if not raw:
+        return format_gedcom_date(parsed)
+    return raw
+
+
+def _parsed_date_widget(raw_field_id: str) -> DateInput:
+    return DateInput(
+        format="%Y-%m-%d",
+        attrs={
+            "class": "form-control js-sync-raw-date",
+            "type": "date",
+            "data-raw-target": raw_field_id,
+        },
+    )
+
+
+def _bind_ajax_place_field(form, field_name, tree_id, current_place=None):
+    """Limit HTML options to the current value; Select2 loads the rest via search."""
+    if field_name not in form.fields:
+        return
+    field = form.fields[field_name]
+    if tree_id:
+        field.queryset = Place.objects.filter(gedcom_tree_id=tree_id)
+    else:
+        field.queryset = Place.objects.none()
+    selected = []
+    if current_place:
+        selected.append(current_place)
+    if form.is_bound:
+        posted = (form.data.get(field_name) or "").strip()
+        if posted:
+            extra = field.queryset.filter(pk=posted).first()
+            if extra and extra not in selected:
+                selected.append(extra)
+    empty_label = field.empty_label or "---------"
+    field.widget.choices = [("", empty_label)] + [
+        (obj.id, obj.name) for obj in selected
+    ]
 
 
 def bind_entity_tag_field(form, tree_id):
@@ -47,7 +95,13 @@ class IndividualForm(ModelForm):
     birth_date_parsed = forms.DateField(
         required=False,
         label=_("Geburts-Datum (geparst)"),
-        widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
+        widget=_parsed_date_widget("id_birth_date_raw"),
+    )
+    birth_place = forms.ModelChoiceField(
+        queryset=Place.objects.none(),
+        required=False,
+        label=_("Geburtsort"),
+        widget=forms.Select(attrs={"class": "form-control select2-place select2-birth-place"}),
     )
     death_date_raw = forms.CharField(
         required=False,
@@ -59,7 +113,13 @@ class IndividualForm(ModelForm):
     death_date_parsed = forms.DateField(
         required=False,
         label=_("Sterbe-Datum (geparst)"),
-        widget=DateInput(format='%Y-%m-%d',attrs={"class": "form-control", "type": "date"}),
+        widget=_parsed_date_widget("id_death_date_raw"),
+    )
+    death_place = forms.ModelChoiceField(
+        queryset=Place.objects.none(),
+        required=False,
+        label=_("Sterbeort"),
+        widget=forms.Select(attrs={"class": "form-control select2-place select2-death-place"}),
     )
 
     class Meta:
@@ -116,17 +176,44 @@ class IndividualForm(ModelForm):
 
         # Wenn ein bereits existierendes Individual bearbeitet wird,
         # laden wir die zugehörigen BIRT-/DEAT-Events (falls vorhanden).
-        if self.instance.pk:
-            birth_evt = self.instance.birth_event
-            death_evt = self.instance.death_event
+        birth_evt = self.instance.birth_event if self.instance.pk else None
+        death_evt = self.instance.death_event if self.instance.pk else None
+        if birth_evt:
+            self.fields["birth_date_raw"].initial = birth_evt.raw_date
+            self.fields["birth_date_parsed"].initial = birth_evt.parsed_date
+            self.fields["birth_place"].initial = birth_evt.place
+        if death_evt:
+            self.fields["death_date_raw"].initial = death_evt.raw_date
+            self.fields["death_date_parsed"].initial = death_evt.parsed_date
+            self.fields["death_place"].initial = death_evt.place
+        _bind_ajax_place_field(
+            self,
+            "birth_place",
+            current_tree_id,
+            birth_evt.place if birth_evt else None,
+        )
+        _bind_ajax_place_field(
+            self,
+            "death_place",
+            current_tree_id,
+            death_evt.place if death_evt else None,
+        )
 
-            if birth_evt:
-                self.fields["birth_date_raw"].initial = birth_evt.raw_date
-                self.fields["birth_date_parsed"].initial = birth_evt.parsed_date
-
-            if death_evt:
-                self.fields["death_date_raw"].initial = death_evt.raw_date
-                self.fields["death_date_parsed"].initial = death_evt.parsed_date
+    def clean(self):
+        cleaned = super().clean()
+        birth_initial = self.fields["birth_date_parsed"].initial
+        death_initial = self.fields["death_date_parsed"].initial
+        cleaned["birth_date_raw"] = synced_raw_date(
+            cleaned.get("birth_date_parsed"),
+            cleaned.get("birth_date_raw"),
+            birth_initial,
+        )
+        cleaned["death_date_raw"] = synced_raw_date(
+            cleaned.get("death_date_parsed"),
+            cleaned.get("death_date_raw"),
+            death_initial,
+        )
+        return cleaned
 
     # --------------------------------------------------------------
     # Hilfsmethode: Event holen (oder neu anlegen)
@@ -172,10 +259,12 @@ class IndividualForm(ModelForm):
         # ----------------------------------------------------------
         birth_raw = self.cleaned_data.get("birth_date_raw")
         birth_parsed = self.cleaned_data.get("birth_date_parsed")
-        if birth_raw or birth_parsed:
+        birth_place = self.cleaned_data.get("birth_place")
+        if birth_raw or birth_parsed or birth_place:
             birth_evt = self._get_or_create_event(individual, "BIRT")
             birth_evt.raw_date = birth_raw or ""
             birth_evt.parsed_date = birth_parsed
+            birth_evt.place = birth_place
             birth_evt.save()
         else:
             # wenn beide Felder leer sind, löschen wir ggf. das Event
@@ -189,10 +278,12 @@ class IndividualForm(ModelForm):
         # ----------------------------------------------------------
         death_raw = self.cleaned_data.get("death_date_raw")
         death_parsed = self.cleaned_data.get("death_date_parsed")
-        if death_raw or death_parsed:
+        death_place = self.cleaned_data.get("death_place")
+        if death_raw or death_parsed or death_place:
             death_evt = self._get_or_create_event(individual, "DEAT")
             death_evt.raw_date = death_raw or ""
             death_evt.parsed_date = death_parsed
+            death_evt.place = death_place
             death_evt.save()
         else:
             Event.objects.filter(
@@ -242,13 +333,7 @@ class FamilyForm(ModelForm):
     marriage_parsed_date = forms.DateField(
         required=False,
         label=_("Heirats-Datum (geparst)"),
-        widget=forms.DateInput(
-                format='%Y-%m-%d',  # <-- DAS HIER IST DAS GEHEIMNIS!
-                attrs={
-                    'class': 'form-control', 
-                    'type': 'date'  # Öffnet den nativen Browser-Kalender
-                }
-            ),
+        widget=_parsed_date_widget("id_marriage_raw_date"),
     )
     marriage_place = forms.ModelChoiceField(
         queryset=Place.objects.none(), 
@@ -298,17 +383,6 @@ class FamilyForm(ModelForm):
                 self.fields["parent"].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
             if "sources" in self.fields:
                 self.fields["sources"].queryset = Source.objects.filter(gedcom_tree_id=current_tree_id)
-            if "marriage_place" in self.fields:
-                self.fields["marriage_place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
-                sel_place = []
-                if self.instance and self.instance.pk:
-                    ev = self.instance.marriage_event
-                    if ev and ev.place:
-                        sel_place = [ev.place]
-                empty_label = self.fields["marriage_place"].empty_label or "---------"
-                self.fields["marriage_place"].widget.choices = [("", empty_label)] + [
-                    (obj.id, obj.name) for obj in sel_place
-                ]
         else:
             self.fields["husband"].queryset = Individual.objects.none()
             self.fields["wife"].queryset = Individual.objects.none()
@@ -316,17 +390,29 @@ class FamilyForm(ModelForm):
                 self.fields["parent"].queryset = Family.objects.none()
             if "sources" in self.fields:
                 self.fields["sources"].queryset = Source.objects.none()
-            if "marriage_place" in self.fields:
-                self.fields["marriage_place"].queryset = Place.objects.none()
 
-        if self.instance.pk:
-            ev = self.instance.marriage_event
-            if ev:
-                self.fields["marriage_raw_date"].initial = ev.raw_date
-                self.fields["marriage_parsed_date"].initial = ev.parsed_date
-                self.fields["marriage_place"].initial = ev.place
+        marriage_ev = self.instance.marriage_event if self.instance.pk else None
+        if marriage_ev:
+            self.fields["marriage_raw_date"].initial = marriage_ev.raw_date
+            self.fields["marriage_parsed_date"].initial = marriage_ev.parsed_date
+            self.fields["marriage_place"].initial = marriage_ev.place
+        _bind_ajax_place_field(
+            self,
+            "marriage_place",
+            current_tree_id,
+            marriage_ev.place if marriage_ev else None,
+        )
 
         bind_entity_tag_field(self, current_tree_id)
+
+    def clean(self):
+        cleaned = super().clean()
+        cleaned["marriage_raw_date"] = synced_raw_date(
+            cleaned.get("marriage_parsed_date"),
+            cleaned.get("marriage_raw_date"),
+            self.fields["marriage_parsed_date"].initial,
+        )
+        return cleaned
 
     # --------------------------------------------------------------
     #  Hilfsmethode: MARR-Event holen oder neu anlegen
@@ -733,13 +819,7 @@ class EventForm(forms.ModelForm):
             'event_type': forms.Select(attrs={'class': 'form-select'}),
             # FIX: Hieß vorher 'date_raw'
             'raw_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. 12 May 1850'}),
-            'parsed_date': forms.DateInput(
-                format='%Y-%m-%d',
-                attrs={
-                    'class': 'form-control', 
-                    'type': 'date'
-                }
-            ),
+            'parsed_date': _parsed_date_widget("id_raw_date"),
             'place': forms.Select(attrs={'class': 'form-control select2-place'}),
             'sources': forms.SelectMultiple(attrs={'class': 'form-control select2-sources'}),
         }
@@ -762,15 +842,12 @@ class EventForm(forms.ModelForm):
                 self.fields['individual'].queryset = Individual.objects.filter(gedcom_tree_id=current_tree_id).order_by('surname', 'given_name')
             if 'family' in self.fields:
                 self.fields['family'].queryset = Family.objects.filter(gedcom_tree_id=current_tree_id)
-            # --- Orte (Places) filtern & optimieren ---
-            if "place" in self.fields:
-                self.fields["place"].queryset = Place.objects.filter(gedcom_tree_id=current_tree_id)
-                # Beim Update den aktuell gewählten Ort behalten, sonst HTML leeren
-                sel_place = [self.instance.place] if self.instance and self.instance.place else []
-                empty_label = self.fields["place"].empty_label or "---------"
-                self.fields["place"].widget.choices = [("", empty_label)] + [
-                    (obj.id, obj.name) for obj in sel_place
-                ]
+            _bind_ajax_place_field(
+                self,
+                "place",
+                current_tree_id,
+                self.instance.place if self.instance else None,
+            )
 
             # --- Quellen (Sources) filtern & optimieren ---
             if "sources" in self.fields:
@@ -828,6 +905,16 @@ class EventForm(forms.ModelForm):
                 ).order_by('name')
 
         bind_entity_tag_field(self, current_tree_id)
+
+    def clean(self):
+        cleaned = super().clean()
+        initial_parsed = self.instance.parsed_date if self.instance and self.instance.pk else None
+        cleaned["raw_date"] = synced_raw_date(
+            cleaned.get("parsed_date"),
+            cleaned.get("raw_date"),
+            initial_parsed,
+        )
+        return cleaned
 
 
 class EntityTagForm(forms.ModelForm):

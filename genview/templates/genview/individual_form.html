@@ -80,28 +80,52 @@
             <h4 class="mb-3">Geburts- und Sterbedaten</h4>
 
             <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     {{ form.birth_date_raw.label_tag }}
                     {{ form.birth_date_raw }}
                     {{ form.birth_date_raw.errors }}
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     {{ form.birth_date_parsed.label_tag }}
                     {{ form.birth_date_parsed }}
                     {{ form.birth_date_parsed.errors }}
                 </div>
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        {{ form.birth_place.label_tag }}
+                        {% if can_edit %}
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-quick-create-open="place" data-quick-create-target=".select2-birth-place">
+                            + Neuer Ort
+                        </button>
+                        {% endif %}
+                    </div>
+                    {{ form.birth_place }}
+                    {{ form.birth_place.errors }}
+                </div>
             </div>
 
             <div class="row g-3 mt-2">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     {{ form.death_date_raw.label_tag }}
                     {{ form.death_date_raw }}
                     {{ form.death_date_raw.errors }}
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     {{ form.death_date_parsed.label_tag }}
                     {{ form.death_date_parsed }}
                     {{ form.death_date_parsed.errors }}
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        {{ form.death_place.label_tag }}
+                        {% if can_edit %}
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-quick-create-open="place" data-quick-create-target=".select2-death-place">
+                            + Neuer Ort
+                        </button>
+                        {% endif %}
+                    </div>
+                    {{ form.death_place }}
+                    {{ form.death_place.errors }}
                 </div>
             </div>
 
@@ -136,6 +160,9 @@
 {% endif %}
 <script>
 jQuery(document).ready(function($) {
+    initGenviewSelect2('.select2-place', "{% url 'genview:api-search-places' tree_id=tree_id %}", "Ort suchen...", {
+        quickCreate: document.getElementById("placeQuickCreateModal") ? { kind: "place" } : null
+    });
     initGenviewSelect2('.select2-sources', "{% url 'genview:api-search-sources' tree_id=tree_id %}", "Quellen suchen...", {
         quickCreate: document.getElementById("sourceQuickCreateModal") ? { kind: "source" } : null
     });

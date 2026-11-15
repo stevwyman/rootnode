@@ -275,6 +275,42 @@ function bindQuickCreateForms() {
     });
 }
 
+function formatGedcomDateFromIso(iso) {
+    if (!iso) {
+        return "";
+    }
+    const parts = iso.split("-");
+    if (parts.length !== 3) {
+        return "";
+    }
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    if (!year || month < 1 || month > 12 || day < 1) {
+        return "";
+    }
+    return day + " " + months[month - 1] + " " + year;
+}
+
+function bindParsedDateSync() {
+    document.querySelectorAll(".js-sync-raw-date").forEach(function (el) {
+        if (el.dataset.rawSyncBound === "1") {
+            return;
+        }
+        el.dataset.rawSyncBound = "1";
+        el.addEventListener("change", function () {
+            const targetId = el.getAttribute("data-raw-target");
+            const target = targetId ? document.getElementById(targetId) : null;
+            if (!target) {
+                return;
+            }
+            target.value = formatGedcomDateFromIso(el.value);
+        });
+    });
+}
+
 jQuery(function () {
     bindQuickCreateForms();
+    bindParsedDateSync();
 });
