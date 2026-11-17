@@ -1,0 +1,96 @@
+{% extends "genview/base.html" %}
+{% load i18n static %}
+
+{% block title %}
+    {% if view.object %}{% trans "Geschichte bearbeiten" %}{% else %}{% trans "Neue Seite" %}{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'stories/reader.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 offset-lg-1">
+        <h1 class="mb-4">
+            {% if view.object %}{% trans "Geschichte bearbeiten" %}{% else %}{% trans "Neue Seite" %}{% endif %}
+        </h1>
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <div class="mb-3">
+                {{ form.title.label_tag }}
+                {{ form.title }}
+                {{ form.title.errors }}
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form.parent.label_tag }}
+                    {{ form.parent }}
+                    {{ form.parent.errors }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.kind.label_tag }}
+                    {{ form.kind }}
+                    {{ form.kind.errors }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.status.label_tag }}
+                    {{ form.status }}
+                    {{ form.status.errors }}
+                </div>
+            </div>
+            <div class="card shadow-sm my-4">
+                <div class="card-header">{% trans "Verknüpfung einfügen" %}</div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label" for="story-mention-person">{% trans "Person" %}</label>
+                            <select id="story-mention-person" class="form-select story-mention-select" data-kind="person"></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="story-mention-family">{% trans "Familie" %}</label>
+                            <select id="story-mention-family" class="form-select story-mention-select" data-kind="family"></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="story-mention-place">{% trans "Ort" %}</label>
+                            <select id="story-mention-place" class="form-select story-mention-select" data-kind="place"></select>
+                        </div>
+                    </div>
+                    <p class="form-text mb-0 mt-3">{{ form.body.help_text }}</p>
+                </div>
+            </div>
+            <div class="mb-3">
+                {{ form.body.label_tag }}
+                {{ form.body }}
+                {{ form.body.errors }}
+            </div>
+            <div class="d-flex justify-content-between mt-4">
+                {% if view.object %}
+                    <a href="{% url 'stories:detail' tree_id=tree_id pk=view.object.pk %}" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</a>
+                {% else %}
+                    <a href="{% url 'stories:index' tree_id=tree_id %}" class="btn btn-outline-secondary">{% trans "Abbrechen" %}</a>
+                {% endif %}
+                <button type="submit" class="btn btn-success">{% trans "Speichern" %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "genview/_select2_assets.html" %}
+<script src="{% static 'stories/editor.js' %}"></script>
+<script>
+jQuery(document).ready(function ($) {
+    initStoryMentionEditor({
+        personUrl: "{% url 'genview:api-search-individuals' tree_id=tree_id %}",
+        familyUrl: "{% url 'genview:api-search-families' tree_id=tree_id %}",
+        placeUrl: "{% url 'genview:api-search-places' tree_id=tree_id %}",
+        personPlaceholder: "{% trans 'Person suchen…' %}",
+        familyPlaceholder: "{% trans 'Familie suchen…' %}",
+        placePlaceholder: "{% trans 'Ort suchen…' %}"
+    });
+});
+</script>
+{% endblock %}

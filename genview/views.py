@@ -69,6 +69,7 @@ from .forms import (
     AppSettingsForm,
 )
 from core.features import FEATURE_COLORIZE, FEATURE_FACE_RECOGNITION, FEATURE_OCR, FEATURE_TREE_QUERY, feature_enabled
+from stories.services import story_mentions_for_context
 from .mixins import (
     SuperuserRequiredMixin,
     UserPassesTestMixin,
@@ -1287,6 +1288,7 @@ class IndividualDetailView(TreeAccessMixin, DetailView):
 
         lifecycle_stations.sort(key=lambda s: s.pop("_sort", None) or date.min)
         ctx["lifecycle_stations"] = lifecycle_stations
+        story_mentions_for_context(ctx, person)
 
         return ctx
 
@@ -1884,6 +1886,7 @@ class FamilyDetailView(TreeAccessMixin, DetailView):
         ctx["family_documents"] = family_media.filter(
             category=MediaObject.Category.DOCUMENT
         )
+        story_mentions_for_context(ctx, family)
 
         return ctx
 
@@ -3209,6 +3212,7 @@ class PlaceDetailView(TreeAccessMixin, DetailView):
         events = list(self.object.events.all())
         ctx["place_events"] = events
         ctx["place_event_count"] = len(events)
+        story_mentions_for_context(ctx, self.object)
         return ctx
 
 # --- 3. Create View ---

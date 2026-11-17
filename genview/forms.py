@@ -1098,12 +1098,14 @@ class AppSettingsForm(forms.ModelForm):
             "enable_tree_query",
             "enable_ocr",
             "enable_face_recognition",
+            "enable_stories",
             "enable_colorize",
         )
         widgets = {
             "enable_tree_query": forms.CheckboxInput(attrs=_SWITCH),
             "enable_ocr": forms.CheckboxInput(attrs=_SWITCH),
             "enable_face_recognition": forms.CheckboxInput(attrs=_SWITCH),
+            "enable_stories": forms.CheckboxInput(attrs=_SWITCH),
             "enable_colorize": forms.CheckboxInput(attrs=_SWITCH),
         }
 

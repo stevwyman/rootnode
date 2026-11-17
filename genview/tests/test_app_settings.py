@@ -9,6 +9,7 @@ from core.features import (
     FEATURE_COLORIZE,
     FEATURE_FACE_RECOGNITION,
     FEATURE_OCR,
+    FEATURE_STORIES,
     FEATURE_TREE_QUERY,
     clear_app_settings_cache,
     feature_enabled,
@@ -41,6 +42,7 @@ class AppSettingsPageTests(TestCase):
             enable_tree_query=True,
             enable_ocr=True,
             enable_face_recognition=True,
+            enable_stories=True,
             enable_colorize=False,
         )
 
@@ -52,6 +54,7 @@ class AppSettingsPageTests(TestCase):
         self.assertContains(response, "Stammbaum fragen")
         self.assertContains(response, "OCR / Texterkennung")
         self.assertContains(response, "Gesichtserkennung")
+        self.assertContains(response, "Geschichten")
         self.assertContains(response, "Fotos kolorisieren")
 
     def test_non_superuser_is_forbidden(self):
@@ -67,10 +70,12 @@ class AppSettingsPageTests(TestCase):
         self.assertFalse(flags.enable_tree_query)
         self.assertFalse(flags.enable_ocr)
         self.assertFalse(flags.enable_face_recognition)
+        self.assertFalse(flags.enable_stories)
         self.assertFalse(flags.enable_colorize)
         self.assertFalse(feature_enabled(FEATURE_TREE_QUERY))
         self.assertFalse(feature_enabled(FEATURE_OCR))
         self.assertFalse(feature_enabled(FEATURE_FACE_RECOGNITION))
+        self.assertFalse(feature_enabled(FEATURE_STORIES))
         self.assertFalse(feature_enabled(FEATURE_COLORIZE))
 
     def test_defaults_are_enabled(self):
@@ -78,6 +83,7 @@ class AppSettingsPageTests(TestCase):
         self.assertTrue(flags.enable_tree_query)
         self.assertTrue(flags.enable_ocr)
         self.assertTrue(flags.enable_face_recognition)
+        self.assertTrue(flags.enable_stories)
         self.assertFalse(flags.enable_colorize)
 
 
@@ -137,6 +143,7 @@ class FeatureFlagGatingTests(TestCase):
             enable_tree_query=True,
             enable_ocr=True,
             enable_face_recognition=True,
+            enable_stories=True,
             enable_colorize=False,
         )
 

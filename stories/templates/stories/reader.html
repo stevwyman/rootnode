@@ -1,0 +1,103 @@
+{% extends "genview/base.html" %}
+{% load i18n static ui_tags %}
+
+{% block title %}
+    {% if story_page %}{{ story_page.title }}{% else %}{% trans "Geschichten" %}{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'stories/reader.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="story-reader">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <nav aria-label="{% trans 'Brotkrumen' %}">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'stories:index' tree_id=tree_id %}">{% trans "Geschichten" %}</a>
+                </li>
+                {% if story_page %}
+                    <li class="breadcrumb-item active" aria-current="page">{{ story_page.title }}</li>
+                {% endif %}
+            </ol>
+        </nav>
+        {% if can_edit %}
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'stories:create' tree_id=tree_id %}" class="btn btn-primary btn-sm">
+                    {% trans "Neue Seite" %}
+                </a>
+                {% if story_page %}
+                    {% url 'stories:edit' tree_id=tree_id pk=story_page.pk as edit_url %}
+                    {% url 'stories:delete' tree_id=tree_id pk=story_page.pk as delete_url %}
+                    {% trans "Bearbeiten" as edit_label %}
+                    {% trans "Löschen" as delete_label %}
+                    {% action_buttons layout="labeled" edit_url=edit_url delete_url=delete_url edit_label=edit_label delete_label=delete_label %}
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-0 story-reader-grid">
+        <nav class="col-lg-2 story-toc" aria-label="{% trans 'In diesem Baum' %}">
+            <p class="story-rail-kicker">{% trans "In diesem Baum" %}</p>
+            {% if story_nav %}
+                <ul class="story-toc-list story-toc-root">
+                    {% include "stories/_toc.html" with nodes=story_nav %}
+                </ul>
+            {% else %}
+                <p class="text-muted small">{% trans "Noch keine Seiten." %}</p>
+            {% endif %}
+        </nav>
+
+        <article class="col-lg-7 story-article">
+            {% if story_page %}
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <h1 class="mb-0">{{ story_page.title }}</h1>
+                    <span class="badge text-bg-light border">{{ story_page.get_kind_display }}</span>
+                    {% if story_page.status != 'published' %}
+                        <span class="badge text-bg-secondary">{% trans "Entwurf" %}</span>
+                    {% endif %}
+                </div>
+                {% if rendered_html %}
+                    <div class="story-body">{{ rendered_html }}</div>
+                {% else %}
+                    <p class="text-muted">{% trans "Diese Seite hat noch keinen Text." %}</p>
+                {% endif %}
+            {% else %}
+                <h1 class="mb-3">{% trans "Geschichten" %}</h1>
+                <p>
+                    {% trans "Erzählungen, Ortsgeschichte und Hinweise zur Suche in diesem Stammbaum. Personen, Familien und Orte können im Text verknüpft werden." %}
+                </p>
+                {% if story_pages %}
+                    <div class="list-group">
+                        {% for page in story_pages %}
+                            {% if not page.parent_id %}
+                                <a href="{% url 'stories:detail' tree_id=tree_id pk=page.pk %}" class="list-group-item list-group-item-action">
+                                    <strong>{{ page.title }}</strong>
+                                    <span class="badge text-bg-light border ms-1">{{ page.get_kind_display }}</span>
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">{% trans "Noch keine Geschichten in diesem Stammbaum." %}</p>
+                    {% if can_edit %}
+                        <a href="{% url 'stories:create' tree_id=tree_id %}" class="btn btn-primary">
+                            {% trans "Erste Seite anlegen" %}
+                        </a>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+        </article>
+
+        <aside class="col-lg-3 story-rail" aria-label="{% trans 'Erwähnte Datensätze' %}">
+            {% if story_page %}
+                {% include "stories/_mention_rail.html" %}
+            {% else %}
+                <p class="text-muted small mb-0">{% trans "Verknüpfte Personen und Familien erscheinen hier, wenn eine Seite geöffnet ist." %}</p>
+            {% endif %}
+        </aside>
+    </div>
+</div>
+{% endblock %}

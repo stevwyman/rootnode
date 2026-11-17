@@ -1,0 +1,43 @@
+{% load i18n %}
+{% if mention_people %}
+    <p class="story-rail-kicker">{% trans "Personen" %}</p>
+    {% for person in mention_people %}
+        <a href="{{ person.get_absolute_url }}" class="story-rail-card text-decoration-none">
+            <strong>{{ person.full_name }}</strong>
+            <span class="d-block">
+                {% include "genview/_vital_date.html" with parsed=person.birth_date raw=person.birth_date_raw %}
+            </span>
+            {% if person.is_deceased %}
+                <span class="d-block">
+                    {% include "genview/_vital_date.html" with parsed=person.death_date raw=person.death_date_raw %}
+                </span>
+            {% endif %}
+        </a>
+    {% endfor %}
+{% endif %}
+{% if mention_families %}
+    <p class="story-rail-kicker">{% trans "Familien" %}</p>
+    {% for family in mention_families %}
+        <a href="{{ family.get_absolute_url }}" class="story-rail-card text-decoration-none">
+            <strong>
+                {{ family.husband.surname|default:"?" }} / {{ family.wife.surname|default:"?" }}
+            </strong>
+            {% if family.marriage_date_parsed or family.marriage_date_raw %}
+                <span class="d-block">
+                    {% include "genview/_vital_date.html" with parsed=family.marriage_date_parsed raw=family.marriage_date_raw %}
+                </span>
+            {% endif %}
+        </a>
+    {% endfor %}
+{% endif %}
+{% if mention_places %}
+    <p class="story-rail-kicker">{% trans "Orte" %}</p>
+    {% for place in mention_places %}
+        <a href="{{ place.get_absolute_url }}" class="story-rail-card text-decoration-none">
+            <strong>{{ place.name }}</strong>
+        </a>
+    {% endfor %}
+{% endif %}
+{% if not mention_people and not mention_families and not mention_places %}
+    <p class="text-muted small mb-0">{% trans "Keine Verknüpfungen in diesem Text." %}</p>
+{% endif %}

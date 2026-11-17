@@ -976,6 +976,126 @@ msgstr "Download descendants"
 msgid "Den aktuellen Stammbaum als GEDCOM herunterladen oder eine weitere Datei mit Personenabgleich hinzufügen."
 msgstr "Download the current tree as GEDCOM, or add another file with person matching."
 
+msgid "Geschichten"
+msgstr "Stories"
+
+msgid "Anleitung"
+msgstr "Guide"
+
+msgid "Historie"
+msgstr "History"
+
+msgid "Erzählung"
+msgstr "Story"
+
+msgid "Entwurf"
+msgstr "Draft"
+
+msgid "Veröffentlicht"
+msgstr "Published"
+
+msgid "Titel"
+msgstr "Title"
+
+msgid "Text"
+msgstr "Text"
+
+msgid "Art"
+msgstr "Type"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Übergeordnete Seite"
+msgstr "Parent page"
+
+msgid "— oberste Ebene —"
+msgstr "— top level —"
+
+msgid "Markdown. Verknüpfungen: [Anna Schmidt](person:12), [Familie Wyman](family:3), [Crediton](place:9)."
+msgstr "Markdown. Links: [Anna Schmidt](person:12), [Wyman family](family:3), [Crediton](place:9)."
+
+msgid "Geschichte"
+msgstr "Story"
+
+msgid "Geschichte gespeichert."
+msgstr "Story saved."
+
+msgid "Geschichte gelöscht."
+msgstr "Story deleted."
+
+msgid "Neue Seite"
+msgstr "New page"
+
+msgid "In diesem Baum"
+msgstr "In this tree"
+
+msgid "Noch keine Seiten."
+msgstr "No pages yet."
+
+msgid "Diese Seite hat noch keinen Text."
+msgstr "This page has no text yet."
+
+msgid "Erzählungen, Ortsgeschichte und Hinweise zur Suche in diesem Stammbaum. Personen, Familien und Orte können im Text verknüpft werden."
+msgstr "Stories, local history, and search tips for this family tree. People, families, and places can be linked in the text."
+
+msgid "Noch keine Geschichten in diesem Stammbaum."
+msgstr "There are no stories in this family tree yet."
+
+msgid "Erste Seite anlegen"
+msgstr "Create the first page"
+
+msgid "Erwähnte Datensätze"
+msgstr "Mentioned records"
+
+msgid "Verknüpfte Personen und Familien erscheinen hier, wenn eine Seite geöffnet ist."
+msgstr "Linked people and families appear here when a page is open."
+
+msgid "Keine Verknüpfungen in diesem Text."
+msgstr "No links in this text."
+
+msgid "Erwähnt in"
+msgstr "Mentioned in"
+
+msgid "Geschichte bearbeiten"
+msgstr "Edit story"
+
+msgid "Verknüpfung einfügen"
+msgstr "Insert link"
+
+msgid "Abbrechen"
+msgstr "Cancel"
+
+msgid "Speichern"
+msgstr "Save"
+
+msgid "Geschichte löschen"
+msgstr "Delete story"
+
+msgid "Geschichte wirklich löschen?"
+msgstr "Delete this story?"
+
+msgid "Unterseiten werden zu obersten Seiten."
+msgstr "Child pages will become top-level pages."
+
+msgid "Ja, Seite entfernen"
+msgstr "Yes, remove page"
+
+msgid "Brotkrumen"
+msgstr "Breadcrumb"
+
+msgid "Person suchen…"
+msgstr "Search for a person…"
+
+msgid "Familie suchen…"
+msgstr "Search for a family…"
+
+msgid "Ort suchen…"
+msgstr "Search for a place…"
+
+msgid "Erzählungen, Ortsgeschichte und Suchhinweise mit Verknüpfungen zu Personen, Familien und Orten."
+msgstr "Stories, local history, and search tips with links to people, families, and places."
+
 #: rootnode/settings.py:168
 msgid "German"
 msgstr "German"

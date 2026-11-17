@@ -32,6 +32,14 @@ class AppSettings(models.Model):
             "Benötigt den Gesichtsdienst (facenode)."
         ),
     )
+    enable_stories = models.BooleanField(
+        default=True,
+        verbose_name=_("Geschichten"),
+        help_text=_(
+            "Erzählungen, Ortsgeschichte und Suchhinweise mit Verknüpfungen "
+            "zu Personen, Familien und Orten."
+        ),
+    )
     enable_colorize = models.BooleanField(
         default=False,
         verbose_name=_("Fotos kolorisieren"),

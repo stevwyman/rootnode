@@ -1,0 +1,17 @@
+{% load i18n %}
+{% for node in nodes %}
+<li class="story-toc-item">
+    <a href="{% url 'stories:detail' tree_id=tree_id pk=node.page.pk %}"
+       class="story-toc-link{% if node.current %} is-active{% endif %}">
+        {{ node.page.title }}
+        {% if node.page.status != 'published' %}
+            <span class="badge text-bg-secondary ms-1">{% trans "Entwurf" %}</span>
+        {% endif %}
+    </a>
+    {% if node.children %}
+        <ul class="story-toc-list">
+            {% include "stories/_toc.html" with nodes=node.children %}
+        </ul>
+    {% endif %}
+</li>
+{% endfor %}

@@ -91,7 +91,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_bootstrap5',
+    'mptt',
     'genview.apps.GenviewConfig',
+    'stories.apps.StoriesConfig',
     'django_otp',
     'django_otp.plugins.otp_totp',          # TOTP (Google-Authenticator)
     'django_otp.plugins.otp_static',        # Backup-Tokens

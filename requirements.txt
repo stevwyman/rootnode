@@ -1,5 +1,7 @@
 django
 django-bootstrap5
+markdown
+bleach
 django-debug-toolbar
 python-dateutil
 django-mptt

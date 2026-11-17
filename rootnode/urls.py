@@ -34,7 +34,8 @@ urlpatterns += i18n_patterns(
     # ------------------ Home / Startseite ------------------
     path('', genview_views.TreeListView.as_view(), name='tree-list'),
     # ------------------ App-bezogene URLs -----------------
-    path('genview/', include('genview.urls'))
+    path('genview/', include('genview.urls')),
+    path('genview/', include('stories.urls')),
 ) 
 
 # -------------------------------------------------

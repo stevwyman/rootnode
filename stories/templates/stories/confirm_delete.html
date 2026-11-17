@@ -1,0 +1,15 @@
+{% extends "genview/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Geschichte löschen" %}{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">{% trans "Geschichte wirklich löschen?" %}</h1>
+<p><strong>{{ object.title }}</strong></p>
+<p class="text-muted">{% trans "Unterseiten werden zu obersten Seiten." %}</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">{% trans "Ja, Seite entfernen" %}</button>
+    <a href="{% url 'stories:detail' tree_id=tree_id pk=object.pk %}" class="btn btn-outline-secondary ms-2">{% trans "Abbrechen" %}</a>
+</form>
+{% endblock %}

@@ -12,12 +12,14 @@ from .models import APP_SETTINGS_CACHE_KEY, AppSettings
 FEATURE_TREE_QUERY = "tree_query"
 FEATURE_OCR = "ocr"
 FEATURE_FACE_RECOGNITION = "face_recognition"
+FEATURE_STORIES = "stories"
 FEATURE_COLORIZE = "colorize"
 
 _FEATURE_FIELDS = {
     FEATURE_TREE_QUERY: "enable_tree_query",
     FEATURE_OCR: "enable_ocr",
     FEATURE_FACE_RECOGNITION: "enable_face_recognition",
+    FEATURE_STORIES: "enable_stories",
     FEATURE_COLORIZE: "enable_colorize",
 }
 
@@ -38,6 +40,7 @@ def get_app_settings() -> AppSettings:
             enable_tree_query=True,
             enable_ocr=True,
             enable_face_recognition=True,
+            enable_stories=True,
             enable_colorize=False,
         )
     # Tests roll back the DB without calling save(), which would otherwise
