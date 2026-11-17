@@ -16,7 +16,7 @@ from genview.mixins import (
 from .forms import StoryPageForm
 from .mentions import render_story_body
 from .models import StoryPage
-from .services import story_nav_tree, visible_story_pages
+from .services import prepare_mentioned_people, story_nav_tree, visible_story_pages
 
 
 class StoryFeatureMixin(FeatureRequiredMixin):
@@ -42,7 +42,9 @@ def _shell_context(view, ctx, page=None):
         apply_privacy=bool(ctx.get("apply_privacy")),
     )
     ctx["rendered_html"] = rendered.html
-    ctx["mention_people"] = rendered.individuals
+    ctx["mention_people"] = prepare_mentioned_people(
+        rendered.individuals, apply_privacy=bool(ctx.get("apply_privacy"))
+    )
     ctx["mention_families"] = rendered.families
     ctx["mention_places"] = rendered.places
     return ctx

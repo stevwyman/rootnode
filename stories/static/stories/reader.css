@@ -95,6 +95,50 @@
   border-color: var(--sw-cyan, var(--bs-info));
 }
 
+.story-rail-person {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.story-rail-portrait {
+  width: 45px;
+  height: 45px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+}
+
+.story-rail-portrait-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.story-rail-person-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.story-rail-name {
+  display: block;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.story-rail-dates {
+  display: block;
+  color: var(--sw-muted, var(--bs-secondary-color));
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 991.98px) {
   .story-toc {
     border-right: 0;

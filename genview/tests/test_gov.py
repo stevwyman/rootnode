@@ -14,6 +14,7 @@ from genview.gov import (
 )
 from genview.models import Event, EventType, Individual, Place, Tree, TreeMembership
 from genview.utils import merge_multiple_places
+from stories.models import StoryPage
 
 SAMPLE_GOV = {
     "id": "KONNAUJO93RX",
@@ -117,6 +118,20 @@ class PlaceGovModelTests(TestCase):
         merge_multiple_places(master, [duplicate])
         master.refresh_from_db()
         self.assertEqual(master.gov_id, "KONNAUJO93RX")
+        self.assertFalse(Place.objects.filter(pk=duplicate.pk).exists())
+
+    def test_merge_rewrites_story_place_mentions(self):
+        master = Place.objects.create(gedcom_tree=self.tree, name="Master")
+        duplicate = Place.objects.create(gedcom_tree=self.tree, name="Duplicate")
+        page = StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            title="Ortsgeschichte",
+            body=f"[Ort](place:{duplicate.pk})",
+            status=StoryPage.Status.PUBLISHED,
+        )
+        page.mentioned_places.add(master)
+        merge_multiple_places(master, [duplicate])
+        self.assertEqual(list(page.mentioned_places.all()), [master])
         self.assertFalse(Place.objects.filter(pk=duplicate.pk).exists())
 
 

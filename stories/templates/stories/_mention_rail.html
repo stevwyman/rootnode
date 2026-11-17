@@ -2,16 +2,22 @@
 {% if mention_people %}
     <p class="story-rail-kicker">{% trans "Personen" %}</p>
     {% for person in mention_people %}
-        <a href="{{ person.get_absolute_url }}" class="story-rail-card text-decoration-none">
-            <strong>{{ person.full_name }}</strong>
-            <span class="d-block">
-                {% include "genview/_vital_date.html" with parsed=person.birth_date raw=person.birth_date_raw %}
-            </span>
-            {% if person.is_deceased %}
-                <span class="d-block">
-                    {% include "genview/_vital_date.html" with parsed=person.death_date raw=person.death_date_raw %}
+        <a href="{{ person.get_absolute_url }}" class="story-rail-card story-rail-person text-decoration-none">
+            {% if person.rail_portrait %}
+                <img src="{% url 'genview:media-thumb' tree_id=tree_id pk=person.rail_portrait.pk size='mini' %}"
+                     alt="{{ person.given_name }}"
+                     class="story-rail-portrait">
+            {% else %}
+                <span class="story-rail-portrait story-rail-portrait-fallback" aria-hidden="true">
+                    {% if person.sex == 'M' %}👦{% elif person.sex == 'F' %}👧{% else %}👶{% endif %}
                 </span>
             {% endif %}
+            <span class="story-rail-person-body">
+                <span class="story-rail-name">{{ person.full_name }}</span>
+                {% if person.rail_dates %}
+                    <span class="story-rail-dates">{{ person.rail_dates }}</span>
+                {% endif %}
+            </span>
         </a>
     {% endfor %}
 {% endif %}
@@ -23,8 +29,8 @@
                 {{ family.husband.surname|default:"?" }} / {{ family.wife.surname|default:"?" }}
             </strong>
             {% if family.marriage_date_parsed or family.marriage_date_raw %}
-                <span class="d-block">
-                    {% include "genview/_vital_date.html" with parsed=family.marriage_date_parsed raw=family.marriage_date_raw %}
+                <span class="story-rail-dates d-block">
+                    <span>⚭ {% if family.marriage_date_parsed %}{{ family.marriage_date_parsed|date:"d.m.Y" }}{% else %}{{ family.marriage_date_raw }}{% endif %}</span>
                 </span>
             {% endif %}
         </a>

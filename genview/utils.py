@@ -194,10 +194,18 @@ def merge_multiple_places(master_place, duplicate_places):
         
         for duplicate in duplicate_places:
             for related in related_objects:
-                filter_kwargs = {related.remote_field.name: duplicate}
-                update_kwargs = {related.remote_field.name: master_place}
-                
-                related.related_model.objects.filter(**filter_kwargs).update(**update_kwargs)
+                field_name = related.remote_field.name
+                if related.many_to_many:
+                    linked = related.related_model.objects.filter(**{field_name: duplicate})
+                    for obj in linked:
+                        manager = getattr(obj, field_name)
+                        manager.remove(duplicate)
+                        manager.add(master_place)
+                    continue
+
+                related.related_model.objects.filter(
+                    **{field_name: duplicate}
+                ).update(**{field_name: master_place})
             
             # Nach dem Umbiegen aller Referenzen wird dieses eine Duplikat gelöscht
             duplicate.delete()

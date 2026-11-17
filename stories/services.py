@@ -55,6 +55,69 @@ def pages_mentioning(obj, *, can_edit: bool) -> list[StoryPage]:
     return list(qs.order_by("title"))
 
 
+def _rail_date_text(event) -> str:
+    if event is None:
+        return ""
+    if event.parsed_date:
+        return event.parsed_date.strftime("%d.%m.%Y")
+    return (event.raw_date or "").strip()
+
+
+def _rail_dates_line(events) -> str:
+    birth = next((event for event in events if event.event_type.tag == "BIRT"), None)
+    death = next((event for event in events if event.event_type.tag == "DEAT"), None)
+    parts = []
+    birth_text = _rail_date_text(birth)
+    if birth_text:
+        parts.append(f"* {birth_text}")
+    death_text = _rail_date_text(death)
+    if death is not None and death_text:
+        parts.append(f"† {death_text}")
+    return "  ".join(parts)
+
+
+def prepare_mentioned_people(people, *, apply_privacy: bool):
+    """Reload mentioned people with portraits, hiding private images when needed."""
+    from django.db.models import Prefetch
+
+    from genview.models import Event, Individual, MediaObject
+
+    ids = [person.pk for person in people]
+    if not ids:
+        return []
+    loaded = {
+        person.pk: person
+        for person in Individual.objects.filter(pk__in=ids).prefetch_related(
+            Prefetch(
+                "media_objects",
+                queryset=MediaObject.objects.order_by(
+                    "-is_portrait", "id"
+                ).prefetch_related("individuals"),
+            ),
+            Prefetch("events", queryset=Event.objects.select_related("event_type")),
+        )
+    }
+    ordered = []
+    for person in people:
+        fresh = loaded.get(person.pk, person)
+        portrait = next(iter(fresh.media_objects.all()), None)
+        if portrait is not None:
+            hidden = apply_privacy and (
+                portrait.is_confidential or portrait.is_private
+            )
+            usable = (
+                portrait.file
+                and portrait.file.name
+                and portrait.is_image
+                and not hidden
+            )
+            portrait = portrait if usable else None
+        fresh.rail_portrait = portrait
+        fresh.rail_dates = _rail_dates_line(list(fresh.events.all()))
+        ordered.append(fresh)
+    return ordered
+
+
 def story_mentions_for_context(ctx, obj) -> None:
     if not feature_enabled(FEATURE_STORIES):
         ctx["story_mentions"] = []

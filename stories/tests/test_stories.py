@@ -1,12 +1,14 @@
 from datetime import date
 
 from django.contrib.auth.models import User
-from django.test import Client, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from core.features import FEATURE_STORIES, clear_app_settings_cache, feature_enabled, get_app_settings
-from genview.models import Event, EventType, Family, Individual, Place, Tree, TreeMembership
+from genview.models import Event, EventType, Family, Individual, MediaObject, Place, Tree, TreeMembership
 from stories.models import StoryPage
+from stories.services import prepare_mentioned_people
 
 
 def _set_stories_enabled(enabled: bool) -> None:
@@ -121,6 +123,7 @@ class StoryAccessTests(TestCase):
         self.assertEqual(self.client.get(self.published_url).status_code, 404)
 
 
+@override_settings(MEDIA_ROOT="/tmp/rootnode_test_media")
 class StoryPublicPrivacyTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -131,11 +134,15 @@ class StoryPublicPrivacyTests(TestCase):
             gedcom_tree=self.tree, given_name="Living", surname="Guest"
         )
         self.historical = Individual.objects.create(
-            gedcom_tree=self.tree, given_name="John", surname="Wyman"
+            gedcom_tree=self.tree, given_name="John", surname="Wyman", sex="M"
         )
         birth, _ = EventType.objects.get_or_create(
             tag="BIRT",
             defaults={"name": "Birth", "category": EventType.Category.INDIVIDUAL},
+        )
+        death, _ = EventType.objects.get_or_create(
+            tag="DEAT",
+            defaults={"name": "Death", "category": EventType.Category.INDIVIDUAL},
         )
         Event.objects.create(
             gedcom_tree=self.tree,
@@ -143,6 +150,20 @@ class StoryPublicPrivacyTests(TestCase):
             event_type=birth,
             parsed_date=date(1851, 3, 12),
         )
+        Event.objects.create(
+            gedcom_tree=self.tree,
+            individual=self.historical,
+            event_type=death,
+            parsed_date=date(1922, 11, 4),
+        )
+        self.portrait = MediaObject.objects.create(
+            gedcom_tree=self.tree,
+            title="Portrait",
+            category=MediaObject.Category.PHOTO,
+            file=SimpleUploadedFile("portrait.jpg", b"jpeg", content_type="image/jpeg"),
+            is_portrait=True,
+        )
+        self.portrait.individuals.add(self.historical)
         self.family = Family.objects.create(gedcom_tree=self.tree, husband=self.historical)
         self.place = Place.objects.create(gedcom_tree=self.tree, name="Crediton")
         self.page = StoryPage.objects.create(
@@ -168,6 +189,51 @@ class StoryPublicPrivacyTests(TestCase):
         self.assertNotContains(response, self.living.get_absolute_url())
         self.assertContains(response, self.place.get_absolute_url())
         self.assertContains(response, "Crediton")
+        self.assertContains(response, "* 12.03.1851  † 04.11.1922")
+        self.assertContains(response, "story-rail-dates")
+        self.assertContains(
+            response,
+            reverse(
+                "genview:media-thumb",
+                kwargs={
+                    "tree_id": self.tree.pk,
+                    "pk": self.portrait.pk,
+                    "size": "mini",
+                },
+            ),
+        )
+
+    def test_guest_does_not_see_private_portrait(self):
+        self.portrait.is_private = True
+        self.portrait.save(update_fields=["is_private"])
+        url = reverse(
+            "stories:detail", kwargs={"tree_id": self.tree.pk, "pk": self.page.pk}
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            reverse(
+                "genview:media-thumb",
+                kwargs={
+                    "tree_id": self.tree.pk,
+                    "pk": self.portrait.pk,
+                    "size": "mini",
+                },
+            ),
+        )
+        self.assertContains(response, "👦")
+
+    def test_prepare_mentioned_people_respects_media_privacy(self):
+        people = prepare_mentioned_people([self.historical], apply_privacy=True)
+        self.assertEqual(people[0].rail_portrait, self.portrait)
+        self.assertEqual(people[0].rail_dates, "* 12.03.1851  † 04.11.1922")
+        self.portrait.is_private = True
+        self.portrait.save(update_fields=["is_private"])
+        hidden = prepare_mentioned_people([self.historical], apply_privacy=True)
+        self.assertIsNone(hidden[0].rail_portrait)
+        shown = prepare_mentioned_people([self.historical], apply_privacy=False)
+        self.assertEqual(shown[0].rail_portrait, self.portrait)
 
     def test_person_detail_lists_backlinks(self):
         editor = User.objects.create_user("pub_editor", password="password")
