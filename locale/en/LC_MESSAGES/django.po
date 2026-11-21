@@ -1097,6 +1097,12 @@ msgid "Erzählungen, Ortsgeschichte und Suchhinweise mit Verknüpfungen zu Perso
 msgstr "Stories, local history, and search tips with links to people, families, and places."
 
 #: rootnode/settings.py:168
+msgid "wird %(age)s"
+msgstr "turns %(age)s"
+
+msgid "verstorben (würde %(age)s Jahre alt werden)"
+msgstr "deceased (would have turned %(age)s)"
+
 msgid "German"
 msgstr "German"
 

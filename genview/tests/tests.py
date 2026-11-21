@@ -70,6 +70,17 @@ class IndividualModelTests(TestCase):
         self.assertEqual(person.full_name(), "King of England")
         self.assertEqual(person.civil_name(), "Edward Windsor")
 
+    def test_civil_name_puts_suffix_before_surname(self):
+        person = Individual.objects.create(
+            gedcom_tree=self.tree1,
+            name_prefix="Dr.",
+            given_name="John",
+            name_suffix="Jr.",
+            surname="Smith",
+        )
+        self.assertEqual(person.civil_name(), "Dr. John Jr. Smith")
+        self.assertEqual(person.full_name(), "Dr. John Jr. Smith")
+
 class IndividualListViewTests(TestCase):
     def setUp(self):
         self.client = Client()

@@ -320,8 +320,12 @@ class Individual(GedcomIdMixin):
         return f"{self.full_name()} ({self.gedcom_id})"
 
     def civil_name(self) -> str:
-        """GIVN/SURN (and prefix/suffix), ignoring GEDCOM TITL."""
-        parts = [self.name_prefix, self.given_name, self.surname, self.name_suffix]
+        """GIVN/SURN (and prefix/suffix), ignoring GEDCOM TITL.
+
+        Order is prefix, given, suffix, surname so Jr./III/von sit in front
+        of the family name rather than wrapping the whole name.
+        """
+        parts = [self.name_prefix, self.given_name, self.name_suffix, self.surname]
         return " ".join(p for p in parts if p).strip() or "Unnamed"
 
     def _titl_events(self) -> list["Event"]:

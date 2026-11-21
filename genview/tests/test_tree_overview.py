@@ -51,7 +51,7 @@ class TreeCalendarTests(TestCase):
             surname="Soon",
         )
         birt = _etype("BIRT", "Birth")
-        today = date.today()
+        today = date(2026, 11, 21)
         target = today + timedelta(days=5)
         Event.objects.create(
             gedcom_tree=tree,
@@ -59,8 +59,12 @@ class TreeCalendarTests(TestCase):
             event_type=birt,
             parsed_date=date(1986, target.month, target.day),
         )
-        items = collect_upcoming_birthdays(tree.id, apply_privacy=False, horizon_days=30)
+        items = collect_upcoming_birthdays(
+            tree.id, apply_privacy=False, horizon_days=30, today=today
+        )
         self.assertTrue(any(i.title == person.full_name() for i in items))
+        match = next(i for i in items if i.title == person.full_name())
+        self.assertEqual(match.subtitle, "wird 40")
 
     def test_deceased_birthday_is_omitted(self):
         tree = Tree.objects.create(name="Cal Tree")
@@ -113,7 +117,30 @@ class TreeCalendarTests(TestCase):
             parsed_date=date(today.year - BIRTH_PRIVACY_YEARS - 5, target.month, target.day),
         )
         items = collect_upcoming_birthdays(tree.id, apply_privacy=True, horizon_days=30)
-        self.assertTrue(any(i.title == person.full_name() for i in items))
+        match = next(i for i in items if i.title == person.full_name())
+        self.assertIn("verstorben", match.subtitle)
+        self.assertIn("würde", match.subtitle)
+
+    def test_birthday_without_death_uses_would_have_turned_when_implausibly_old(self):
+        tree = Tree.objects.create(name="Cal Tree")
+        person = Individual.objects.create(
+            gedcom_tree=tree, given_name="Ancient", surname="Soul"
+        )
+        today = date(2026, 11, 21)
+        target = today + timedelta(days=5)
+        Event.objects.create(
+            gedcom_tree=tree,
+            individual=person,
+            event_type=_etype("BIRT", "Birth"),
+            parsed_date=date(today.year - 200, target.month, target.day),
+        )
+        items = collect_upcoming_birthdays(
+            tree.id, apply_privacy=False, horizon_days=30, today=today
+        )
+        match = next(i for i in items if i.title == person.full_name())
+        self.assertEqual(
+            match.subtitle, "verstorben (würde 200 Jahre alt werden)"
+        )
 
     def test_anniversary_with_living_child_hidden_when_privacy_applies(self):
         tree = Tree.objects.create(name="Cal Tree")

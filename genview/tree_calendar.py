@@ -8,8 +8,10 @@ from typing import Literal
 
 from django.db.models import Exists, OuterRef, Prefetch
 from django.urls import reverse
+from django.utils.translation import gettext as _
 
 from .models import Event, Individual, MediaObject
+from .privacy import ASSUMED_DECEASED_YEARS
 
 
 @dataclass
@@ -61,6 +63,13 @@ def _media_thumb_url(media: MediaObject | None, tree_id: int, apply_privacy: boo
         "genview:media-thumb",
         kwargs={"tree_id": tree_id, "pk": media.pk, "size": "mini"},
     )
+
+
+def _birthday_subtitle(age: int) -> str:
+    """Living people 'turn N'; implausibly old people without a death event do not."""
+    if age >= ASSUMED_DECEASED_YEARS:
+        return _("verstorben (würde %(age)s Jahre alt werden)") % {"age": age}
+    return _("wird %(age)s") % {"age": age}
 
 
 def _profile_media(individual: Individual) -> MediaObject | None:
@@ -160,7 +169,7 @@ def collect_upcoming_birthdays(
             when=when,
             days_until=days,
             title=ind.full_name(),
-            subtitle=f"wird {age}",
+            subtitle=_birthday_subtitle(age),
             url=ind.get_absolute_url(),
             thumb_url=thumbs.get(ind.pk),
             is_today=days == 0,
