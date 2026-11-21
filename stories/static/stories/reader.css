@@ -38,6 +38,32 @@
   margin-top: 1.4rem;
 }
 
+.story-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bs-secondary) 14%, var(--bs-body-bg));
+}
+
+.story-body pre {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--bs-border-color);
+  background: color-mix(in srgb, var(--bs-secondary) 12%, var(--bs-body-bg));
+}
+
+.story-body pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+
 .story-mention {
   background: color-mix(in srgb, var(--sw-cyan, #049dbf) 14%, transparent);
   border-radius: 3px;

@@ -35,6 +35,16 @@ class StoryPage(MPTTModel):
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
     slug = models.SlugField(max_length=220, allow_unicode=True)
+    sort_order = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Reihenfolge"),
+        help_text=_(
+            "Kleine Zahlen stehen weiter oben. Die Reihenfolge gilt "
+            "unter Seiten derselben Ebene. Leer lassen, um die Seite "
+            "am Ende einzufügen."
+        ),
+    )
     body = models.TextField(blank=True, verbose_name=_("Text"))
     kind = models.CharField(
         max_length=16,
@@ -81,7 +91,7 @@ class StoryPage(MPTTModel):
     updated_at = models.DateTimeField(auto_now=True)
 
     class MPTTMeta:
-        order_insertion_by = ["title"]
+        order_insertion_by = ["sort_order", "title"]
 
     class Meta:
         verbose_name = _("Geschichte")
@@ -106,6 +116,14 @@ class StoryPage(MPTTModel):
             kwargs={"tree_id": self.gedcom_tree_id, "pk": self.pk},
         )
 
+    @classmethod
+    def next_sort_order(cls, tree_id: int, parent_id: int | None, *, exclude_pk=None) -> int:
+        qs = cls.objects.filter(gedcom_tree_id=tree_id, parent_id=parent_id)
+        if exclude_pk:
+            qs = qs.exclude(pk=exclude_pk)
+        last = qs.aggregate(models.Max("sort_order"))["sort_order__max"]
+        return (last or 0) + 10
+
     def assign_unique_slug(self) -> None:
         base = slugify(self.title, allow_unicode=True) or "seite"
         slug = base
@@ -124,6 +142,10 @@ class StoryPage(MPTTModel):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.assign_unique_slug()
+        if self.sort_order is None:
+            self.sort_order = self.next_sort_order(
+                self.gedcom_tree_id, self.parent_id, exclude_pk=self.pk
+            )
         super().save(*args, **kwargs)
         self.sync_mentions()
 

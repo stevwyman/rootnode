@@ -21,9 +21,14 @@ def story_nav_tree(pages, current_pk=None) -> list[dict]:
         parent_id = page.parent_id if page.parent_id in page_ids else None
         by_parent[parent_id].append(page)
 
+    def sibling_key(page):
+        order = page.sort_order if page.sort_order is not None else 0
+        return (order, (page.title or "").casefold(), page.pk)
+
     def walk(parent_id):
         nodes = []
-        for page in by_parent.get(parent_id, []):
+        siblings = sorted(by_parent.get(parent_id, []), key=sibling_key)
+        for page in siblings:
             nodes.append(
                 {
                     "page": page,
@@ -52,7 +57,7 @@ def pages_mentioning(obj, *, can_edit: bool) -> list[StoryPage]:
     qs = StoryPage.objects.filter(gedcom_tree_id=obj.gedcom_tree_id, **filt)
     if not can_edit:
         qs = qs.filter(status=StoryPage.Status.PUBLISHED)
-    return list(qs.order_by("title"))
+    return list(qs.order_by("sort_order", "title", "pk"))
 
 
 def _rail_date_text(event) -> str:

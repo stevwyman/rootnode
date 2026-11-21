@@ -69,15 +69,13 @@
                 <p>
                     {% trans "Erzählungen, Ortsgeschichte und Hinweise zur Suche in diesem Stammbaum. Personen, Familien und Orte können im Text verknüpft werden." %}
                 </p>
-                {% if story_pages %}
+                {% if story_nav %}
                     <div class="list-group">
-                        {% for page in story_pages %}
-                            {% if not page.parent_id %}
-                                <a href="{% url 'stories:detail' tree_id=tree_id pk=page.pk %}" class="list-group-item list-group-item-action">
-                                    <strong>{{ page.title }}</strong>
-                                    <span class="badge text-bg-light border ms-1">{{ page.get_kind_display }}</span>
-                                </a>
-                            {% endif %}
+                        {% for node in story_nav %}
+                            <a href="{% url 'stories:detail' tree_id=tree_id pk=node.page.pk %}" class="list-group-item list-group-item-action">
+                                <strong>{{ node.page.title }}</strong>
+                                <span class="badge text-bg-light border ms-1">{{ node.page.get_kind_display }}</span>
+                            </a>
                         {% endfor %}
                     </div>
                 {% else %}

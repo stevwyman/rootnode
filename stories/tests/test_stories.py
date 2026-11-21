@@ -8,7 +8,7 @@ from django.urls import reverse
 from core.features import FEATURE_STORIES, clear_app_settings_cache, feature_enabled, get_app_settings
 from genview.models import Event, EventType, Family, Individual, MediaObject, Place, Tree, TreeMembership
 from stories.models import StoryPage
-from stories.services import prepare_mentioned_people
+from stories.services import prepare_mentioned_people, story_nav_tree, visible_story_pages
 
 
 def _set_stories_enabled(enabled: bool) -> None:
@@ -245,6 +245,65 @@ class StoryPublicPrivacyTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Erwähnt in")
         self.assertContains(response, "Die Auswanderung der Wymans")
+
+
+class StorySortOrderTests(TestCase):
+    def setUp(self):
+        self.tree = Tree.objects.create(name="Sort Tree")
+
+    def test_nav_follows_sort_order_not_title(self):
+        StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            title="Zebra",
+            sort_order=10,
+            status=StoryPage.Status.PUBLISHED,
+        )
+        StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            title="Apple",
+            sort_order=20,
+            status=StoryPage.Status.PUBLISHED,
+        )
+        pages = list(visible_story_pages(self.tree.pk, can_edit=False))
+        nav = story_nav_tree(pages)
+        self.assertEqual([node["page"].title for node in nav], ["Zebra", "Apple"])
+
+    def test_children_are_sorted_among_siblings(self):
+        parent = StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            title="Parent",
+            sort_order=10,
+            status=StoryPage.Status.PUBLISHED,
+        )
+        StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            parent=parent,
+            title="AAA later",
+            sort_order=20,
+            status=StoryPage.Status.PUBLISHED,
+        )
+        StoryPage.objects.create(
+            gedcom_tree=self.tree,
+            parent=parent,
+            title="ZZZ first",
+            sort_order=10,
+            status=StoryPage.Status.PUBLISHED,
+        )
+        pages = list(visible_story_pages(self.tree.pk, can_edit=False))
+        nav = story_nav_tree(pages)
+        children = nav[0]["children"]
+        self.assertEqual(
+            [node["page"].title for node in children],
+            ["ZZZ first", "AAA later"],
+        )
+
+    def test_new_page_appends_when_sort_order_is_empty(self):
+        first = StoryPage.objects.create(
+            gedcom_tree=self.tree, title="First", sort_order=10
+        )
+        second = StoryPage.objects.create(gedcom_tree=self.tree, title="Second")
+        self.assertEqual(first.sort_order, 10)
+        self.assertEqual(second.sort_order, 20)
 
 
 class StorySettingsTests(TestCase):

@@ -29,12 +29,20 @@
                     {{ form.parent }}
                     {{ form.parent.errors }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-6">
+                    {{ form.sort_order.label_tag }}
+                    {{ form.sort_order }}
+                    {% if form.sort_order.help_text %}
+                        <div class="form-text">{{ form.sort_order.help_text }}</div>
+                    {% endif %}
+                    {{ form.sort_order.errors }}
+                </div>
+                <div class="col-md-6">
                     {{ form.kind.label_tag }}
                     {{ form.kind }}
                     {{ form.kind.errors }}
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-6">
                     {{ form.status.label_tag }}
                     {{ form.status }}
                     {{ form.status.errors }}

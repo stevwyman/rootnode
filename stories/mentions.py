@@ -41,6 +41,8 @@ ALLOWED_TAGS = [
 ALLOWED_ATTRIBUTES = {
     "a": ["href", "class", "title"],
     "span": ["class"],
+    "code": ["class"],
+    "pre": ["class"],
 }
 
 
@@ -165,7 +167,7 @@ def render_story_body(body: str, *, tree_id: int, apply_privacy: bool) -> Render
     )
     html = markdown.markdown(
         text,
-        extensions=["nl2br", "sane_lists", extension],
+        extensions=["fenced_code", "nl2br", "sane_lists", extension],
         output_format="html",
     )
     cleaned = bleach.clean(

@@ -1006,14 +1006,20 @@ msgstr "Type"
 msgid "Status"
 msgstr "Status"
 
+msgid "Reihenfolge"
+msgstr "Sort order"
+
+msgid "Kleine Zahlen stehen weiter oben. Die Reihenfolge gilt unter Seiten derselben Ebene. Leer lassen, um die Seite am Ende einzufügen."
+msgstr "Lower numbers appear first. The order applies among pages at the same level. Leave empty to add the page at the end."
+
 msgid "Übergeordnete Seite"
 msgstr "Parent page"
 
 msgid "— oberste Ebene —"
 msgstr "— top level —"
 
-msgid "Markdown. Verknüpfungen: [Anna Schmidt](person:12), [Familie Wyman](family:3), [Crediton](place:9)."
-msgstr "Markdown. Links: [Anna Schmidt](person:12), [Wyman family](family:3), [Crediton](place:9)."
+msgid "Markdown. Codeblock mit fester Schrift: drei Backticks vor und nach dem Text. Verknüpfungen: [Anna Schmidt](person:12), [Familie Wyman](family:3), [Crediton](place:9)."
+msgstr "Markdown. Fixed-width code block: three backticks before and after the text. Links: [Anna Schmidt](person:12), [Wyman family](family:3), [Crediton](place:9)."
 
 msgid "Geschichte"
 msgstr "Story"

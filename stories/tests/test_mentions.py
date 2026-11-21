@@ -31,6 +31,19 @@ class MentionParseTests(TestCase):
         self.assertNotIn("<script>", html)
         self.assertIn("alert(1)", html)
 
+    def test_fenced_code_block_uses_pre_and_code(self):
+        tree = Tree.objects.create(name="Mentions")
+        html = render_story_body(
+            "Intro\n\n```\nSELECT * FROM person\nWHERE id = 1\n```\n",
+            tree_id=tree.pk,
+            apply_privacy=False,
+        ).html
+        self.assertIn("<pre>", html)
+        self.assertIn("<code>", html)
+        self.assertIn("SELECT * FROM person", html)
+        self.assertIn("WHERE id = 1", html)
+        self.assertNotIn("<script>", html)
+
 
 class MentionPrivacyTests(TestCase):
     def setUp(self):
